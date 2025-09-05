@@ -117,7 +117,7 @@ window.__run = async function(){
   runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
     const payload = {
-      prompt: (promptEl.value || '').trim(),
+      prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
       files: await Promise.all(files.map(async f => ({
         name: f.name,
