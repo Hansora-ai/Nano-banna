@@ -106,7 +106,7 @@ async function fileToBase64(file){
 }
 
 // Keep requests under ~7.5M base64 chars (~5.6MB binary) to avoid mobile 400/500.
-const SAFE_TOTAL_BASE64 = 7_500_000;
+const SAFE_TOTAL_BASE64 = 9_500_000;
 
 // Lossless PNG re-encode at same size
 async function pngReencodeSameSize(file){
