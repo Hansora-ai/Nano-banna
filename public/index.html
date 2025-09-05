@@ -13,7 +13,7 @@
     label{display:block; font-size:13px; opacity:.85; margin-bottom:6px}
     input[type="file"], textarea, select { width:100%; background:#0f0f15; color:#eaeaf0; border:1px solid #262634; border-radius:12px; padding:10px 12px; }
     textarea{min-height:120px; resize:vertical}
-    button{width:100%; padding:12px 16px; background:#6b5bd1; color:white; border:0; border-radius:12px; font-weight:600; cursor:pointer}
+    button{width:100%; padding:12px 16px; background:#6b5bd1; color:#fff; border:0; border-radius:12px; font-weight:600; cursor:pointer}
     button[disabled]{opacity:.6; cursor:not-allowed}
     .thumb{margin-top:8px; width:160px; height:160px; object-fit:cover; border-radius:10px; border:1px solid #262634}
     details{margin-top:16px; background:#0f0f15; border:1px solid #262634; border-radius:12px; padding:10px 12px}
@@ -27,7 +27,6 @@
   <div class="wrap">
     <h1>Nano Banana — Image-to-Image</h1>
 
-    <!-- Prevent default submit to avoid page reload -->
     <form id="jobForm" onsubmit="return false;">
       <div class="row">
         <div class="col">
@@ -35,9 +34,8 @@
           <input id="files" type="file" accept="image/*" multiple />
           <div id="thumbs" class="grid"></div>
           <div class="note">
-            This page converts files to <b>Base64</b> and sends <b>JSON</b> to the Netlify Function
-            <code>/.netlify/functions/kie-create</code>. The function uploads to KIE’s uploader and then calls
-            <code>POST https://api.kie.ai/api/v1/jobs/createTask</code>.
+            Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code> (upload → createTask),
+            then polls <code>/.netlify/functions/kie-status</code> for the result.
           </div>
         </div>
 
@@ -51,7 +49,6 @@
             <option value="jpeg">JPEG</option>
           </select>
           <div style="height:14px"></div>
-          <!-- IMPORTANT: button type is 'button' so the form doesn't submit/reload -->
           <button id="runBtn" type="button">Run</button>
         </div>
       </div>
@@ -67,18 +64,17 @@
     </details>
   </div>
 
-<!-- =================== SCRIPT =================== -->
 <script>
-const filesEl   = document.getElementById('files');
-const thumbsEl  = document.getElementById('thumbs');
-const promptEl  = document.getElementById('prompt');
-const formatEl  = document.getElementById('format');
-const runBtn    = document.getElementById('runBtn');
-const dbg       = document.getElementById('debug');
-const outBox    = document.getElementById('out');
-const gallery   = document.getElementById('gallery');
+const filesEl = document.getElementById('files');
+const thumbsEl = document.getElementById('thumbs');
+const promptEl = document.getElementById('prompt');
+const formatEl = document.getElementById('format');
+const runBtn = document.getElementById('runBtn');
+const dbg = document.getElementById('debug');
+const outBox = document.getElementById('out');
+const gallery = document.getElementById('gallery');
 
-function log(...a){ dbg.textContent += '\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); }
+function log(...a){ dbg.textContent += '\\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); }
 
 filesEl.addEventListener('change', () => {
   thumbsEl.innerHTML = '';
@@ -90,17 +86,66 @@ filesEl.addEventListener('change', () => {
   });
 });
 
-// Convert a File to base64 (safe for ~10MB)
 async function fileToBase64(file){
   const ab = await file.arrayBuffer();
   let bin=''; const bytes=new Uint8Array(ab), step=0x8000;
-  for (let i=0;i<bytes.length;i+=step){
-    bin += String.fromCharCode.apply(null, bytes.subarray(i,i+step));
-  }
+  for (let i=0;i<bytes.length;i+=step) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+step));
   return btoa(bin);
 }
 
-// CLICK handler (no form submit!)
+// Recursively pull any image-like URLs from an arbitrary JSON
+function extractImageUrls(obj, out=[]) {
+  if (!obj) return out;
+  if (typeof obj === 'string') {
+    if (/^https?:\\/\\/[^\\s"]+\\.(png|jpg|jpeg|webp)(\\?.*)?$/i.test(obj)) out.push(obj);
+    return out;
+  }
+  if (Array.isArray(obj)) obj.forEach(v => extractImageUrls(v, out));
+  else if (typeof obj === 'object') Object.values(obj).forEach(v => extractImageUrls(v, out));
+  return out;
+}
+
+async function pollStatus(taskId, recordId) {
+  log('Polling status… taskId=', taskId, 'recordId=', recordId);
+  for (let i=0;i<60;i++){  // ~3 minutes at 3s interval
+    const url = `/.netlify/functions/kie-status?${new URLSearchParams({taskId, recordId}).toString()}`;
+    const r = await fetch(url);
+    const j = await r.json().catch(()=>null);
+    log('STATUS JSON:', j);
+
+    const data = j && (j.response || j).data;
+    const status = (data && (data.status || data.taskStatus || data.state || data.stage || '')).toString().toLowerCase();
+
+    // success keywords
+    if (/success|succeed|finished|done|complete/.test(status)) {
+      const urls = extractImageUrls(j);
+      if (urls.length) {
+        gallery.innerHTML = '';
+        urls.forEach(u=>{
+          const a = document.createElement('a'); a.href = u; a.textContent = u; a.target = '_blank';
+          const img = document.createElement('img'); img.src = u; img.style.width='100%'; img.style.borderRadius='12px';
+          const wrap = document.createElement('div'); wrap.appendChild(img); wrap.appendChild(a);
+          gallery.appendChild(wrap);
+        });
+        outBox.style.display = 'block';
+      } else {
+        log('No image URLs found in response. Check STATUS JSON above.');
+        outBox.style.display = 'block';
+      }
+      return;
+    }
+
+    // failure keywords
+    if (/fail|error|exception|illegal|denied|reject/.test(status)) {
+      alert('KIE reported failure. See Debug for details.');
+      return;
+    }
+
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  alert('Timed out waiting for result. Check Debug for last status.');
+}
+
 runBtn.addEventListener('click', async () => {
   dbg.textContent = 'Submitting…';
   gallery.innerHTML = '';
@@ -109,7 +154,7 @@ runBtn.addEventListener('click', async () => {
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
   if (files.length > 4) { alert('Max 4 images.'); return; }
-  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
+  for (const f of files){ if (f.size > 10*1024*1024){ alert(\`"\${f.name}" exceeds 10MB.\`); return; } }
 
   runBtn.disabled = true;
   try {
@@ -131,9 +176,17 @@ runBtn.addEventListener('click', async () => {
 
     const ct  = res.headers.get('content-type') || '';
     const txt = await res.text();
-    log(`Response status: ${res.status} content-type: ${ct}`);
-    try { log('JSON:', JSON.parse(txt)); } catch { log('TEXT:', txt); }
-    outBox.style.display = 'block';
+    log(\`Response status: \${res.status} content-type: \${ct}\`);
+    let j = null; try { j = JSON.parse(txt); log('JSON:', j); } catch { log('TEXT:', txt); }
+
+    const data = j && j.data || j && j.response && j.response.data || {};
+    const taskId = data.taskId || data.id || '';
+    const recordId = data.recordId || '';
+    if (taskId || recordId) {
+      await pollStatus(taskId, recordId);
+    } else {
+      alert('Task created but no taskId/recordId returned. See Debug.');
+    }
   } catch (err) {
     log('JS ERROR:', String(err));
     alert('Request failed. See Debug.');
