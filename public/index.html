@@ -58,9 +58,9 @@
           <option value="jpeg">JPEG</option>
         </select>
         <div style="height:14px"></div>
-        <!-- INLINE ALERT so you SEE the click immediately -->
+        <!-- Inline click calls the handler; no alert -->
         <button id="runBtn" type="button"
-                onclick="alert('RUN CLICKED'); window.__run && window.__run()">Run</button>
+                onclick="window.__run && window.__run()">Run</button>
       </div>
     </div>
 
@@ -151,11 +151,7 @@ window.__run = async function(){
   }
 };
 
-/* (REMOVED the two extra bindings that caused double-send)
-runBtn.addEventListener('click', window.__run);
-runBtn.onclick = window.__run;
-*/
-
+/* (no extra bindings; the inline onclick calls __run) */
 log('BOOT: handler attached.');
 </script>
 </body>
