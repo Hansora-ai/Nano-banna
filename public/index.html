@@ -24,10 +24,15 @@
     textarea{min-height:120px; resize:vertical}
     button{width:100%; padding:12px 16px; background:#6b5bd1; color:#fff; border:0; border-radius:12px; font-weight:600; cursor:pointer}
     button[disabled]{opacity:.6; cursor:not-allowed}
+    #thumbs{display:flex; gap:8px; flex-wrap:wrap}
     .thumb{margin-top:8px; width:160px; height:160px; object-fit:cover; border-radius:10px; border:1px solid #262634}
     details{margin-top:16px; background:#0f0f15; border:1px solid #262634; border-radius:12px; padding:10px 12px}
     pre{white-space:pre-wrap; word-break:break-word; margin:0}
-    .note{font-size:12px; opacity:.7; margin-top:6px}
+
+    /* Status banner */
+    .banner{margin-top:12px; padding:12px 14px; border-radius:12px; border:1px solid transparent; font-weight:600}
+    .banner.ok{background:#0f1a12; border-color:#1f6d3d; color:#b9f3cf}
+    .banner.err{background:#1a1110; border-color:#a24a4a; color:#ffd1d1}
   </style>
 </head>
 <body>
@@ -43,9 +48,6 @@
         <label for="files">Select 1–4 images (jpeg/png/webp, ≤10MB each)</label>
         <input id="files" type="file" accept="image/*" multiple />
         <div id="thumbs"></div>
-        <div class="note">
-          Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code>. KIE posts the final result to your Make.com webhook.
-        </div>
       </div>
 
       <div class="col">
@@ -61,10 +63,14 @@
         <!-- Inline click calls the handler; no alert -->
         <button id="runBtn" type="button"
                 onclick="window.__run && window.__run()">Run</button>
+
+        <!-- User-facing status (success/error). Hidden by default. -->
+        <div id="status" class="banner" role="status" aria-live="polite" hidden></div>
       </div>
     </div>
 
-    <details open>
+    <!-- Debug panel kept for you but hidden from users -->
+    <details style="display:none">
       <summary>Debug</summary>
       <pre id="debug">BOOT: page parsed.</pre>
     </details>
@@ -83,8 +89,16 @@ const thumbsEl= document.getElementById('thumbs');
 const promptEl= document.getElementById('prompt');
 const formatEl= document.getElementById('format');
 const runBtn  = document.getElementById('runBtn');
+const statusEl= document.getElementById('status');
 
 log('BOOT: elements wired.');
+
+/* User-facing status helpers (UI only) */
+function showStatus(msg, kind){
+  statusEl.textContent = msg;
+  statusEl.className = 'banner ' + (kind === 'ok' ? 'ok' : 'err');
+  statusEl.hidden = false;
+}
 
 /* ===================== THUMBNAILS ===================== */
 filesEl.addEventListener('change', () => {
@@ -158,6 +172,7 @@ window.__run = async function(){
   for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
 
   const oldText = runBtn.textContent;
+  statusEl.hidden = true; // reset banner
   runBtn.dataset.busy = '1';
   runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
@@ -190,11 +205,16 @@ window.__run = async function(){
       const data = j?.data || j?.response?.data || {};
       const taskId   = data.taskId || data.id || '';
       const recordId = data.recordId || '';
-      if (taskId || recordId) log('SUBMITTED ✔  Watch your Make webhook for the result.', { taskId, recordId });
-    } catch { log('CREATE TEXT:', txt); }
+      if (taskId || recordId) {
+        log('SUBMITTED ✔  Watch your Make webhook for the result.', { taskId, recordId });
+        showStatus('✅ Submitted successfully. Check your Telegram — your image will arrive shortly.', 'ok');
+      }
+    } catch {
+      log('CREATE TEXT:', txt);
+    }
   } catch (err) {
     log('RUN ERROR:', String(err));
-    alert('Request failed. See Debug.');
+    showStatus('❌ Error occurred. Please try again.', 'err');
   } finally {
     runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy='';
   }
