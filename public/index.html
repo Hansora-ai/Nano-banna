@@ -38,11 +38,14 @@
   <div class="wrap">
     <div class="card">
       <h1>Nano Banana – Image Edit</h1>
+
       <label>Select 1–4 images (jpeg/png/webp, ≤10MB each)</label>
       <input id="fileInput" type="file" accept="image/*" multiple />
       <div id="thumbs" class="thumbs"></div>
+
       <label>Prompt</label>
       <textarea id="prompt" placeholder="Describe the edit you want..."></textarea>
+
       <div class="row" style="margin-top:10px;">
         <select id="format">
           <option value="png">PNG</option>
@@ -50,8 +53,10 @@
         </select>
         <button id="runBtn">Run</button>
       </div>
+
       <div id="status" class="hint"></div>
       <div id="results" class="results"></div>
+
       <details style="margin-top:12px;">
         <summary>Debug</summary>
         <pre id="debug"></pre>
@@ -62,14 +67,15 @@
 <script>
 (function(){
   try{ Telegram?.WebApp?.ready(); Telegram?.WebApp?.expand(); }catch(e){}
+
   const fileInput = document.getElementById('fileInput');
-  const thumbs = document.getElementById('thumbs');
-  const promptEl = document.getElementById('prompt');
-  const formatEl = document.getElementById('format');
-  const runBtn = document.getElementById('runBtn');
+  const thumbs    = document.getElementById('thumbs');
+  const promptEl  = document.getElementById('prompt');
+  const formatEl  = document.getElementById('format');
+  const runBtn    = document.getElementById('runBtn');
   const resultsEl = document.getElementById('results');
-  const statusEl = document.getElementById('status');
-  const debugEl = document.getElementById('debug');
+  const statusEl  = document.getElementById('status');
+  const debugEl   = document.getElementById('debug');
 
   let selected = [];
 
@@ -87,49 +93,74 @@
   runBtn.addEventListener('click', async () => {
     try{
       if(!selected.length){ alert('Please choose 1–4 images.'); return; }
-      runBtn.disabled = true; resultsEl.innerHTML=''; statusEl.textContent='Uploading...';
 
+      runBtn.disabled = true;
+      resultsEl.innerHTML='';
+      statusEl.textContent='Uploading...';
+      debugEl.textContent='';
+
+      // 1) Upload images -> returns { urls: [...] }
       const filesPayload = await Promise.all(selected.map(f => fileToBase64(f)));
-
       const upRes = await fetch('/.netlify/functions/upload', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ files: filesPayload })
       });
+      const upText = await upRes.text();
+      let upJson; try { upJson = JSON.parse(upText); } catch { upJson = { raw: upText }; }
       if(!upRes.ok){
-        const msg = await upRes.text();
-        throw new Error(`Upload failed: ${msg}`);
+        alert(`Upload failed`);
+        debugEl.textContent = JSON.stringify(upJson,null,2);
+        return;
       }
-      const { urls } = await upRes.json();
+      const urls = upJson.urls || [];
+      if(!Array.isArray(urls) || urls.length === 0){
+        alert('Upload returned no URLs');
+        debugEl.textContent = JSON.stringify(upJson,null,2);
+        return;
+      }
 
+      // 2) Call server function that follows KIE's "input{...}" format
       statusEl.textContent='Calling Nano Banana...';
-      const apiRes = await fetch('/.netlify/functions/run-nano-banana',{
+      const body = {
+        urls,                         // array of HTTP image URLs
+        prompt: promptEl.value || '',
+        format: formatEl.value,       // 'png' | 'jpeg'
+        size: 'auto'
+      };
+
+      const apiRes = await fetch('/.netlify/functions/run-nano-banana', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          image_urls: urls,
-          output_format: formatEl.value,
-          prompt: promptEl.value || ''
-        })
+        body: JSON.stringify(body)
       });
-      const data = await apiRes.json();
+
+      const apiText = await apiRes.text();
+      let data; try { data = JSON.parse(apiText); } catch { data = { raw: apiText }; }
+      debugEl.textContent = JSON.stringify(data,null,2);
+
       if(!apiRes.ok){
-        throw new Error(data?.error || 'API error');
+        statusEl.textContent='KIE error';
+        alert('KIE error');
+        return;
       }
 
-      if(!data?.urls || !data.urls.length){
-        throw new Error('No output URLs returned');
+      // 3) Try to pull any output image URLs from the response
+      const imgs = extractImageUrls(data);
+      if(imgs.length === 0){
+        alert('No output URLs returned');
+        statusEl.textContent='No output URLs';
+        return;
       }
 
-      statusEl.textContent = 'Done';
-      data.urls.forEach(u => {
+      statusEl.textContent='Done';
+      imgs.forEach(u => {
         const img = document.createElement('img');
         img.src = u;
         resultsEl.appendChild(img);
       });
-      debugEl.textContent = JSON.stringify(data.api ?? data, null, 2);
     }catch(err){
-      alert(err.message || 'Error');
+      alert(err?.message || 'Error');
     }finally{
       runBtn.disabled = false;
     }
@@ -145,6 +176,14 @@
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  }
+
+  function extractImageUrls(obj){
+    const s = JSON.stringify(obj);
+    const re = /(https?:\/\/[^"\s]+\.(?:png|jpg|jpeg|webp))/gi;
+    const out = []; let m;
+    while((m = re.exec(s))) out.push(m[1]);
+    return Array.from(new Set(out));
   }
 })();
 </script>
