@@ -22,7 +22,8 @@ export const handler = async (event) => {
     try { bodyIn = JSON.parse(event.body || '{}'); }
     catch { return { statusCode: 400, headers: cors(), body: 'Bad JSON' }; }
 
-    const { prompt, format = 'png', files = [], imageUrls = [] } = bodyIn;
+    // ⬇️ ADDED: read uid (Telegram user_id) from the incoming body
+    const { prompt, format = 'png', files = [], imageUrls = [], uid } = bodyIn; // ← only addition here
     if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
     // Build image_urls from URLs (preferred) or from base64 (legacy)
@@ -56,13 +57,20 @@ export const handler = async (event) => {
       }
     }
 
+    // ⬇️ ADDED: set fixed cost
+    const COST = 1.5;
+
     // Create the task (KIE will POST the final result to Make)
     const clientContext = { prompt, format, submittedAt: new Date().toISOString() };
-    const callbackUrl = `${MAKE_WEBHOOK_URL}?ctx=${encodeURIComponent(JSON.stringify(clientContext))}`;
+
+    // ⬇️ ADDED: append uid + cost to your existing Make webhook URL
+    const callbackUrl =
+      `${MAKE_WEBHOOK_URL}?ctx=${encodeURIComponent(JSON.stringify(clientContext))}` +
+      `&uid=${encodeURIComponent(uid || '')}&cost=${encodeURIComponent(COST)}`;
 
     const payload = {
       model: "google/nano-banana-edit",
-      callBackUrl: callbackUrl,
+      callBackUrl: callbackUrl, // keep same field name as your working version
       input: {
         prompt,
         image_urls,
