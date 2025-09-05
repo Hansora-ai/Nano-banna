@@ -90,11 +90,17 @@
       runBtn.disabled = true; resultsEl.innerHTML=''; statusEl.textContent='Uploading...';
 
       const filesPayload = await Promise.all(selected.map(f => fileToBase64(f)));
-      const upRes = await fetch('/.netlify/functions/upload',{
-        method:'POST', headers:{'Content-Type':'application/json'},
+
+      // UPDATED: show real error message from the upload function
+      const upRes = await fetch('/.netlify/functions/upload', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ files: filesPayload })
       });
-      if(!upRes.ok){ throw new Error('Upload failed'); }
+      if(!upRes.ok){
+        const msg = await upRes.text();
+        throw new Error(`Upload failed: ${msg}`);
+      }
       const { urls } = await upRes.json();
 
       statusEl.textContent='Calling Nano Banana...';
