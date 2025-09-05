@@ -105,57 +105,73 @@ async function fileToBase64(file){
   return btoa(bin);
 }
 
-/* >>> REPLACED: preserve quality; only compress if absolutely necessary */
-async function prepareFileForUpload(file){
-  const SAFE_BASE64_CHARS = 7_500_000;   // ~5.6 MB binary; keeps request body safe on mobile
-  const PNG_MAXSIDE_STEP1 = Infinity;    // full-size lossless first
-  const PNG_MAXSIDE_STEP2 = 2400;        // gentle downscale, still PNG/lossless
-  const JPG_MAXSIDE       = 2000;        // last resort
-  const JPG_QUALITIES     = [0.92, 0.88, 0.82]; // high -> medium
+// Keep requests under ~7.5M base64 chars (~5.6MB binary) to avoid mobile 400/500.
+const SAFE_TOTAL_BASE64 = 7_500_000;
 
-  // 0) Try original as-is if small enough
-  if ((file.size || 0) <= 5 * 1024 * 1024) { // <=5MB binary ≈ <=6.7MB base64
-    return { name: file.name, contentType: file.type || 'application/octet-stream', data: await fileToBase64(file) };
-  }
+// Lossless PNG re-encode at same size
+async function pngReencodeSameSize(file){
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.getContext('2d').drawImage(img, 0, 0);
+  const dataURL = c.toDataURL('image/png'); // lossless
+  const base64  = dataURL.split(',')[1];
+  return { name: (file.name||'image').replace(/\.[^.]+$/,'') + '.png', contentType: 'image/png', data: base64 };
+}
 
-  // helper to draw and export PNG/JPEG at given max side / quality
-  async function drawExport({type, maxSide=Infinity, quality=null}){
+// Minimal downscale if still too big (keeps quality)
+async function mildDownscaleToLimit(file){
+  // start from full size; step down gently
+  let maxSide = 2400; // still high-res
+  for (let step=0; step<3; step++){
     const url = URL.createObjectURL(file);
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+    const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
     let w = img.naturalWidth, h = img.naturalHeight;
-    if (isFinite(maxSide)) {
-      if (w > h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
-      else if (h >= w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
-    }
+    if (w > h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
+    else if (h >= w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     c.getContext('2d').drawImage(img, 0, 0, w, h);
-    const dataURL = type === 'image/png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', quality ?? 0.92);
-    const base64  = dataURL.split(',')[1];
-    const name    = (file.name || 'image').replace(/\.[^.]+$/,'') + (type==='image/png'?'.png':'.jpg');
-    return { name, contentType: type, data: base64 };
-  }
-
-  // 1) Lossless PNG at full size
-  try {
-    let out = await drawExport({ type: 'image/png', maxSide: PNG_MAXSIDE_STEP1 });
-    if (out.data.length <= SAFE_BASE64_CHARS) return out;
-
-    // 2) Gentle lossless downscale (PNG)
-    out = await drawExport({ type: 'image/png', maxSide: PNG_MAXSIDE_STEP2 });
-    if (out.data.length <= SAFE_BASE64_CHARS) return out;
-
-    // 3) Last resort: high-quality JPEG with moderate downscale
-    for (const q of JPG_QUALITIES) {
-      out = await drawExport({ type: 'image/jpeg', maxSide: JPG_MAXSIDE, quality: q });
-      if (out.data.length <= SAFE_BASE64_CHARS) return out;
+    // prefer PNG first; if still big, try gentle JPEG
+    let dataURL = c.toDataURL('image/png');
+    let base64  = dataURL.split(',')[1];
+    if (base64.length > SAFE_TOTAL_BASE64) {
+      dataURL = c.toDataURL('image/jpeg', 0.9); // high quality
+      base64  = dataURL.split(',')[1];
+      const name = (file.name||'image').replace(/\.[^.]+$/,'') + '.jpg';
+      if (base64.length <= SAFE_TOTAL_BASE64) return { name, contentType: 'image/jpeg', data: base64 };
+    } else {
+      const name = (file.name||'image').replace(/\.[^.]+$/,'') + '.png';
+      return { name, contentType: 'image/png', data: base64 };
     }
-    // If still huge, return best we got (last JPEG)
-    return out;
-  } catch {
-    // On any failure, fall back to original
+    maxSide = Math.max(1800, Math.round(maxSide * 0.85)); // one more gentle step if needed
+  }
+  // If we’re still above the limit, return the last high-quality JPEG anyway.
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+  const c = document.createElement('canvas');
+  const scale = 1800 / Math.max(img.naturalWidth, img.naturalHeight);
+  c.width = Math.round(img.naturalWidth * Math.min(1, scale));
+  c.height= Math.round(img.naturalHeight* Math.min(1, scale));
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const dataURL = c.toDataURL('image/jpeg', 0.88);
+  const base64  = dataURL.split(',')[1];
+  return { name: (file.name||'image').replace(/\.[^.]+$/,'') + '.jpg', contentType: 'image/jpeg', data: base64 };
+}
+
+// Prepare ONE file with minimal/no quality loss; only downsize if absolutely required.
+async function prepareOne(file){
+  // If original binary is ≤5MB it’s already safe → send original
+  if ((file.size || 0) <= 5 * 1024 * 1024) {
     return { name: file.name, contentType: file.type || 'application/octet-stream', data: await fileToBase64(file) };
   }
+  // Try lossless PNG re-encode at full size
+  const pngFull = await pngReencodeSameSize(file);
+  if (pngFull.data.length <= SAFE_TOTAL_BASE64) return pngFull;
+
+  // Still too big → do a gentle downscale
+  return await mildDownscaleToLimit(file);
 }
 
 /* ===================== MAIN RUN ===================== */
@@ -169,10 +185,20 @@ window.__run = async function(){
   const oldText = runBtn.textContent;
   runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
+    // Prepare files individually; keeps originals unless they’d overflow the mobile limit
+    const prepared = await Promise.all(files.map(prepareOne));
+
+    // If multiple big files would overflow in one request, warn (Netlify request limit).
+    const totalBase64 = prepared.reduce((n,f)=>n+(f.data?.length||0),0);
+    if (totalBase64 > SAFE_TOTAL_BASE64) {
+      alert('These images together are too large to send in one request on mobile. Please send fewer images at once or choose smaller files.');
+      runBtn.textContent = oldText; runBtn.disabled = false; return;
+    }
+
     const payload = {
       prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
-      files: await Promise.all(files.map(prepareFileForUpload))
+      files: prepared
     };
 
     const res = await fetch('/.netlify/functions/kie-create', {
