@@ -1,12 +1,7 @@
 [build]
-  publish = "public"
-  functions = "netlify/functions"
+  publish = "nano-banana-miniapp-netlify-keyed/public"
+  functions = "nano-banana-miniapp-netlify-keyed/netlify/functions"
   node_version = "18"
 
 [functions]
   node_bundler = "esbuild"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
