@@ -4,6 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Nano Banana — Image-to-Image</title>
+
+  <!-- CSP that allows inline JS + the endpoints we call -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 img-src * data: blob:;
+                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com;
+                 style-src 'self' 'unsafe-inline';
+                 script-src 'self' 'unsafe-inline'">
+
   <style>
     body { background:#0b0b0f; color:#eaeaf0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
     .wrap { max-width:880px; margin:40px auto; padding:24px; background:#14141b; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.45); }
@@ -22,6 +31,10 @@
   </style>
 </head>
 <body>
+  <noscript><div style="background:#ffdbdb;color:#300;padding:10px;border-radius:8px">
+    JavaScript is disabled. The Run button won’t work.
+  </div></noscript>
+
   <div class="wrap">
     <h1>Nano Banana — Image-to-Image</h1>
 
@@ -31,8 +44,7 @@
         <input id="files" type="file" accept="image/*" multiple />
         <div id="thumbs"></div>
         <div class="note">
-          Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code>. KIE will
-          <b>POST the final result</b> to your Make.com webhook. This page just shows the task id / response.
+          Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code>. KIE posts the final result to your Make.com webhook.
         </div>
       </div>
 
@@ -46,8 +58,9 @@
           <option value="jpeg">JPEG</option>
         </select>
         <div style="height:14px"></div>
-        <!-- triple-wired: inline onclick, eventListener, and assignment in script -->
-        <button id="runBtn" type="button" onclick="window.__run && window.__run()">Run</button>
+        <!-- INLINE ALERT so you SEE the click immediately -->
+        <button id="runBtn" type="button"
+                onclick="alert('RUN CLICKED'); window.__run && window.__run()">Run</button>
       </div>
     </div>
 
@@ -60,7 +73,7 @@
 <script>
 /* ===================== DEBUG & ELEMENTS ===================== */
 const dbg = document.getElementById('debug');
-const log = (...a) => { dbg.textContent += '\\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); };
+const log = (...a) => { dbg.textContent += '\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); };
 
 window.addEventListener('error', e => log('Window error:', e.message));
 window.addEventListener('unhandledrejection', e => log('Unhandled promise:', String(e.reason)));
@@ -94,13 +107,14 @@ async function fileToBase64(file){
 
 /* ===================== MAIN RUN ===================== */
 window.__run = async function(){
-  log('RUN: clicked.');
+  log('RUN: clicked (handler).');
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
   if (files.length > 4) { alert('Max 4 images.'); return; }
-  for (const f of files){ if (f.size > 10*1024*1024){ alert(\`"\${f.name}" exceeds 10MB.\`); return; } }
+  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
 
-  runBtn.disabled = true; const oldText = runBtn.textContent; runBtn.textContent = 'Working…';
+  const oldText = runBtn.textContent;
+  runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
     const payload = {
       prompt: (promptEl.value || '').trim(),
@@ -120,17 +134,15 @@ window.__run = async function(){
 
     const ct  = res.headers.get('content-type') || '';
     const txt = await res.text();
-    log(\`CREATE: status=\${res.status} ct=\${ct}\`);
+    log(`CREATE: status=${res.status} ct=${ct}`);
     try {
       const j = JSON.parse(txt);
       log('CREATE JSON:', j);
       const data = j?.data || j?.response?.data || {};
-      const taskId   = data.taskId  || data.id || '';
+      const taskId   = data.taskId || data.id || '';
       const recordId = data.recordId || '';
       if (taskId || recordId) log('SUBMITTED ✔  Watch your Make webhook for the result.', { taskId, recordId });
-    } catch {
-      log('CREATE TEXT:', txt);
-    }
+    } catch { log('CREATE TEXT:', txt); }
   } catch (err) {
     log('RUN ERROR:', String(err));
     alert('Request failed. See Debug.');
@@ -139,9 +151,10 @@ window.__run = async function(){
   }
 };
 
-/* triple-wire the button to be safe */
+/* Triple-wire the click so it ALWAYS reacts */
 runBtn.addEventListener('click', window.__run);
 runBtn.onclick = window.__run;
+
 log('BOOT: handler attached.');
 </script>
 </body>
