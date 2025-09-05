@@ -184,10 +184,14 @@ window.__run = async function(){
     }
     log('Got KIE download URLs:', urls);
 
+    // ADDED: read uid from ?uid=... in the page URL
+    const uid = new URLSearchParams(location.search).get('uid') || '';
+
     const payload = {
       prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
-      imageUrls: urls
+      imageUrls: urls,
+      uid // ADDED: pass uid to your Netlify function
     };
 
     const res = await fetch('/.netlify/functions/kie-create', {
