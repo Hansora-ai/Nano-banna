@@ -91,7 +91,6 @@
 
       const filesPayload = await Promise.all(selected.map(f => fileToBase64(f)));
 
-      // UPDATED: show real error message from the upload function
       const upRes = await fetch('/.netlify/functions/upload', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -104,25 +103,31 @@
       const { urls } = await upRes.json();
 
       statusEl.textContent='Calling Nano Banana...';
-      const body = {
-        image_urls: urls,
-        output_format: formatEl.value,
-        prompt: promptEl.value || ''
-      };
       const apiRes = await fetch('/.netlify/functions/run-nano-banana',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(body)
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          image_urls: urls,
+          output_format: formatEl.value,
+          prompt: promptEl.value || ''
+        })
       });
       const data = await apiRes.json();
-      statusEl.textContent = apiRes.ok ? 'Done' : 'API error';
+      if(!apiRes.ok){
+        throw new Error(data?.error || 'API error');
+      }
 
-      const imgs = extractImageUrls(data);
-      imgs.forEach(u => {
+      if(!data?.urls || !data.urls.length){
+        throw new Error('No output URLs returned');
+      }
+
+      statusEl.textContent = 'Done';
+      data.urls.forEach(u => {
         const img = document.createElement('img');
         img.src = u;
         resultsEl.appendChild(img);
       });
-      debugEl.textContent = JSON.stringify(data,null,2);
+      debugEl.textContent = JSON.stringify(data.api ?? data, null, 2);
     }catch(err){
       alert(err.message || 'Error');
     }finally{
@@ -140,14 +145,6 @@
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-  }
-
-  function extractImageUrls(obj){
-    const s = JSON.stringify(obj);
-    const re = /(https?:\/\/[^"\s]+\.(?:png|jpg|jpeg|webp))/gi;
-    const out = []; let m;
-    while((m = re.exec(s))) out.push(m[1]);
-    return Array.from(new Set(out));
   }
 })();
 </script>
