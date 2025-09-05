@@ -1,5 +1,6 @@
+
 // /.netlify/functions/upload
-export default async (request, context) => {
+export default async (request) => {
   try {
     if (request.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Use POST' }), { status: 405 });
@@ -29,14 +30,18 @@ export default async (request, context) => {
         return new Response(JSON.stringify({ error: 'File > 10MB' }), { status: 400 });
       }
 
-      // Upload anonymously to 0x0.st
+      // Upload to Catbox (no auth required)
       const form = new FormData();
+      form.append('reqtype', 'fileupload');
       const filename = (f.name || 'image').replace(/\s+/g, '_');
-      form.append('file', new Blob([buf], { type: f.type }), filename);
+      form.append('fileToUpload', new Blob([buf], { type: f.type }), filename);
 
-      const resp = await fetch('https://0x0.st', { method: 'POST', body: form });
-      const text = (await resp.text()).trim();
+      const resp = await fetch('https://catbox.moe/user/api.php', {
+        method: 'POST',
+        body: form
+      });
 
+      const text = (await resp.text()).trim(); // returns the URL on success
       if (!resp.ok || !/^https?:\/\//i.test(text)) {
         return new Response(
           JSON.stringify({ error: 'Upload host failed', status: resp.status, body: text }),
