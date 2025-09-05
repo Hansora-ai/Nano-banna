@@ -19,7 +19,7 @@
     details{margin-top:16px; background:#0f0f15; border:1px solid #262634; border-radius:12px; padding:10px 12px}
     pre{white-space:pre-wrap; word-break:break-word; margin:0}
     .out{margin-top:18px; padding:12px; background:#0f0f15; border:1px solid #262634; border-radius:12px}
-    .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px}
+    .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:14px}
     .note{font-size:12px; opacity:.7; margin-top:6px}
   </style>
 </head>
@@ -27,7 +27,6 @@
   <div class="wrap">
     <h1>Nano Banana — Image-to-Image</h1>
 
-    <!-- prevent default submit just in case -->
     <form id="jobForm" onsubmit="return false;">
       <div class="row">
         <div class="col">
@@ -35,7 +34,7 @@
           <input id="files" type="file" accept="image/*" multiple />
           <div id="thumbs" class="grid"></div>
           <div class="note">
-            Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code> (upload → createTask),
+            Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code> (upload → createTask),<br/>
             then polls <code>/.netlify/functions/kie-status</code> for results.
           </div>
         </div>
@@ -50,7 +49,7 @@
             <option value="jpeg">JPEG</option>
           </select>
           <div style="height:14px"></div>
-          <!-- IMPORTANT: button is 'button', not 'submit'. Also inline fallback onclick. -->
+          <!-- Button is 'button' (no submit). Inline fallback calls __doRun if present. -->
           <button id="runBtn" type="button" onclick="window.__doRun && window.__doRun()">Run</button>
         </div>
       </div>
@@ -66,142 +65,142 @@
     </details>
   </div>
 
+<!-- =================== SCRIPT =================== -->
 <script>
-window.addEventListener('DOMContentLoaded', () => {
-  const filesEl = document.getElementById('files');
-  const thumbsEl = document.getElementById('thumbs');
-  const promptEl = document.getElementById('prompt');
-  const formatEl = document.getElementById('format');
-  const runBtn = document.getElementById('runBtn');
-  const dbg = document.getElementById('debug');
-  const outBox = document.getElementById('out');
-  const gallery = document.getElementById('gallery');
+/* --------- utilities --------- */
+const dbg     = document.getElementById('debug');
+const log = (...a) => { dbg.textContent += '\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); };
+window.addEventListener('error', e => log('Window error:', e.message));
+window.addEventListener('unhandledrejection', e => log('Unhandled promise:', String(e.reason)));
 
-  function log(...a){ dbg.textContent += '\\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); }
+/* --------- grab elements (script is at end of body, so DOM is ready) --------- */
+const filesEl = document.getElementById('files');
+const thumbsEl= document.getElementById('thumbs');
+const promptEl= document.getElementById('prompt');
+const formatEl= document.getElementById('format');
+const runBtn  = document.getElementById('runBtn');
+const outBox  = document.getElementById('out');
+const gallery = document.getElementById('gallery');
 
-  // catch any JS errors so you see them in Debug (not only DevTools)
-  window.addEventListener('error', e => log('Window error:', e.message));
-  window.addEventListener('unhandledrejection', e => log('Unhandled promise:', String(e.reason)));
+log('BOOT: script loaded.');
 
-  filesEl.addEventListener('change', () => {
-    thumbsEl.innerHTML = '';
-    [...filesEl.files].slice(0,4).forEach(f=>{
-      const url = URL.createObjectURL(f);
-      const img = document.createElement('img');
-      img.src = url; img.className = 'thumb';
-      thumbsEl.appendChild(img);
-    });
+/* --------- thumbnails --------- */
+filesEl.addEventListener('change', () => {
+  thumbsEl.innerHTML = '';
+  [...filesEl.files].slice(0,4).forEach(f=>{
+    const url = URL.createObjectURL(f);
+    const img = document.createElement('img');
+    img.src = url; img.className = 'thumb';
+    thumbsEl.appendChild(img);
   });
+});
 
-  async function fileToBase64(file){
-    const ab = await file.arrayBuffer();
-    let bin=''; const bytes=new Uint8Array(ab), step=0x8000;
-    for (let i=0;i<bytes.length;i+=step) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+step));
-    return btoa(bin);
-  }
-
-  function extractImageUrls(obj, out=[]) {
-    if (!obj) return out;
-    if (typeof obj === 'string') {
-      if (/^https?:\\/\\/[^\\s"]+\\.(png|jpg|jpeg|webp)(\\?.*)?$/i.test(obj)) out.push(obj);
-      return out;
-    }
-    if (Array.isArray(obj)) obj.forEach(v => extractImageUrls(v, out));
-    else if (typeof obj === 'object') Object.values(obj).forEach(v => extractImageUrls(v, out));
+/* --------- helpers --------- */
+async function fileToBase64(file){
+  const ab = await file.arrayBuffer();
+  let bin=''; const bytes=new Uint8Array(ab), step=0x8000;
+  for (let i=0;i<bytes.length;i+=step) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+step));
+  return btoa(bin);
+}
+function extractImageUrls(obj, out=[]) {
+  if (!obj) return out;
+  if (typeof obj === 'string') {
+    if (/^https?:\/\/[^\s"]+\.(png|jpg|jpeg|webp)(\?.*)?$/i.test(obj)) out.push(obj);
     return out;
   }
+  if (Array.isArray(obj)) obj.forEach(v => extractImageUrls(v, out));
+  else if (typeof obj === 'object') Object.values(obj).forEach(v => extractImageUrls(v, out));
+  return out;
+}
+async function pollStatus(taskId, recordId) {
+  log('Polling status…', { taskId, recordId });
+  for (let i=0;i<60;i++){  // ~3 minutes
+    const url = `/.netlify/functions/kie-status?${new URLSearchParams({taskId, recordId}).toString()}`;
+    const r = await fetch(url);
+    const j = await r.json().catch(()=>null);
+    log('STATUS JSON:', j);
 
-  async function pollStatus(taskId, recordId) {
-    log('Polling status…', { taskId, recordId });
-    for (let i=0;i<60;i++){  // ~3 minutes
-      const url = `/.netlify/functions/kie-status?${new URLSearchParams({taskId, recordId}).toString()}`;
-      const r = await fetch(url);
-      const j = await r.json().catch(()=>null);
-      log('STATUS JSON:', j);
+    const data = j && (j.response || j).data;
+    const status = (data && (data.status || data.taskStatus || data.state || data.stage || '')).toString().toLowerCase();
 
-      const data = j && (j.response || j).data;
-      const status = (data && (data.status || data.taskStatus || data.state || data.stage || '')).toString().toLowerCase();
-
-      if (/success|succeed|finished|done|complete/.test(status)) {
-        const urls = extractImageUrls(j);
-        if (urls.length) {
-          gallery.innerHTML = '';
-          urls.forEach(u=>{
-            const a = document.createElement('a'); a.href = u; a.textContent = u; a.target = '_blank';
-            const img = document.createElement('img'); img.src = u; img.style.width='100%'; img.style.borderRadius='12px';
-            const wrap = document.createElement('div'); wrap.appendChild(img); wrap.appendChild(a);
-            gallery.appendChild(wrap);
-          });
-        } else {
-          log('No image URLs found in status JSON.');
-        }
-        outBox.style.display = 'block';
-        return;
-      }
-
-      if (/fail|error|exception|illegal|denied|reject/.test(status)) {
-        alert('KIE reported failure. See Debug for details.'); return;
-      }
-
-      await new Promise(r => setTimeout(r, 3000));
-    }
-    alert('Timed out waiting for result. Check Debug for last status.');
-  }
-
-  // The actual run function (also exposed as inline fallback)
-  window.__doRun = async function(){
-    log('Run clicked.');
-    gallery.innerHTML = '';
-    outBox.style.display = 'none';
-
-    const files = [...filesEl.files];
-    if (!files.length) { alert('Choose at least one image.'); return; }
-    if (files.length > 4) { alert('Max 4 images.'); return; }
-    for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
-
-    runBtn.disabled = true;
-    try {
-      const payload = {
-        prompt: (promptEl.value || '').trim(),
-        format: (formatEl.value || 'png').toLowerCase(),
-        files: await Promise.all(files.map(async f => ({
-          name: f.name,
-          contentType: f.type || 'application/octet-stream',
-          data: await fileToBase64(f)
-        })))
-      };
-
-      const res = await fetch('/.netlify/functions/kie-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const ct  = res.headers.get('content-type') || '';
-      const txt = await res.text();
-      log(`CreateTask response status: ${res.status} content-type: ${ct}`);
-      let j = null; try { j = JSON.parse(txt); log('CreateTask JSON:', j); } catch { log('CreateTask TEXT:', txt); }
-
-      const data = j && j.data || j && j.response && j.response.data || {};
-      const taskId = data.taskId || data.id || '';
-      const recordId = data.recordId || '';
-      if (taskId || recordId) {
-        await pollStatus(taskId, recordId);
+    if (/success|succeed|finished|done|complete/.test(status)) {
+      const urls = extractImageUrls(j);
+      gallery.innerHTML = '';
+      if (urls.length) {
+        urls.forEach(u=>{
+          const a = document.createElement('a'); a.href = u; a.textContent = u; a.target = '_blank';
+          const img = document.createElement('img'); img.src = u; img.style.width='100%'; img.style.borderRadius='12px';
+          const wrap = document.createElement('div'); wrap.appendChild(img); wrap.appendChild(a);
+          gallery.appendChild(wrap);
+        });
       } else {
-        alert('Task created but no taskId/recordId returned. See Debug.');
+        const p = document.createElement('p'); p.textContent = 'No image URLs found in status JSON.';
+        gallery.appendChild(p);
       }
-    } catch (err) {
-      log('JS ERROR:', String(err));
-      alert('Request failed. See Debug.');
-    } finally {
-      runBtn.disabled = false;
+      outBox.style.display = 'block';
+      return;
     }
-  };
+    if (/fail|error|exception|illegal|denied|reject/.test(status)) {
+      alert('KIE reported failure. See Debug for details.'); return;
+    }
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  alert('Timed out waiting for result. Check Debug for last status.');
+}
 
-  // Attach listener (plus inline fallback above)
-  runBtn.addEventListener('click', window.__doRun);
-  log('JS loaded. Handler attached.');
-});
+/* --------- main run function (also used by inline fallback) --------- */
+window.__doRun = async function(){
+  log('Run clicked.');
+  gallery.innerHTML = '';
+  outBox.style.display = 'none';
+
+  const files = [...filesEl.files];
+  if (!files.length) { alert('Choose at least one image.'); return; }
+  if (files.length > 4) { alert('Max 4 images.'); return; }
+  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
+
+  runBtn.disabled = true;
+  try {
+    const payload = {
+      prompt: (promptEl.value || '').trim(),
+      format: (formatEl.value || 'png').toLowerCase(),
+      files: await Promise.all(files.map(async f => ({
+        name: f.name,
+        contentType: f.type || 'application/octet-stream',
+        data: await fileToBase64(f)
+      })))
+    };
+
+    const res = await fetch('/.netlify/functions/kie-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const ct  = res.headers.get('content-type') || '';
+    const txt = await res.text();
+    log(`CreateTask response status: ${res.status} content-type: ${ct}`);
+    let j = null; try { j = JSON.parse(txt); log('CreateTask JSON:', j); } catch { log('CreateTask TEXT:', txt); }
+
+    const data = j && j.data || j && j.response && j.response.data || {};
+    const taskId = data.taskId || data.id || '';
+    const recordId = data.recordId || '';
+    if (taskId || recordId) {
+      await pollStatus(taskId, recordId);
+    } else {
+      alert('Task created but no taskId/recordId returned. See Debug.');
+    }
+  } catch (err) {
+    log('JS ERROR:', String(err));
+    alert('Request failed. See Debug.');
+  } finally {
+    runBtn.disabled = false;
+  }
+};
+
+/* attach listener */
+runBtn.addEventListener('click', window.__doRun);
+log('Handler attached.');
 </script>
 </body>
 </html>
