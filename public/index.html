@@ -151,9 +151,10 @@ window.__run = async function(){
   }
 };
 
-/* Triple-wire the click so it ALWAYS reacts */
+/* (REMOVED the two extra bindings that caused double-send)
 runBtn.addEventListener('click', window.__run);
 runBtn.onclick = window.__run;
+*/
 
 log('BOOT: handler attached.');
 </script>
