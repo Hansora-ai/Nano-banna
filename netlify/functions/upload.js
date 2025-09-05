@@ -29,25 +29,22 @@ export default async (request, context) => {
         return new Response(JSON.stringify({ error: 'File > 10MB' }), { status: 400 });
       }
 
-      // Upload to PixelDrain
-      const resp = await fetch('https://pixeldrain.com/api/file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: buf
-      });
+      // Upload anonymously to 0x0.st
+      const form = new FormData();
+      const filename = (f.name || 'image').replace(/\s+/g, '_');
+      form.append('file', new Blob([buf], { type: f.type }), filename);
 
-      const text = await resp.text();          // read ONCE
-      let data = null;
-      try { data = JSON.parse(text); } catch {}
+      const resp = await fetch('https://0x0.st', { method: 'POST', body: form });
+      const text = (await resp.text()).trim();
 
-      if (!resp.ok || !data?.id) {
+      if (!resp.ok || !/^https?:\/\//i.test(text)) {
         return new Response(
           JSON.stringify({ error: 'Upload host failed', status: resp.status, body: text }),
           { status: 502, headers: { 'Content-Type': 'application/json' } }
         );
       }
 
-      urls.push(`https://pixeldrain.com/api/file/${data.id}`);
+      urls.push(text);
     }
 
     return new Response(JSON.stringify({ urls }), {
