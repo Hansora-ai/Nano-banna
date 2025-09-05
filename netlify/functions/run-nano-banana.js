@@ -1,5 +1,5 @@
 // netlify/functions/run-nano-banana.js
-const API_KEY = "7714ece17d4416e99ee15eada5f91ac6";
+const API_KEY = "bcf86d741fea9aa3ee039f6c6a2ad98b";
 
 // KIE endpoints (per their docs)
 const CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
