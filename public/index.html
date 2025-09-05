@@ -9,7 +9,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  img-src * data: blob:;
-                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com;
+                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com https://file.io;
                  style-src 'self' 'unsafe-inline';
                  script-src 'self' 'unsafe-inline'">
 
@@ -105,7 +105,7 @@ async function fileToBase64(file){
   return btoa(bin);
 }
 
-// Keep requests under ~7.5M base64 chars (~5.6MB binary) to avoid mobile 400/500.
+// Keep requests under ~9.5M base64 chars (~7MB binary) if we ever fall back.
 const SAFE_TOTAL_BASE64 = 9_500_000;
 
 // Lossless PNG re-encode at same size
@@ -122,8 +122,7 @@ async function pngReencodeSameSize(file){
 
 // Minimal downscale if still too big (keeps quality)
 async function mildDownscaleToLimit(file){
-  // start from full size; step down gently
-  let maxSide = 2400; // still high-res
+  let maxSide = 2400;
   for (let step=0; step<3; step++){
     const url = URL.createObjectURL(file);
     const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
@@ -133,11 +132,10 @@ async function mildDownscaleToLimit(file){
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     c.getContext('2d').drawImage(img, 0, 0, w, h);
-    // prefer PNG first; if still big, try gentle JPEG
     let dataURL = c.toDataURL('image/png');
     let base64  = dataURL.split(',')[1];
     if (base64.length > SAFE_TOTAL_BASE64) {
-      dataURL = c.toDataURL('image/jpeg', 0.9); // high quality
+      dataURL = c.toDataURL('image/jpeg', 0.9);
       base64  = dataURL.split(',')[1];
       const name = (file.name||'image').replace(/\.[^.]+$/,'') + '.jpg';
       if (base64.length <= SAFE_TOTAL_BASE64) return { name, contentType: 'image/jpeg', data: base64 };
@@ -145,9 +143,8 @@ async function mildDownscaleToLimit(file){
       const name = (file.name||'image').replace(/\.[^.]+$/,'') + '.png';
       return { name, contentType: 'image/png', data: base64 };
     }
-    maxSide = Math.max(1800, Math.round(maxSide * 0.85)); // one more gentle step if needed
+    maxSide = Math.max(1800, Math.round(maxSide * 0.85));
   }
-  // If we’re still above the limit, return the last high-quality JPEG anyway.
   const url = URL.createObjectURL(file);
   const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
   const c = document.createElement('canvas');
@@ -160,22 +157,31 @@ async function mildDownscaleToLimit(file){
   return { name: (file.name||'image').replace(/\.[^.]+$/,'') + '.jpg', contentType: 'image/jpeg', data: base64 };
 }
 
-// Prepare ONE file with minimal/no quality loss; only downsize if absolutely required.
+// Prepare ONE file for base64 fallback (keeps originals unless oversized)
 async function prepareOne(file){
-  // If original binary is ≤5MB it’s already safe → send original
   if ((file.size || 0) <= 5 * 1024 * 1024) {
     return { name: file.name, contentType: file.type || 'application/octet-stream', data: await fileToBase64(file) };
   }
-  // Try lossless PNG re-encode at full size
   const pngFull = await pngReencodeSameSize(file);
   if (pngFull.data.length <= SAFE_TOTAL_BASE64) return pngFull;
-
-  // Still too big → do a gentle downscale
   return await mildDownscaleToLimit(file);
+}
+
+/* === NEW: direct browser upload to file.io (no secrets). Returns a public URL. === */
+async function uploadToFileIO(file){
+  const fd = new FormData();
+  fd.append('file', file, file.name || 'image');
+  const res = await fetch('https://file.io/?expires=1w', { method:'POST', body: fd });
+  const j = await res.json().catch(()=>null);
+  if (!res.ok || !j || j.success !== true || !j.link) {
+    throw new Error(`file.io upload failed (${res.status})`);
+  }
+  return j.link; // one-time download; perfect for KIE to fetch once
 }
 
 /* ===================== MAIN RUN ===================== */
 window.__run = async function(){
+  if (runBtn.disabled || runBtn.dataset.busy === '1') return; // guard against double-clicks
   log('RUN: clicked (handler).');
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
@@ -183,23 +189,35 @@ window.__run = async function(){
   for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
 
   const oldText = runBtn.textContent;
+  runBtn.dataset.busy = '1';
   runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
-    // Prepare files individually; keeps originals unless they’d overflow the mobile limit
-    const prepared = await Promise.all(files.map(prepareOne));
+    let payload;
 
-    // If multiple big files would overflow in one request, warn (Netlify request limit).
-    const totalBase64 = prepared.reduce((n,f)=>n+(f.data?.length||0),0);
-    if (totalBase64 > SAFE_TOTAL_BASE64) {
-      alert('These images together are too large to send in one request on mobile. Please send fewer images at once or choose smaller files.');
-      runBtn.textContent = oldText; runBtn.disabled = false; return;
+    // Prefer direct URL uploads (works for huge images on phone & desktop).
+    try {
+      const urls = await Promise.all(files.map(uploadToFileIO));
+      log('Using direct URLs via file.io:', urls);
+      payload = {
+        prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
+        format: (formatEl.value || 'png').toLowerCase(),
+        imageUrls: urls
+      };
+    } catch (e) {
+      // Fallback to your original base64 flow (with gentle size handling)
+      log('Direct upload failed → fallback to base64:', String(e));
+      const prepared = await Promise.all(files.map(prepareOne));
+      const totalBase64 = prepared.reduce((n,f)=>n+(f.data?.length||0),0);
+      if (totalBase64 > SAFE_TOTAL_BASE64) {
+        alert('These images are too large for a single request. Please send fewer images at once.');
+        runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy=''; return;
+      }
+      payload = {
+        prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
+        format: (formatEl.value || 'png').toLowerCase(),
+        files: prepared
+      };
     }
-
-    const payload = {
-      prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
-      format: (formatEl.value || 'png').toLowerCase(),
-      files: prepared
-    };
 
     const res = await fetch('/.netlify/functions/kie-create', {
       method: 'POST',
@@ -222,7 +240,7 @@ window.__run = async function(){
     log('RUN ERROR:', String(err));
     alert('Request failed. See Debug.');
   } finally {
-    runBtn.textContent = oldText; runBtn.disabled = false;
+    runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy='';
   }
 };
 
