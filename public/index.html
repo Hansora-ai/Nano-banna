@@ -25,62 +25,66 @@
   <div class="wrap">
     <h1>Nano Banana — Image-to-Image</h1>
 
-    <form id="jobForm" onsubmit="return false;">
-      <div class="row">
-        <div class="col">
-          <label for="files">Select 1–4 images (jpeg/png/webp, ≤10MB each)</label>
-          <input id="files" type="file" accept="image/*" multiple />
-          <div id="thumbs"></div>
-          <div class="note">
-            Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code>. KIE will
-            <b>POST the final result</b> directly to your Make.com webhook. This page just shows the task id.
-          </div>
-        </div>
-
-        <div class="col">
-          <label for="prompt">Prompt</label>
-          <textarea id="prompt" placeholder="Describe the edit or style…"></textarea>
-          <div style="height:10px"></div>
-          <label for="format">Output format</label>
-          <select id="format">
-            <option value="png" selected>PNG</option>
-            <option value="jpeg">JPEG</option>
-          </select>
-          <div style="height:14px"></div>
-          <button id="runBtn" type="button">Run</button>
+    <div class="row">
+      <div class="col">
+        <label for="files">Select 1–4 images (jpeg/png/webp, ≤10MB each)</label>
+        <input id="files" type="file" accept="image/*" multiple />
+        <div id="thumbs"></div>
+        <div class="note">
+          Sends <b>JSON</b> to <code>/.netlify/functions/kie-create</code>. KIE will
+          <b>POST the final result</b> to your Make.com webhook. This page just shows the task id / response.
         </div>
       </div>
-    </form>
+
+      <div class="col">
+        <label for="prompt">Prompt</label>
+        <textarea id="prompt" placeholder="Describe the edit or style…"></textarea>
+        <div style="height:10px"></div>
+        <label for="format">Output format</label>
+        <select id="format">
+          <option value="png" selected>PNG</option>
+          <option value="jpeg">JPEG</option>
+        </select>
+        <div style="height:14px"></div>
+        <!-- triple-wired: inline onclick, eventListener, and assignment in script -->
+        <button id="runBtn" type="button" onclick="window.__run && window.__run()">Run</button>
+      </div>
+    </div>
 
     <details open>
       <summary>Debug</summary>
-      <pre id="debug">Ready.</pre>
+      <pre id="debug">BOOT: page parsed.</pre>
     </details>
   </div>
 
 <script>
+/* ===================== DEBUG & ELEMENTS ===================== */
 const dbg = document.getElementById('debug');
-const filesEl = document.getElementById('files');
-const promptEl = document.getElementById('prompt');
-const formatEl = document.getElementById('format');
-const runBtn   = document.getElementById('runBtn');
-
 const log = (...a) => { dbg.textContent += '\\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); };
 
 window.addEventListener('error', e => log('Window error:', e.message));
 window.addEventListener('unhandledrejection', e => log('Unhandled promise:', String(e.reason)));
 
+const filesEl = document.getElementById('files');
+const thumbsEl= document.getElementById('thumbs');
+const promptEl= document.getElementById('prompt');
+const formatEl= document.getElementById('format');
+const runBtn  = document.getElementById('runBtn');
+
+log('BOOT: elements wired.');
+
+/* ===================== THUMBNAILS ===================== */
 filesEl.addEventListener('change', () => {
-  const thumbs = document.getElementById('thumbs');
-  thumbs.innerHTML = '';
+  thumbsEl.innerHTML = '';
   [...filesEl.files].slice(0,4).forEach(f=>{
     const url = URL.createObjectURL(f);
     const img = document.createElement('img');
     img.src = url; img.className = 'thumb';
-    thumbs.appendChild(img);
+    thumbsEl.appendChild(img);
   });
 });
 
+/* ===================== HELPERS ===================== */
 async function fileToBase64(file){
   const ab = await file.arrayBuffer();
   let bin=''; const bytes=new Uint8Array(ab), step=0x8000;
@@ -88,14 +92,15 @@ async function fileToBase64(file){
   return btoa(bin);
 }
 
-runBtn.addEventListener('click', async () => {
-  log('Submitting…');
+/* ===================== MAIN RUN ===================== */
+window.__run = async function(){
+  log('RUN: clicked.');
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
   if (files.length > 4) { alert('Max 4 images.'); return; }
   for (const f of files){ if (f.size > 10*1024*1024){ alert(\`"\${f.name}" exceeds 10MB.\`); return; } }
 
-  runBtn.disabled = true;
+  runBtn.disabled = true; const oldText = runBtn.textContent; runBtn.textContent = 'Working…';
   try {
     const payload = {
       prompt: (promptEl.value || '').trim(),
@@ -115,24 +120,29 @@ runBtn.addEventListener('click', async () => {
 
     const ct  = res.headers.get('content-type') || '';
     const txt = await res.text();
-    log(\`CreateTask response status: \${res.status} content-type: \${ct}\`);
-    try { 
+    log(\`CREATE: status=\${res.status} ct=\${ct}\`);
+    try {
       const j = JSON.parse(txt);
-      log('CreateTask JSON:', j);
+      log('CREATE JSON:', j);
       const data = j?.data || j?.response?.data || {};
-      const taskId = data.taskId || data.id || '';
+      const taskId   = data.taskId  || data.id || '';
       const recordId = data.recordId || '';
-      if (taskId || recordId) log('Task submitted. Watch your Make webhook for the result.', { taskId, recordId });
-    } catch { 
-      log('CreateTask TEXT:', txt); 
+      if (taskId || recordId) log('SUBMITTED ✔  Watch your Make webhook for the result.', { taskId, recordId });
+    } catch {
+      log('CREATE TEXT:', txt);
     }
   } catch (err) {
-    log('JS ERROR:', String(err));
+    log('RUN ERROR:', String(err));
     alert('Request failed. See Debug.');
   } finally {
-    runBtn.disabled = false;
+    runBtn.textContent = oldText; runBtn.disabled = false;
   }
-});
+};
+
+/* triple-wire the button to be safe */
+runBtn.addEventListener('click', window.__run);
+runBtn.onclick = window.__run;
+log('BOOT: handler attached.');
 </script>
 </body>
 </html>
