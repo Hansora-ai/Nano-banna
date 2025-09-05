@@ -9,7 +9,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  img-src * data: blob:;
-                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com https://file.io;
+                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com;
                  style-src 'self' 'unsafe-inline';
                  script-src 'self' 'unsafe-inline'">
 
@@ -105,83 +105,52 @@ async function fileToBase64(file){
   return btoa(bin);
 }
 
-// Keep requests under ~9.5M base64 chars (~7MB binary) if we ever fall back.
-const SAFE_TOTAL_BASE64 = 9_500_000;
-
-// Lossless PNG re-encode at same size
-async function pngReencodeSameSize(file){
+/* Optional: very gentle prep if a single file is huge (keeps quality).
+   We only use this when needed before uploading one-by-one. */
+const SAFE_SINGLE_BASE64 = 9_500_000; // ~7MB binary per request
+async function prepareOneIfHuge(file){
+  const base64 = await fileToBase64(file);
+  if (base64.length <= SAFE_SINGLE_BASE64) {
+    return { name: file.name, contentType: file.type || 'application/octet-stream', data: base64 };
+  }
+  // mild, loss-minimized downscale only if absolutely necessary
   const url = URL.createObjectURL(file);
   const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
   const c = document.createElement('canvas');
-  c.width = img.naturalWidth; c.height = img.naturalHeight;
-  c.getContext('2d').drawImage(img, 0, 0);
-  const dataURL = c.toDataURL('image/png'); // lossless
-  const base64  = dataURL.split(',')[1];
-  return { name: (file.name||'image').replace(/\.[^.]+$/,'') + '.png', contentType: 'image/png', data: base64 };
+  const maxSide = 2400;
+  let { naturalWidth:w, naturalHeight:h } = img;
+  if (w >= h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
+  else if (h > w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  const dataURL = c.toDataURL(file.type.includes('png') ? 'image/png' : 'image/jpeg', 0.92);
+  const b64 = dataURL.split(',')[1];
+  return {
+    name: (file.name||'image').replace(/\.[^.]+$/,'') + (file.type.includes('png') ? '.png' : '.jpg'),
+    contentType: file.type.includes('png') ? 'image/png' : 'image/jpeg',
+    data: b64
+  };
 }
 
-// Minimal downscale if still too big (keeps quality)
-async function mildDownscaleToLimit(file){
-  let maxSide = 2400;
-  for (let step=0; step<3; step++){
-    const url = URL.createObjectURL(file);
-    const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
-    let w = img.naturalWidth, h = img.naturalHeight;
-    if (w > h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
-    else if (h >= w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
-    const c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    c.getContext('2d').drawImage(img, 0, 0, w, h);
-    let dataURL = c.toDataURL('image/png');
-    let base64  = dataURL.split(',')[1];
-    if (base64.length > SAFE_TOTAL_BASE64) {
-      dataURL = c.toDataURL('image/jpeg', 0.9);
-      base64  = dataURL.split(',')[1];
-      const name = (file.name||'image').replace(/\.[^.]+$/,'') + '.jpg';
-      if (base64.length <= SAFE_TOTAL_BASE64) return { name, contentType: 'image/jpeg', data: base64 };
-    } else {
-      const name = (file.name||'image').replace(/\.[^.]+$/,'') + '.png';
-      return { name, contentType: 'image/png', data: base64 };
-    }
-    maxSide = Math.max(1800, Math.round(maxSide * 0.85));
-  }
-  const url = URL.createObjectURL(file);
-  const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
-  const c = document.createElement('canvas');
-  const scale = 1800 / Math.max(img.naturalWidth, img.naturalHeight);
-  c.width = Math.round(img.naturalWidth * Math.min(1, scale));
-  c.height= Math.round(img.naturalHeight* Math.min(1, scale));
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-  const dataURL = c.toDataURL('image/jpeg', 0.88);
-  const base64  = dataURL.split(',')[1];
-  return { name: (file.name||'image').replace(/\.[^.]+$/,'') + '.jpg', contentType: 'image/jpeg', data: base64 };
-}
-
-// Prepare ONE file for base64 fallback (keeps originals unless oversized)
-async function prepareOne(file){
-  if ((file.size || 0) <= 5 * 1024 * 1024) {
-    return { name: file.name, contentType: file.type || 'application/octet-stream', data: await fileToBase64(file) };
-  }
-  const pngFull = await pngReencodeSameSize(file);
-  if (pngFull.data.length <= SAFE_TOTAL_BASE64) return pngFull;
-  return await mildDownscaleToLimit(file);
-}
-
-/* === NEW: direct browser upload to file.io (no secrets). Returns a public URL. === */
-async function uploadToFileIO(file){
-  const fd = new FormData();
-  fd.append('file', file, file.name || 'image');
-  const res = await fetch('https://file.io/?expires=1w', { method:'POST', body: fd });
+// Upload a single image to our server function; it returns a KIE downloadUrl.
+async function uploadViaFn(file){
+  // prepare only if massive; otherwise send original at full quality
+  const prepared = await prepareOneIfHuge(file);
+  const res = await fetch('/.netlify/functions/kie-upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prepared)
+  });
   const j = await res.json().catch(()=>null);
-  if (!res.ok || !j || j.success !== true || !j.link) {
-    throw new Error(`file.io upload failed (${res.status})`);
+  if (!res.ok || !j || !j.downloadUrl) {
+    throw new Error(`kie-upload failed (${res.status})`);
   }
-  return j.link; // one-time download; perfect for KIE to fetch once
+  return j.downloadUrl;
 }
 
 /* ===================== MAIN RUN ===================== */
 window.__run = async function(){
-  if (runBtn.disabled || runBtn.dataset.busy === '1') return; // guard against double-clicks
+  if (runBtn.disabled || runBtn.dataset.busy === '1') return; // anti double-click
   log('RUN: clicked (handler).');
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
@@ -192,32 +161,19 @@ window.__run = async function(){
   runBtn.dataset.busy = '1';
   runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
-    let payload;
-
-    // Prefer direct URL uploads (works for huge images on phone & desktop).
-    try {
-      const urls = await Promise.all(files.map(uploadToFileIO));
-      log('Using direct URLs via file.io:', urls);
-      payload = {
-        prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
-        format: (formatEl.value || 'png').toLowerCase(),
-        imageUrls: urls
-      };
-    } catch (e) {
-      // Fallback to your original base64 flow (with gentle size handling)
-      log('Direct upload failed → fallback to base64:', String(e));
-      const prepared = await Promise.all(files.map(prepareOne));
-      const totalBase64 = prepared.reduce((n,f)=>n+(f.data?.length||0),0);
-      if (totalBase64 > SAFE_TOTAL_BASE64) {
-        alert('These images are too large for a single request. Please send fewer images at once.');
-        runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy=''; return;
-      }
-      payload = {
-        prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
-        format: (formatEl.value || 'png').toLowerCase(),
-        files: prepared
-      };
+    // Upload images one-by-one to our function (no CORS/3rd-party issues)
+    const urls = [];
+    for (const f of files) {
+      const u = await uploadViaFn(f);
+      urls.push(u);
     }
+    log('Got KIE download URLs:', urls);
+
+    const payload = {
+      prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
+      format: (formatEl.value || 'png').toLowerCase(),
+      imageUrls: urls
+    };
 
     const res = await fetch('/.netlify/functions/kie-create', {
       method: 'POST',
