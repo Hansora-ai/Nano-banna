@@ -105,19 +105,8 @@ async function fileToBase64(file){
   return btoa(bin);
 }
 
-/* >>> ADDED: shrink large/mobile images before upload (prevents 400 text/plain) */
+/* >>> ONLY CHANGE: always redraw & compress to avoid 400/500 on some images */
 async function prepareFileForUpload(file){
-  const MAX_BYTES_SOFT = 5 * 1024 * 1024; // soft limit to keep payloads small on mobile
-  const t = (file.type || '').toLowerCase();
-
-  if ((/image\/(png|jpeg|jpg|webp)/.test(t)) && (file.size || 0) <= MAX_BYTES_SOFT) {
-    return {
-      name: file.name,
-      contentType: file.type || 'application/octet-stream',
-      data: await fileToBase64(file)
-    };
-  }
-
   try {
     const url = URL.createObjectURL(file);
     const img = await new Promise((res, rej) => {
@@ -127,7 +116,7 @@ async function prepareFileForUpload(file){
       i.src = url;
     });
 
-    const maxSide = 2048;
+    const maxSide = 1600; // tighter cap prevents pixel-limit/server errors
     let w = img.naturalWidth, h = img.naturalHeight;
     if (w > h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
     else if (h >= w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
@@ -137,13 +126,14 @@ async function prepareFileForUpload(file){
     c.getContext('2d').drawImage(img, 0, 0, w, h);
 
     const mime = 'image/jpeg';
-    const quality = 0.88;
+    const quality = 0.85;
     const dataURL = c.toDataURL(mime, quality);
     const base64 = dataURL.split(',')[1];
 
     const name = (file.name || 'image').replace(/\.[^.]+$/,'') + '.jpg';
     return { name, contentType: mime, data: base64 };
   } catch {
+    // fallback to original if redraw fails for any reason
     return {
       name: file.name,
       contentType: file.type || 'application/octet-stream',
