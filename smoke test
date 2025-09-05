@@ -1,0 +1,45 @@
+// netlify/functions/kie-smoke.js
+const API_KEY = "7714ece17d4416e99ee15eada5f91ac6";
+
+// KIE async task creation endpoint (per their docs)
+const CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
+
+// Use a known public image so we remove upload as a variable
+const DEMO_IMAGE =
+  "https://file.aiquickdraw.com/custom-page/akr/section-images/1756223420389w8xa2jfe.png";
+
+export default async () => {
+  try {
+    const payload = {
+      model: "google/nano-banana-edit",
+      input: {
+        prompt: "brighten",
+        image_urls: [DEMO_IMAGE],
+        output_format: "png",
+        image_size: "auto"
+      }
+    };
+
+    const resp = await fetch(CREATE_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await resp.text();
+    // Return EXACTLY what KIE returns so we can see it in the browser
+    return new Response(text, {
+      status: resp.status,
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+};
