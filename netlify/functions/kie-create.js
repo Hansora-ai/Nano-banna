@@ -1,10 +1,4 @@
-// Uploads files to KIE's uploader, then creates a Nano Banana task
-// and tells KIE to POST the final result to your Make.com webhook.
-// Env vars required:
-//   KIE_API_KEY        = <raw key>          (no "Bearer")
-//   KIE_API_URL        = https://api.kie.ai/api/v1/jobs/createTask
-//   MAKE_WEBHOOK_URL   = https://hook.make.com/xxxxxxxxxxxxxxxx (your Make custom webhook)
-
+// netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
 export const handler = async (event) => {
@@ -26,16 +20,12 @@ export const handler = async (event) => {
 
     let bodyIn = {};
     try { bodyIn = JSON.parse(event.body || '{}'); }
-    catch (e) { return { statusCode: 400, headers: cors(), body: 'Bad JSON' }; }
+    catch { return { statusCode: 400, headers: cors(), body: 'Bad JSON' }; }
 
     const { prompt, format = 'png', files = [], imageUrls = [] } = bodyIn;
-    if (!prompt)        return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
+    if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
-    // Optional: add context for Make (so you can trace which request this was)
-    const clientContext = { prompt, format, submittedAt: new Date().toISOString() };
-    const callbackUrl = `${MAKE_WEBHOOK_URL}?ctx=${encodeURIComponent(JSON.stringify(clientContext))}`;
-
-    // Build image_urls either from URLs (preferred) or by uploading base64 (your original flow)
+    // Build image_urls from URLs (preferred) or from base64 (legacy)
     let image_urls = [];
     if (Array.isArray(imageUrls) && imageUrls.length) {
       image_urls = imageUrls;
@@ -66,7 +56,10 @@ export const handler = async (event) => {
       }
     }
 
-    // 2) Create the task (KIE will POST the final result to Make)
+    // Create the task (KIE will POST the final result to Make)
+    const clientContext = { prompt, format, submittedAt: new Date().toISOString() };
+    const callbackUrl = `${MAKE_WEBHOOK_URL}?ctx=${encodeURIComponent(JSON.stringify(clientContext))}`;
+
     const payload = {
       model: "google/nano-banana-edit",
       callBackUrl: callbackUrl,
@@ -90,7 +83,6 @@ export const handler = async (event) => {
 
     const ct = resp.headers.get('content-type') || 'application/json';
     const body = await resp.text();
-
     return { statusCode: resp.status, headers: { ...cors(), 'Content-Type': ct }, body };
   } catch (e) {
     return { statusCode: 502, headers: cors(), body: `Server error: ${e.message || e}` };
