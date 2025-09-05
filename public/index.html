@@ -105,40 +105,56 @@ async function fileToBase64(file){
   return btoa(bin);
 }
 
-/* >>> ONLY CHANGE: always redraw & compress to avoid 400/500 on some images */
+/* >>> REPLACED: preserve quality; only compress if absolutely necessary */
 async function prepareFileForUpload(file){
-  try {
+  const SAFE_BASE64_CHARS = 7_500_000;   // ~5.6 MB binary; keeps request body safe on mobile
+  const PNG_MAXSIDE_STEP1 = Infinity;    // full-size lossless first
+  const PNG_MAXSIDE_STEP2 = 2400;        // gentle downscale, still PNG/lossless
+  const JPG_MAXSIDE       = 2000;        // last resort
+  const JPG_QUALITIES     = [0.92, 0.88, 0.82]; // high -> medium
+
+  // 0) Try original as-is if small enough
+  if ((file.size || 0) <= 5 * 1024 * 1024) { // <=5MB binary ≈ <=6.7MB base64
+    return { name: file.name, contentType: file.type || 'application/octet-stream', data: await fileToBase64(file) };
+  }
+
+  // helper to draw and export PNG/JPEG at given max side / quality
+  async function drawExport({type, maxSide=Infinity, quality=null}){
     const url = URL.createObjectURL(file);
-    const img = await new Promise((res, rej) => {
-      const i = new Image();
-      i.onload = () => res(i);
-      i.onerror = rej;
-      i.src = url;
-    });
-
-    const maxSide = 1600; // tighter cap prevents pixel-limit/server errors
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
     let w = img.naturalWidth, h = img.naturalHeight;
-    if (w > h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
-    else if (h >= w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
-
+    if (isFinite(maxSide)) {
+      if (w > h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
+      else if (h >= w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
+    }
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     c.getContext('2d').drawImage(img, 0, 0, w, h);
+    const dataURL = type === 'image/png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', quality ?? 0.92);
+    const base64  = dataURL.split(',')[1];
+    const name    = (file.name || 'image').replace(/\.[^.]+$/,'') + (type==='image/png'?'.png':'.jpg');
+    return { name, contentType: type, data: base64 };
+  }
 
-    const mime = 'image/jpeg';
-    const quality = 0.85;
-    const dataURL = c.toDataURL(mime, quality);
-    const base64 = dataURL.split(',')[1];
+  // 1) Lossless PNG at full size
+  try {
+    let out = await drawExport({ type: 'image/png', maxSide: PNG_MAXSIDE_STEP1 });
+    if (out.data.length <= SAFE_BASE64_CHARS) return out;
 
-    const name = (file.name || 'image').replace(/\.[^.]+$/,'') + '.jpg';
-    return { name, contentType: mime, data: base64 };
+    // 2) Gentle lossless downscale (PNG)
+    out = await drawExport({ type: 'image/png', maxSide: PNG_MAXSIDE_STEP2 });
+    if (out.data.length <= SAFE_BASE64_CHARS) return out;
+
+    // 3) Last resort: high-quality JPEG with moderate downscale
+    for (const q of JPG_QUALITIES) {
+      out = await drawExport({ type: 'image/jpeg', maxSide: JPG_MAXSIDE, quality: q });
+      if (out.data.length <= SAFE_BASE64_CHARS) return out;
+    }
+    // If still huge, return best we got (last JPEG)
+    return out;
   } catch {
-    // fallback to original if redraw fails for any reason
-    return {
-      name: file.name,
-      contentType: file.type || 'application/octet-stream',
-      data: await fileToBase64(file)
-    };
+    // On any failure, fall back to original
+    return { name: file.name, contentType: file.type || 'application/octet-stream', data: await fileToBase64(file) };
   }
 }
 
