@@ -12,7 +12,7 @@
     .col{flex:1 1 320px}
     label{display:block; font-size:13px; opacity:.85; margin-bottom:6px}
     input[type="file"], textarea, select { width:100%; background:#0f0f15; color:#eaeaf0; border:1px solid #262634; border-radius:12px; padding:10px 12px; }
-    textarea{min-height:100px; resize:vertical}
+    textarea{min-height:120px; resize:vertical}
     button{width:100%; padding:12px 16px; background:#6b5bd1; color:white; border:0; border-radius:12px; font-weight:600; cursor:pointer}
     button[disabled]{opacity:.6; cursor:not-allowed}
     .thumb{margin-top:8px; width:160px; height:160px; object-fit:cover; border-radius:10px; border:1px solid #262634}
@@ -26,26 +26,28 @@
 <body>
   <div class="wrap">
     <h1>Nano Banana — Image-to-Image</h1>
-    <form id="jobForm" enctype="multipart/form-data">
+
+    <form id="jobForm">
       <div class="row">
         <div class="col">
           <label for="files">Select 1–4 images (jpeg/png/webp, ≤10MB each)</label>
-          <!-- IMPORTANT: Keep the name attributes matching the KIE example you have -->
-          <!-- If your KIE sample uses a different field name (e.g. "image", "images[]", "input_image"),
-               just change the name below to match it exactly. -->
-          <input id="files" name="image" type="file" accept="image/*" multiple />
+          <input id="files" type="file" accept="image/*" multiple />
           <div id="thumbs" class="grid"></div>
-          <div class="note">Tip: this page sends the form exactly as multipart/form-data—no custom JSON. Field names are preserved.</div>
+          <div class="note">
+            This page converts your files to Base64 and sends <b>JSON</b> to a Netlify Function
+            (<code>kie-create</code>). The function uploads to KIE’s file uploader and then calls
+            <code>POST https://api.kie.ai/api/v1/jobs/createTask</code>.
+          </div>
         </div>
+
         <div class="col">
           <label for="prompt">Prompt</label>
-          <textarea id="prompt" name="prompt" placeholder="Describe the edit or style…"></textarea>
+          <textarea id="prompt" placeholder="Describe the edit or style…"></textarea>
           <div style="height:10px"></div>
           <label for="format">Output format</label>
-          <select id="format" name="format">
+          <select id="format">
             <option value="png" selected>PNG</option>
-            <option value="jpg">JPG</option>
-            <option value="webp">WEBP</option>
+            <option value="jpeg">JPEG</option>
           </select>
           <div style="height:14px"></div>
           <button id="runBtn" type="submit">Run</button>
@@ -63,16 +65,19 @@
     </details>
   </div>
 
+<!-- ====== THE SCRIPT LIVES RIGHT HERE ====== -->
 <script>
-const filesEl = document.getElementById('files');
-const thumbsEl = document.getElementById('thumbs');
-const runBtn = document.getElementById('runBtn');
-const formEl = document.getElementById('jobForm');
-const dbg = document.getElementById('debug');
-const gallery = document.getElementById('gallery');
-const outBox = document.getElementById('out');
+const filesEl   = document.getElementById('files');
+const thumbsEl  = document.getElementById('thumbs');
+const promptEl  = document.getElementById('prompt');
+const formatEl  = document.getElementById('format');
+const runBtn    = document.getElementById('runBtn');
+const formEl    = document.getElementById('jobForm');
+const dbg       = document.getElementById('debug');
+const gallery   = document.getElementById('gallery');
+const outBox    = document.getElementById('out');
 
-function log(...args){ dbg.textContent += '\n' + args.map(a=>typeof a==='string'?a:JSON.stringify(a,null,2)).join(' '); }
+function log(...a){ dbg.textContent += '\\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); }
 
 filesEl.addEventListener('change', () => {
   thumbsEl.innerHTML = '';
@@ -84,6 +89,15 @@ filesEl.addEventListener('change', () => {
   });
 });
 
+async function fileToBase64(file){
+  const ab = await file.arrayBuffer();
+  let bin=''; const bytes=new Uint8Array(ab), step=0x8000;
+  for (let i=0;i<bytes.length;i+=step){
+    bin += String.fromCharCode.apply(null, bytes.subarray(i,i+step));
+  }
+  return btoa(bin);
+}
+
 formEl.addEventListener('submit', async (e) => {
   e.preventDefault();
   dbg.textContent = 'Submitting…';
@@ -91,56 +105,34 @@ formEl.addEventListener('submit', async (e) => {
   outBox.style.display = 'none';
 
   const files = [...filesEl.files];
-  if (!files.length) { log('No files selected.'); alert('Choose at least one image.'); return; }
-  if (files.length > 4){ alert('Max 4 images.'); return; }
-  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" is over 10MB`); return; } }
+  if (!files.length) return alert('Choose at least one image.');
+  if (files.length > 4) return alert('Max 4 images.');
+  for (const f of files){ if (f.size > 10*1024*1024) return alert(\`"\${f.name}" exceeds 10MB.\`); }
 
   runBtn.disabled = true;
-
   try {
-    // Build FormData from the actual form so your existing field names are preserved
-    const fd = new FormData(formEl);
+    const payload = {
+      prompt: (promptEl.value || '').trim(),
+      format: (formatEl.value || 'png').toLowerCase(),
+      files: await Promise.all(files.map(async f => ({
+        name: f.name,
+        contentType: f.type || 'application/octet-stream',
+        data: await fileToBase64(f)
+      })))
+    };
 
-    // Call the Netlify Function proxy (keeps your API key server-side; avoids CORS)
-    const res = await fetch('/.netlify/functions/kie', { method: 'POST', body: fd });
+    // IMPORTANT: this calls the Netlify Function that does upload -> createTask
+    const res = await fetch('/.netlify/functions/kie-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
-    const ct = res.headers.get('content-type') || '';
-    log(`Response status: ${res.status}`, `content-type: ${ct}`);
-
-    if (!res.ok) {
-      const txt = await res.text();
-      log('ERROR BODY:', txt);
-      alert(`KIE returned ${res.status}. See Debug section below.`);
-      return;
-    }
-
-    if (ct.startsWith('image/')) {
-      // Single image response
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const img = document.createElement('img');
-      img.src = url; img.style.width = '100%'; img.style.borderRadius = '12px';
-      gallery.appendChild(img);
-      outBox.style.display = 'block';
-      log('Received image bytes.');
-    } else if (ct.includes('application/json')) {
-      const data = await res.json();
-      log('JSON:', data);
-      // Best-effort: show any returned URLs (array or single)
-      const urls = [];
-      if (Array.isArray(data)) data.forEach(x => x?.url && urls.push(x.url));
-      if (data?.url) urls.push(data.url);
-      if (data?.images) data.images.forEach(x => x?.url && urls.push(x.url));
-      urls.forEach(u => {
-        const a = document.createElement('a'); a.href = u; a.textContent = u; a.target = '_blank';
-        const p = document.createElement('p'); p.appendChild(a); gallery.appendChild(p);
-      });
-      outBox.style.display = 'block';
-    } else {
-      const txt = await res.text();
-      log('TEXT:', txt);
-      alert('Received non-image response. See Debug.');
-    }
+    const ct  = res.headers.get('content-type') || '';
+    const txt = await res.text();
+    log(\`Response status: \${res.status} content-type: \${ct}\`);
+    try { log('JSON:', JSON.parse(txt)); } catch { log('TEXT:', txt); }
+    outBox.style.display = 'block';
   } catch (err) {
     log('JS ERROR:', String(err));
     alert('Request failed. See Debug.');
