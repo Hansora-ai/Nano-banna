@@ -2,190 +2,152 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nano Banana – Edit</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Nano Banana — Image-to-Image</title>
   <style>
-    :root { --bg:#0b0c10; --card:#111318; --text:#f1f5f9; --muted:#9aa0a6; }
-    *{ box-sizing:border-box; }
-    body{ margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); }
-    .wrap{ max-width:860px; margin:20px auto; padding:16px; }
-    .card{ background:var(--card); border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
-    h1{ margin:6px 0 14px; font-size:22px; }
-    label{ display:block; margin:10px 0 6px; color:var(--muted); font-size:13px; }
-    input[type="file"], textarea, select {
-      width:100%; padding:12px; background:#0e1117; color:var(--text);
-      border:1px solid #1f2635; border-radius:10px;
-    }
-    textarea{ min-height:110px; resize:vertical; }
-    button{
-      background:#6c5ce7; color:#fff; border:0; padding:12px 16px;
-      border-radius:12px; cursor:pointer; font-weight:600;
-      box-shadow:0 6px 18px rgba(108,92,231,.35);
-    }
-    button[disabled]{ opacity:.6; cursor:not-allowed; box-shadow:none; }
-    .thumbs{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-top:10px; }
-    .thumbs img{ width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #232a3d; }
-    .row{ display:flex; gap:10px; align-items:center; }
-    .row>*{ flex:1; }
-    .hint{ color:var(--muted); font-size:12px; margin-top:6px; }
-    .results{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-top:12px; }
-    .results img{ width:100%; border-radius:12px; border:1px solid #232a3d; }
-    pre{ background:#0d1016; color:#cbd5e1; padding:10px; border-radius:10px; overflow:auto; font-size:12px; }
+    body { background:#0b0b0f; color:#eaeaf0; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .wrap { max-width:880px; margin:40px auto; padding:24px; background:#14141b; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.45); }
+    h1 { font-weight:700; font-size:24px; margin:0 0 12px; }
+    .row{display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap}
+    .col{flex:1 1 320px}
+    label{display:block; font-size:13px; opacity:.85; margin-bottom:6px}
+    input[type="file"], textarea, select { width:100%; background:#0f0f15; color:#eaeaf0; border:1px solid #262634; border-radius:12px; padding:10px 12px; }
+    textarea{min-height:100px; resize:vertical}
+    button{width:100%; padding:12px 16px; background:#6b5bd1; color:white; border:0; border-radius:12px; font-weight:600; cursor:pointer}
+    button[disabled]{opacity:.6; cursor:not-allowed}
+    .thumb{margin-top:8px; width:160px; height:160px; object-fit:cover; border-radius:10px; border:1px solid #262634}
+    details{margin-top:16px; background:#0f0f15; border:1px solid #262634; border-radius:12px; padding:10px 12px}
+    pre{white-space:pre-wrap; word-break:break-word; margin:0}
+    .out{margin-top:18px; padding:12px; background:#0f0f15; border:1px solid #262634; border-radius:12px}
+    .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:14px}
+    .note{font-size:12px; opacity:.7; margin-top:6px}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h1>Nano Banana – Image Edit</h1>
-
-      <label>Select 1–4 images (jpeg/png/webp, ≤10MB each)</label>
-      <input id="fileInput" type="file" accept="image/*" multiple />
-      <div id="thumbs" class="thumbs"></div>
-
-      <label>Prompt</label>
-      <textarea id="prompt" placeholder="Describe the edit you want..."></textarea>
-
-      <div class="row" style="margin-top:10px;">
-        <select id="format">
-          <option value="png">PNG</option>
-          <option value="jpeg">JPEG</option>
-        </select>
-        <button id="runBtn">Run</button>
+    <h1>Nano Banana — Image-to-Image</h1>
+    <form id="jobForm" enctype="multipart/form-data">
+      <div class="row">
+        <div class="col">
+          <label for="files">Select 1–4 images (jpeg/png/webp, ≤10MB each)</label>
+          <!-- IMPORTANT: Keep the name attributes matching the KIE example you have -->
+          <!-- If your KIE sample uses a different field name (e.g. "image", "images[]", "input_image"),
+               just change the name below to match it exactly. -->
+          <input id="files" name="image" type="file" accept="image/*" multiple />
+          <div id="thumbs" class="grid"></div>
+          <div class="note">Tip: this page sends the form exactly as multipart/form-data—no custom JSON. Field names are preserved.</div>
+        </div>
+        <div class="col">
+          <label for="prompt">Prompt</label>
+          <textarea id="prompt" name="prompt" placeholder="Describe the edit or style…"></textarea>
+          <div style="height:10px"></div>
+          <label for="format">Output format</label>
+          <select id="format" name="format">
+            <option value="png" selected>PNG</option>
+            <option value="jpg">JPG</option>
+            <option value="webp">WEBP</option>
+          </select>
+          <div style="height:14px"></div>
+          <button id="runBtn" type="submit">Run</button>
+        </div>
       </div>
+    </form>
 
-      <div id="status" class="hint"></div>
-      <div id="results" class="results"></div>
-
-      <details style="margin-top:12px;">
-        <summary>Debug</summary>
-        <pre id="debug"></pre>
-      </details>
+    <div id="out" class="out" style="display:none">
+      <div class="grid" id="gallery"></div>
     </div>
+
+    <details open>
+      <summary>Debug</summary>
+      <pre id="debug">Ready.</pre>
+    </details>
   </div>
 
 <script>
-(function(){
-  try{ Telegram?.WebApp?.ready(); Telegram?.WebApp?.expand(); }catch(e){}
+const filesEl = document.getElementById('files');
+const thumbsEl = document.getElementById('thumbs');
+const runBtn = document.getElementById('runBtn');
+const formEl = document.getElementById('jobForm');
+const dbg = document.getElementById('debug');
+const gallery = document.getElementById('gallery');
+const outBox = document.getElementById('out');
 
-  const fileInput = document.getElementById('fileInput');
-  const thumbs    = document.getElementById('thumbs');
-  const promptEl  = document.getElementById('prompt');
-  const formatEl  = document.getElementById('format');
-  const runBtn    = document.getElementById('runBtn');
-  const resultsEl = document.getElementById('results');
-  const statusEl  = document.getElementById('status');
-  const debugEl   = document.getElementById('debug');
+function log(...args){ dbg.textContent += '\n' + args.map(a=>typeof a==='string'?a:JSON.stringify(a,null,2)).join(' '); }
 
-  let selected = [];
-
-  fileInput.addEventListener('change', () => {
-    selected = Array.from(fileInput.files || []).slice(0,4);
-    thumbs.innerHTML='';
-    selected.forEach(f => {
-      const url = URL.createObjectURL(f);
-      const img = document.createElement('img');
-      img.src = url;
-      thumbs.appendChild(img);
-    });
+filesEl.addEventListener('change', () => {
+  thumbsEl.innerHTML = '';
+  [...filesEl.files].slice(0,4).forEach(f=>{
+    const url = URL.createObjectURL(f);
+    const img = document.createElement('img');
+    img.src = url; img.className = 'thumb';
+    thumbsEl.appendChild(img);
   });
+});
 
-  runBtn.addEventListener('click', async () => {
-    try{
-      if(!selected.length){ alert('Please choose 1–4 images.'); return; }
+formEl.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  dbg.textContent = 'Submitting…';
+  gallery.innerHTML = '';
+  outBox.style.display = 'none';
 
-      runBtn.disabled = true;
-      resultsEl.innerHTML='';
-      statusEl.textContent='Uploading...';
-      debugEl.textContent='';
+  const files = [...filesEl.files];
+  if (!files.length) { log('No files selected.'); alert('Choose at least one image.'); return; }
+  if (files.length > 4){ alert('Max 4 images.'); return; }
+  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" is over 10MB`); return; } }
 
-      // 1) Upload images -> returns { urls: [...] }
-      const filesPayload = await Promise.all(selected.map(f => fileToBase64(f)));
-      const upRes = await fetch('/.netlify/functions/upload', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ files: filesPayload })
-      });
-      const upText = await upRes.text();
-      let upJson; try { upJson = JSON.parse(upText); } catch { upJson = { raw: upText }; }
-      if(!upRes.ok){
-        alert(`Upload failed`);
-        debugEl.textContent = JSON.stringify(upJson,null,2);
-        return;
-      }
-      const urls = upJson.urls || [];
-      if(!Array.isArray(urls) || urls.length === 0){
-        alert('Upload returned no URLs');
-        debugEl.textContent = JSON.stringify(upJson,null,2);
-        return;
-      }
+  runBtn.disabled = true;
 
-      // 2) Call server function that follows KIE's "input{...}" format
-      statusEl.textContent='Calling Nano Banana...';
-      const body = {
-        urls,                         // array of HTTP image URLs
-        prompt: promptEl.value || '',
-        format: formatEl.value,       // 'png' | 'jpeg'
-        size: 'auto'
-      };
+  try {
+    // Build FormData from the actual form so your existing field names are preserved
+    const fd = new FormData(formEl);
 
-      const apiRes = await fetch('/.netlify/functions/run-nano-banana', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(body)
-      });
+    // Call the Netlify Function proxy (keeps your API key server-side; avoids CORS)
+    const res = await fetch('/.netlify/functions/kie', { method: 'POST', body: fd });
 
-      const apiText = await apiRes.text();
-      let data; try { data = JSON.parse(apiText); } catch { data = { raw: apiText }; }
-      debugEl.textContent = JSON.stringify(data,null,2);
+    const ct = res.headers.get('content-type') || '';
+    log(`Response status: ${res.status}`, `content-type: ${ct}`);
 
-      if(!apiRes.ok){
-        statusEl.textContent='KIE error';
-        alert('KIE error');
-        return;
-      }
-
-      // 3) Try to pull any output image URLs from the response
-      const imgs = extractImageUrls(data);
-      if(imgs.length === 0){
-        alert('No output URLs returned');
-        statusEl.textContent='No output URLs';
-        return;
-      }
-
-      statusEl.textContent='Done';
-      imgs.forEach(u => {
-        const img = document.createElement('img');
-        img.src = u;
-        resultsEl.appendChild(img);
-      });
-    }catch(err){
-      alert(err?.message || 'Error');
-    }finally{
-      runBtn.disabled = false;
+    if (!res.ok) {
+      const txt = await res.text();
+      log('ERROR BODY:', txt);
+      alert(`KIE returned ${res.status}. See Debug section below.`);
+      return;
     }
-  });
 
-  function fileToBase64(file){
-    return new Promise((resolve,reject)=>{
-      const reader = new FileReader();
-      reader.onload = ()=>{
-        const base64 = String(reader.result).split(',')[1];
-        resolve({ name:file.name, type:file.type, data: base64 });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    if (ct.startsWith('image/')) {
+      // Single image response
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const img = document.createElement('img');
+      img.src = url; img.style.width = '100%'; img.style.borderRadius = '12px';
+      gallery.appendChild(img);
+      outBox.style.display = 'block';
+      log('Received image bytes.');
+    } else if (ct.includes('application/json')) {
+      const data = await res.json();
+      log('JSON:', data);
+      // Best-effort: show any returned URLs (array or single)
+      const urls = [];
+      if (Array.isArray(data)) data.forEach(x => x?.url && urls.push(x.url));
+      if (data?.url) urls.push(data.url);
+      if (data?.images) data.images.forEach(x => x?.url && urls.push(x.url));
+      urls.forEach(u => {
+        const a = document.createElement('a'); a.href = u; a.textContent = u; a.target = '_blank';
+        const p = document.createElement('p'); p.appendChild(a); gallery.appendChild(p);
+      });
+      outBox.style.display = 'block';
+    } else {
+      const txt = await res.text();
+      log('TEXT:', txt);
+      alert('Received non-image response. See Debug.');
+    }
+  } catch (err) {
+    log('JS ERROR:', String(err));
+    alert('Request failed. See Debug.');
+  } finally {
+    runBtn.disabled = false;
   }
-
-  function extractImageUrls(obj){
-    const s = JSON.stringify(obj);
-    const re = /(https?:\/\/[^"\s]+\.(?:png|jpg|jpeg|webp))/gi;
-    const out = []; let m;
-    while((m = re.exec(s))) out.push(m[1]);
-    return Array.from(new Set(out));
-  }
-})();
+});
 </script>
 </body>
 </html>
