@@ -1,5 +1,4 @@
-// netlify/functions/kie-create.js
-const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload'; // KIE's upload service
+const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload'; // KIE uploader
 
 export const handler = async (event) => {
   try {
@@ -8,7 +7,7 @@ export const handler = async (event) => {
     if (event.httpMethod !== 'POST')
       return { statusCode: 405, headers: cors(), body: 'Method Not Allowed' };
 
-    const KIE_API_URL = process.env.KIE_API_URL;   // MUST be https://api.kie.ai/api/v1/jobs/createTask
+    const KIE_API_URL = process.env.KIE_API_URL;   // https://api.kie.ai/api/v1/jobs/createTask
     const KIE_API_KEY = process.env.KIE_API_KEY;   // raw key (no "Bearer")
     const miss = [];
     if (!KIE_API_URL) miss.push('KIE_API_URL');
@@ -17,23 +16,18 @@ export const handler = async (event) => {
       return { statusCode: 500, headers: cors(), body: `Missing: ${miss.join(', ')}` };
 
     const { prompt, format = 'png', files = [] } = JSON.parse(event.body || '{}');
+    if (!prompt)         return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
+    if (!files.length)   return { statusCode: 400, headers: cors(), body: 'Provide at least one file' };
+    if (files.length>4)  return { statusCode: 400, headers: cors(), body: 'Up to 4 files allowed' };
 
-    if (!prompt)  return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
-    if (!files.length) return { statusCode: 400, headers: cors(), body: 'Provide at least one file' };
-    if (files.length > 4) return { statusCode: 400, headers: cors(), body: 'Up to 4 files allowed' };
-
-    // 1) Upload each file to KIE's uploader → get public downloadUrl
+    // 1) upload each file to KIE's uploader -> get downloadUrl
     const image_urls = [];
     for (const f of files) {
       const dataUrl = `data:${f.contentType || 'application/octet-stream'};base64,${f.data}`;
       const up = await fetch(UPLOAD_BASE64_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${KIE_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          base64Data: dataUrl,
-          uploadPath: 'images/user-uploads',
-          fileName: f.name || 'image.png'
-        })
+        body: JSON.stringify({ base64Data: dataUrl, uploadPath: 'images/user-uploads', fileName: f.name || 'image.png' })
       });
       const uj = await up.json();
       if (!up.ok || !uj?.data?.downloadUrl) {
@@ -42,7 +36,7 @@ export const handler = async (event) => {
       image_urls.push(uj.data.downloadUrl);
     }
 
-    // 2) Create the Nano Banana task (exact fields)
+    // 2) create Nano Banana task (exact fields)
     const payload = {
       model: "google/nano-banana-edit",
       input: {
@@ -71,10 +65,8 @@ export const handler = async (event) => {
   }
 };
 
-function cors() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-  };
-}
+function cors(){ return {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};}
