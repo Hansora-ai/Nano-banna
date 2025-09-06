@@ -211,7 +211,7 @@ window.__run = async function(){
       const recordId = data.recordId || '';
       if (taskId || recordId) {
         log('SUBMITTED ✔  Watch your Make webhook for the result.', { taskId, recordId });
-        showStatus('✅ Submitted successfully. Check your Telegram — your image will arrive shortly.', 'ok');
+        showStatus('✅ Submitted successfully. If you have enough credits, your image will be delivered in Telegram within ~30 seconds.\n\n✅ Запрос успешно принят. Если у вас достаточно кредитов, изображение будет доставлено в Telegram в течение ~30 секунд.', 'ok');
       }
     } catch {
       log('CREATE TEXT:', txt);
