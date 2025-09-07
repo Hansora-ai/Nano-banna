@@ -5,13 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Nano Banana — Image-to-Image</title>
 
-  <!-- CSP that allows inline JS + the endpoints we call -->
+  <!-- CSP updated: allow unpkg (exifr) and S3/R2 PUTs -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  img-src * data: blob:;
-                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com;
+                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com https://*.amazonaws.com https://*.r2.cloudflarestorage.com;
                  style-src 'self' 'unsafe-inline';
-                 script-src 'self' 'unsafe-inline'">
+                 script-src 'self' 'unsafe-inline' https://unpkg.com">
+
+  <!-- Avoid stale caching during upload/create -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <!-- EXIF orientation reader -->
+  <script src="https://unpkg.com/exifr/dist/lite.umd.js"></script>
 
   <style>
     body { background:#0b0b0f; color:#eaeaf0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
@@ -111,92 +119,113 @@ filesEl.addEventListener('change', () => {
   });
 });
 
-/* ===================== HELPERS ===================== */
-async function fileToBase64(file){
-  const ab = await file.arrayBuffer();
-  let bin=''; const bytes=new Uint8Array(ab), step=0x8000;
-  for (let i=0;i<bytes.length;i+=step) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+step));
-  return btoa(bin);
+/* ===================== RUN-ID ===================== */
+function newRunId(userId){
+  const r = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+  return `${userId}-${Date.now()}-${r}`;
 }
 
-/* Optional: very gentle prep if a single file is huge (keeps quality).
-   We only use this when needed before uploading one-by-one. */
-const SAFE_SINGLE_BASE64 = 9_500_000; // ~7MB binary per request
-async function prepareOneIfHuge(file){
-  const base64 = await fileToBase64(file);
-  if (base64.length <= SAFE_SINGLE_BASE64) {
-    return { name: file.name, contentType: file.type || 'application/octet-stream', data: base64 };
-  }
-  // mild, loss-minimized downscale only if absolutely necessary
-  const url = URL.createObjectURL(file);
-  const img = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+/* ===================== OPTIONAL ORIENTATION FIX ===================== */
+/* Only rotate when EXIF != 1; otherwise send original bytes unchanged */
+async function normalizeIfRotated(file) {
+  let orientation = 1;
+  try { orientation = await exifr.orientation(file) || 1; } catch {}
+  if (orientation === 1) return file;
+
+  const bmp = await createImageBitmap(file);
+  const rotated = [5,6,7,8].includes(orientation);
   const c = document.createElement('canvas');
-  const maxSide = 2400;
-  let { naturalWidth:w, naturalHeight:h } = img;
-  if (w >= h && w > maxSide) { h = Math.round(h * (maxSide / w)); w = maxSide; }
-  else if (h > w && h > maxSide) { w = Math.round(w * (maxSide / h)); h = maxSide; }
-  c.width = w; c.height = h;
-  c.getContext('2d').drawImage(img, 0, 0, w, h);
-  const dataURL = c.toDataURL(file.type.includes('png') ? 'image/png' : 'image/jpeg', 0.92);
-  const b64 = dataURL.split(',')[1];
-  return {
-    name: (file.name||'image').replace(/\.[^.]+$/,'') + (file.type.includes('png') ? '.png' : '.jpg'),
-    contentType: file.type.includes('png') ? 'image/png' : 'image/jpeg',
-    data: b64
-  };
+  c.width = rotated ? bmp.height : bmp.width;
+  c.height = rotated ? bmp.width : bmp.height;
+  const ctx = c.getContext('2d');
+
+  switch (orientation) {
+    case 2: ctx.translate(c.width,0); ctx.scale(-1,1); break;
+    case 3: ctx.translate(c.width,c.height); ctx.rotate(Math.PI); break;
+    case 4: ctx.translate(0,c.height); ctx.scale(1,-1); break;
+    case 5: ctx.rotate(.5*Math.PI); ctx.scale(1,-1); ctx.translate(0,-c.width); break;
+    case 6: ctx.rotate(.5*Math.PI); ctx.translate(0,-c.height); break;
+    case 7: ctx.rotate(.5*Math.PI); ctx.scale(-1,1); ctx.translate(-c.width,-c.height); break;
+    case 8: ctx.rotate(-.5*Math.PI); ctx.translate(-c.height,0); break;
+    default: ;
+  }
+  ctx.drawImage(bmp, 0, 0);
+
+  const blob = await new Promise(r => c.toBlob(r, file.type.includes('png') ? 'image/png' : 'image/jpeg', 0.95));
+  return new File([blob], file.name.replace(/\.[^.]+$/, file.type.includes('png') ? '.png' : '.jpg'), { type: blob.type });
 }
 
-// Upload a single image to our server function; it returns a KIE downloadUrl.
-async function uploadViaFn(file){
-  // prepare only if massive; otherwise send original at full quality
-  const prepared = await prepareOneIfHuge(file);
-  const res = await fetch('/.netlify/functions/kie-upload', {
+/* ===================== SIGN + PUT DIRECT UPLOAD ===================== */
+/* Requires a Netlify function at /.netlify/functions/sign-upload */
+async function signAndPut(file, rid, index) {
+  const signRes = await fetch('/.netlify/functions/sign-upload', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(prepared)
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    body: JSON.stringify({
+      name: `${index}-${file.name || 'image'}`,
+      type: file.type || 'application/octet-stream',
+      run_id: rid
+    })
   });
-  const j = await res.json().catch(()=>null);
-  if (!res.ok || !j || !j.downloadUrl) {
-    throw new Error(`kie-upload failed (${res.status})`);
-  }
-  return j.downloadUrl;
+  if (!signRes.ok) throw new Error('sign-upload failed');
+  const { putUrl, publicUrl } = await signRes.json();
+
+  const putRes = await fetch(putUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file
+  });
+  if (!putRes.ok) throw new Error(`PUT failed (${putRes.status})`);
+
+  // cache-bust for downstream fetchers
+  return publicUrl + `?rid=${encodeURIComponent(rid)}&ts=${Date.now()}`;
 }
 
 /* ===================== MAIN RUN ===================== */
 window.__run = async function(){
   if (runBtn.disabled || runBtn.dataset.busy === '1') return; // anti double-click
   log('RUN: clicked (handler).');
+
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
   if (files.length > 4) { alert('Max 4 images.'); return; }
-  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
 
   const oldText = runBtn.textContent;
   statusEl.hidden = true; // reset banner
   runBtn.dataset.busy = '1';
   runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
-    // Upload images one-by-one to our function (no CORS/3rd-party issues)
+    // Prefer Telegram user id; else ?uid=...; else random
+    const tg = window.Telegram?.WebApp;
+    const deepUid = new URLSearchParams(location.search).get('uid') || '';
+    const userId = tg?.initDataUnsafe?.user?.id || deepUid || `web-${Math.random().toString(36).slice(2,8)}`;
+    const run_id = newRunId(userId);
+
+    // Fix orientation only when needed (no downscale, keep quality)
+    const prepared = [];
+    for (let i=0;i<files.length;i++){
+      prepared.push(await normalizeIfRotated(files[i]));
+    }
+
+    // Upload each file directly to storage (no base64, no 10MB cap)
     const urls = [];
-    for (const f of files) {
-      const u = await uploadViaFn(f);
+    for (let i=0;i<prepared.length;i++){
+      const u = await signAndPut(prepared[i], run_id, i);
       urls.push(u);
     }
     log('Got KIE download URLs:', urls);
-
-    // ADDED: read uid from ?uid=... in the page URL
-    const uid = new URLSearchParams(location.search).get('uid') || '';
 
     const payload = {
       prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
       imageUrls: urls,
-      uid // ADDED: pass uid to your Netlify function
+      uid: userId,
+      run_id // will be added to Kie metadata in your function
     };
 
-    const res = await fetch('/.netlify/functions/kie-create', {
+    const res = await fetch('/.netlify/functions/kie-create' + `?rid=${encodeURIComponent(run_id)}&t=${Date.now()}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
       body: JSON.stringify(payload)
     });
 
@@ -212,6 +241,8 @@ window.__run = async function(){
       if (taskId || recordId) {
         log('SUBMITTED ✔  Watch your Make webhook for the result.', { taskId, recordId });
         showStatus('✅ Submitted successfully. If you have enough credits, your image will be delivered in Telegram within ~30 seconds.\n\n✅ Запрос успешно принят. Если у вас достаточно кредитов, изображение будет доставлено в Telegram в течение ~30 секунд.', 'ok');
+      } else {
+        showStatus('✅ Submitted. Check Telegram for the result.', 'ok');
       }
     } catch {
       log('CREATE TEXT:', txt);
