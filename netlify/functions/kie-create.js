@@ -11,6 +11,7 @@ export const handler = async (event) => {
     const KIE_API_URL = process.env.KIE_API_URL;
     const KIE_API_KEY = process.env.KIE_API_KEY;
     const MAKE_WEBHOOK_URL = process.env.MAKE_WEBHOOK_URL;
+
     const miss = [];
     if (!KIE_API_URL) miss.push('KIE_API_URL');
     if (!KIE_API_KEY) miss.push('KIE_API_KEY');
@@ -22,8 +23,8 @@ export const handler = async (event) => {
     try { bodyIn = JSON.parse(event.body || '{}'); }
     catch { return { statusCode: 400, headers: cors(), body: 'Bad JSON' }; }
 
-    // ⬇️ ADDED: read uid (Telegram user_id) from the incoming body
-    const { prompt, format = 'png', files = [], imageUrls = [], uid } = bodyIn; // ← only addition here
+    // ⬇️ ADDED: run_id (per-submission id)
+    const { prompt, format = 'png', files = [], imageUrls = [], uid = '', run_id = '' } = bodyIn;
     if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
     // Build image_urls from URLs (preferred) or from base64 (legacy)
@@ -57,16 +58,24 @@ export const handler = async (event) => {
       }
     }
 
-    // ⬇️ ADDED: set fixed cost
+    // ⬇️ fixed cost (unchanged from your plan)
     const COST = 1.5;
 
-    // Create the task (KIE will POST the final result to Make)
-    const clientContext = { prompt, format, submittedAt: new Date().toISOString() };
+    // Client context for debugging (now also includes run_id + uid)
+    const clientContext = {
+      prompt,
+      format,
+      submittedAt: new Date().toISOString(),
+      run_id,
+      uid
+    };
 
-    // ⬇️ ADDED: append uid + cost to your existing Make webhook URL
+    // ⬇️ ADDED: include run_id + uid in the callback URL
     const callbackUrl =
       `${MAKE_WEBHOOK_URL}?ctx=${encodeURIComponent(JSON.stringify(clientContext))}` +
-      `&uid=${encodeURIComponent(uid || '')}&cost=${encodeURIComponent(COST)}`;
+      `&uid=${encodeURIComponent(uid)}` +
+      `&run_id=${encodeURIComponent(run_id)}` +
+      `&cost=${encodeURIComponent(COST)}`;
 
     const payload = {
       model: "google/nano-banana-edit",
@@ -77,6 +86,9 @@ export const handler = async (event) => {
         output_format: String(format).toLowerCase(), // png | jpeg
         image_size: "auto"
       }
+      // If KIE supports metadata, we could also send:
+      // metadata: { uid, run_id }
+      // (left out to avoid breaking if the API doesn't expect it)
     };
 
     const resp = await fetch(KIE_API_URL, {
@@ -91,7 +103,11 @@ export const handler = async (event) => {
 
     const ct = resp.headers.get('content-type') || 'application/json';
     const body = await resp.text();
-    return { statusCode: resp.status, headers: { ...cors(), 'Content-Type': ct }, body };
+    return {
+      statusCode: resp.status,
+      headers: { ...cors(), 'Content-Type': ct, 'Cache-Control': 'no-store' },
+      body
+    };
   } catch (e) {
     return { statusCode: 502, headers: cors(), body: `Server error: ${e.message || e}` };
   }
