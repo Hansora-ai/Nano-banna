@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Nano Banana — Image-to-Image</title>
 
-  <!-- CSP updated: allow unpkg (exifr) and S3/R2 PUTs -->
+  <!-- CSP: no S3/R2; allow unpkg (exifr) and your endpoints -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  img-src * data: blob:;
-                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com https://*.amazonaws.com https://*.r2.cloudflarestorage.com;
+                 connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com;
                  style-src 'self' 'unsafe-inline';
                  script-src 'self' 'unsafe-inline' https://unpkg.com">
 
@@ -68,16 +68,11 @@
           <option value="jpeg">JPEG</option>
         </select>
         <div style="height:14px"></div>
-        <!-- Inline click calls the handler; no alert -->
-        <button id="runBtn" type="button"
-                onclick="window.__run && window.__run()">Run</button>
-
-        <!-- User-facing status (success/error). Hidden by default. -->
+        <button id="runBtn" type="button" onclick="window.__run && window.__run()">Run</button>
         <div id="status" class="banner" role="status" aria-live="polite" hidden></div>
       </div>
     </div>
 
-    <!-- Debug panel kept for you but hidden from users -->
     <details style="display:none">
       <summary>Debug</summary>
       <pre id="debug">BOOT: page parsed.</pre>
@@ -155,30 +150,23 @@ async function normalizeIfRotated(file) {
   return new File([blob], file.name.replace(/\.[^.]+$/, file.type.includes('png') ? '.png' : '.jpg'), { type: blob.type });
 }
 
-/* ===================== SIGN + PUT DIRECT UPLOAD ===================== */
-/* Requires a Netlify function at /.netlify/functions/sign-upload */
-async function signAndPut(file, rid, index) {
-  const signRes = await fetch('/.netlify/functions/sign-upload', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    body: JSON.stringify({
-      name: `${index}-${file.name || 'image'}`,
-      type: file.type || 'application/octet-stream',
-      run_id: rid
-    })
-  });
-  if (!signRes.ok) throw new Error('sign-upload failed');
-  const { putUrl, publicUrl } = await signRes.json();
+/* ===================== MULTIPART UPLOAD (NO BASE64) ===================== */
+/* Posts raw bytes to /.netlify/functions/kie-upload and expects { downloadUrl } */
+async function uploadViaFn(file, rid, index){
+  // rotate only if necessary; do NOT shrink/compress
+  const prepared = await normalizeIfRotated(file);
 
-  const putRes = await fetch(putUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
-    body: file
-  });
-  if (!putRes.ok) throw new Error(`PUT failed (${putRes.status})`);
+  const fd = new FormData();
+  // unique filename prevents collisions across users/runs
+  fd.append('file', prepared, `${rid}-${index}-${prepared.name || 'image'}`);
+  fd.append('run_id', rid);
 
-  // cache-bust for downstream fetchers
-  return publicUrl + `?rid=${encodeURIComponent(rid)}&ts=${Date.now()}`;
+  const res = await fetch('/.netlify/functions/kie-upload', { method: 'POST', body: fd });
+  const j = await res.json().catch(()=>null);
+  if (!res.ok || !j || !j.downloadUrl) {
+    throw new Error(`kie-upload failed (${res.status})`);
+  }
+  return j.downloadUrl; // URL to pass to Kie
 }
 
 /* ===================== MAIN RUN ===================== */
@@ -189,6 +177,8 @@ window.__run = async function(){
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
   if (files.length > 4) { alert('Max 4 images.'); return; }
+  // Per-file limit (~10MB via Netlify/API Gateway)
+  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
 
   const oldText = runBtn.textContent;
   statusEl.hidden = true; // reset banner
@@ -201,16 +191,10 @@ window.__run = async function(){
     const userId = tg?.initDataUnsafe?.user?.id || deepUid || `web-${Math.random().toString(36).slice(2,8)}`;
     const run_id = newRunId(userId);
 
-    // Fix orientation only when needed (no downscale, keep quality)
-    const prepared = [];
-    for (let i=0;i<files.length;i++){
-      prepared.push(await normalizeIfRotated(files[i]));
-    }
-
-    // Upload each file directly to storage (no base64, no 10MB cap)
+    // Upload each file (multipart, raw bytes)
     const urls = [];
-    for (let i=0;i<prepared.length;i++){
-      const u = await signAndPut(prepared[i], run_id, i);
+    for (let i=0;i<files.length;i++){
+      const u = await uploadViaFn(files[i], run_id, i);
       urls.push(u);
     }
     log('Got KIE download URLs:', urls);
@@ -239,7 +223,7 @@ window.__run = async function(){
       const taskId   = data.taskId || data.id || '';
       const recordId = data.recordId || '';
       if (taskId || recordId) {
-        log('SUBMITTED ✔  Watch your Make webhook for the result.', { taskId, recordId });
+        log('SUBMITTED ✔', { taskId, recordId });
         showStatus('✅ Submitted successfully. If you have enough credits, your image will be delivered in Telegram within ~30 seconds.\n\n✅ Запрос успешно принят. Если у вас достаточно кредитов, изображение будет доставлено в Telegram в течение ~30 секунд.', 'ok');
       } else {
         showStatus('✅ Submitted. Check Telegram for the result.', 'ok');
