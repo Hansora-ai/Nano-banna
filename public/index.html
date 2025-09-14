@@ -21,6 +21,21 @@
   <!-- EXIF orientation reader -->
   <script src="https://unpkg.com/exifr/dist/lite.umd.js"></script>
 
+  <!-- ADDED: tiny HEIC→JPEG converter (fits CSP via unpkg) -->
+  <script src="https://unpkg.com/heic2any/dist/heic2any.min.js"></script>
+  <script>
+    // ADDED: normalize unsupported HEIC/HEIF to JPEG before upload
+    async function ensureSupported(file){
+      const t = (file.type || '').toLowerCase();
+      if (t === 'image/heic' || t === 'image/heif' || t === 'image/heif-sequence') {
+        const base = (file.name?.replace(/\.[^.]+$/, '') || 'image');
+        const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+        return new File([blob], base + '.jpg', { type: 'image/jpeg' });
+      }
+      return file;
+    }
+  </script>
+
   <style>
     body { background:#0b0b0f; color:#eaeaf0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
     .wrap { max-width:880px; margin:40px auto; padding:24px; background:#14141b; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.45); }
@@ -153,8 +168,8 @@ async function normalizeIfRotated(file) {
 /* ===================== MULTIPART UPLOAD (NO BASE64) ===================== */
 /* Posts raw bytes to /.netlify/functions/kie-upload and expects { downloadUrl } */
 async function uploadViaFn(file, rid, index){
-  // rotate only if necessary; do NOT shrink/compress
-  const prepared = await normalizeIfRotated(file);
+  const supported = await ensureSupported(file);          // ADDED: convert HEIC/HEIF → JPEG first
+  const prepared  = await normalizeIfRotated(supported);  // keep your rotation logic
 
   const fd = new FormData();
   // unique filename prevents collisions across users/runs
@@ -164,7 +179,8 @@ async function uploadViaFn(file, rid, index){
   const res = await fetch('/.netlify/functions/kie-upload', { method: 'POST', body: fd });
   const j = await res.json().catch(()=>null);
   if (!res.ok || !j || !j.downloadUrl) {
-    throw new Error(`kie-upload failed (${res.status})`);
+    // small enhancement: show backend reason if present
+    throw new Error((j && j.error) ? j.error : `kie-upload failed (${res.status})`);
   }
   return j.downloadUrl; // URL to pass to Kie
 }
