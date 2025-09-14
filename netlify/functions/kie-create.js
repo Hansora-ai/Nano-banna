@@ -2,16 +2,51 @@
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
 // Fetch remote image and return { base64Data, contentType, fileName }
+// (with MIME sniffing to fix wrong/empty content-types)
 async function fetchUrlAsBase64(url, defaultName = 'image') {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`fetch ${res.status}`);
-  const ct = res.headers.get('content-type') || 'application/octet-stream';
+
   const ab = await res.arrayBuffer();
+  const bytes = new Uint8Array(ab);
+
+  // Simple magic-byte sniffers
+  function detectImageMime(b) {
+    // JPEG: FF D8 FF
+    if (b.length > 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'image/jpeg';
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (b.length > 8 &&
+        b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47 &&
+        b[4] === 0x0D && b[5] === 0x0A && b[6] === 0x1A && b[7] === 0x0A) return 'image/png';
+    // WEBP: "RIFF"...."WEBP"
+    if (b.length > 12 &&
+        b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+        b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+    // ISO-BMFF (HEIC/HEIF/AVIF): bytes 4..7 = "ftyp"
+    if (b.length > 12 &&
+        b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) {
+      const brand = String.fromCharCode(b[8], b[9], b[10], b[11]).toLowerCase();
+      if (brand.includes('heic') || brand.includes('heif') || brand.includes('hevx') || brand.includes('mif1') || brand.includes('msf1')) {
+        return 'image/heic';
+      }
+      if (brand.includes('avif') || brand.includes('avis')) return 'image/avif';
+    }
+    return '';
+  }
+
+  let ct = (res.headers.get('content-type') || '').toLowerCase();
+  const sniffed = detectImageMime(bytes);
+  if (!ct.startsWith('image/') && sniffed) ct = sniffed;
+  if (!ct.startsWith('image/')) throw new Error('unsupported content (not an image)');
+
   const b64 = Buffer.from(ab).toString('base64');
   const ext =
-    ct.includes('png')  ? 'png' :
-    (ct.includes('jpeg') || ct.includes('jpg')) ? 'jpg' :
-    ct.includes('webp') ? 'webp' : 'bin';
+    ct.includes('png')  ? 'png'  :
+    ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' :
+    ct.includes('webp') ? 'webp' :
+    ct.includes('avif') ? 'avif' :
+    (ct.includes('heic') || ct.includes('heif')) ? 'heic' : 'bin';
+
   return {
     base64Data: `data:${ct};base64,${b64}`,
     contentType: ct,
@@ -41,18 +76,27 @@ async function uploadBase64ToKie({ base64Data, fileName }, KIE_API_KEY) {
   return uj.data.downloadUrl;
 }
 
-// Self-heal a URL: if not image/* or fails, rehost to KIE and return KIE URL
+// Non-KIE links get rehosted; KIE-hosted links pass through
+function isKieHosted(u) {
+  try {
+    const h = new URL(u).hostname;
+    return (
+      h.endsWith('kieai.redpandaai.co') ||
+      h.endsWith('api.kie.ai') ||
+      h === 'kie.ai'
+    );
+  } catch { return false; }
+}
+
+// If a URL is flaky, we rehost it to KIE
 async function ensureKieFetchable(url, index, KIE_API_KEY) {
   try {
     const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'image/*' }, cache: 'no-store' });
     const ct = (res.headers.get('content-type') || '').toLowerCase();
-    if (res.ok && ct.startsWith('image/')) return url; // good as-is
-  } catch (_) {
-    // fall through to rehost
-  }
+    if (res.ok && ct.startsWith('image/')) return url;
+  } catch (_) { /* fall through */ }
   const base64Payload = await fetchUrlAsBase64(url, `img-${(index || 0) + 1}`);
-  const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
-  return hosted;
+  return await uploadBase64ToKie(base64Payload, KIE_API_KEY);
 }
 
 export const handler = async (event) => {
@@ -83,13 +127,18 @@ export const handler = async (event) => {
     let image_urls = [];
 
     if (Array.isArray(imageUrls) && imageUrls.length) {
+      // Rehost any non-KIE URL; keep KIE-hosted as-is
       const out = [];
       for (let i = 0; i < imageUrls.length; i++) {
-        const hostedOrSame = await ensureKieFetchable(imageUrls[i], i, KIE_API_KEY);
-        out.push(hostedOrSame);
+        const src = imageUrls[i];
+        const finalUrl = isKieHosted(src)
+          ? src
+          : await uploadBase64ToKie(await fetchUrlAsBase64(src, `img-${i + 1}`), KIE_API_KEY);
+        out.push(finalUrl);
       }
       image_urls = out;
     } else {
+      // Legacy base64 "files" path (unchanged)
       if (!files.length)  return { statusCode: 400, headers: cors(), body: 'Provide at least one file or imageUrls' };
       if (files.length>4) return { statusCode: 400, headers: cors(), body: 'Up to 4 files allowed' };
 
@@ -135,6 +184,7 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
+    // Input block (adds common aliases + init_image variants)
     const input = {
       prompt,
       image_urls,
@@ -144,12 +194,14 @@ export const handler = async (event) => {
       images: image_urls,
       reference_images: image_urls,
       image_url: image_urls[0],
-      imageUrl: image_urls[0]
+      imageUrl: image_urls[0],
+      init_image: image_urls[0],
+      init_image_url: image_urls[0]
     };
 
     const payload = {
       model: 'google/nano-banana-edit',
-      // ⬇️ Minimal fix: include both key variants so KIE picks it up
+      // send both spellings so callback is picked up
       callbackUrl: callbackUrl,
       callBackUrl: callbackUrl,
       input
