@@ -1,6 +1,27 @@
 // netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
+// NEW: tiny helper to validate that a URL is actually an image
+async function isImageUrl(url, timeoutMs = 6000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    // Use GET (some CDNs block HEAD); ask for images; add cache-buster
+    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
+      method: 'GET',
+      headers: { 'Accept': 'image/*' },
+      cache: 'no-store',
+      signal: ctrl.signal
+    });
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    return res.ok && ct.startsWith('image/');
+  } catch (_) {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS')
@@ -23,7 +44,7 @@ export const handler = async (event) => {
     try { bodyIn = JSON.parse(event.body || '{}'); }
     catch { return { statusCode: 400, headers: cors(), body: 'Bad JSON' }; }
 
-    // ⬇️ ADDED: run_id (per-submission id)
+    // ⬇️ ADDED earlier: run_id (kept)
     const { prompt, format = 'png', files = [], imageUrls = [], uid = '', run_id = '' } = bodyIn;
     if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
@@ -58,10 +79,23 @@ export const handler = async (event) => {
       }
     }
 
-    // ⬇️ fixed cost (unchanged from your plan)
+    // NEW: validate each URL is actually image/*; drop any bad ones
+    if (image_urls.length) {
+      const checks = await Promise.all(
+        image_urls.map(async (u) => (await isImageUrl(u)) ? u : null)
+      );
+      image_urls = checks.filter(Boolean);
+    }
+
+    // NEW: fail closed if we don't have at least one usable image URL
+    if (!image_urls.length) {
+      return { statusCode: 400, headers: cors(), body: 'No usable image URLs (make sure images are JPEG/PNG/WebP and publicly fetchable).' };
+    }
+
+    // ⬇️ fixed cost (unchanged)
     const COST = 1.5;
 
-    // Client context for debugging (now also includes run_id + uid)
+    // Client context for debugging (kept)
     const clientContext = {
       prompt,
       format,
@@ -70,25 +104,35 @@ export const handler = async (event) => {
       uid
     };
 
-    // ⬇️ ADDED: include run_id + uid in the callback URL
+    // ADDED earlier: include run_id + uid in the callback URL (kept)
     const callbackUrl =
       `${MAKE_WEBHOOK_URL}?ctx=${encodeURIComponent(JSON.stringify(clientContext))}` +
       `&uid=${encodeURIComponent(uid)}` +
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
+    // NEW: be generous with field names inside `input`
+    // Some Kie adapters read snake_case, others camelCase, others `images`/`reference_images`
+    const input = {
+      prompt,
+      // primary fields
+      image_urls,
+      output_format: String(format).toLowerCase(), // png | jpeg
+      image_size: 'auto',
+
+      // compatibility duplicates (harmless if unused)
+      imageUrls: image_urls,
+      images: image_urls,
+      reference_images: image_urls,
+      image_url: image_urls[0],
+      imageUrl: image_urls[0]
+    };
+
     const payload = {
-      model: "google/nano-banana-edit",
-      callBackUrl: callbackUrl, // keep same field name as your working version
-      input: {
-        prompt,
-        image_urls,
-        output_format: String(format).toLowerCase(), // png | jpeg
-        image_size: "auto"
-      }
-      // If KIE supports metadata, we could also send:
-      // metadata: { uid, run_id }
-      // (left out to avoid breaking if the API doesn't expect it)
+      model: 'google/nano-banana-edit',
+      callBackUrl: callbackUrl, // unchanged
+      input
+      // metadata: { uid, run_id } // leave commented to avoid breaking strict schemas
     };
 
     const resp = await fetch(KIE_API_URL, {
