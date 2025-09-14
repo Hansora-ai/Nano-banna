@@ -84,6 +84,16 @@ export const handler = async (event) => {
       return { statusCode: 400, headers: cors(), body: 'No image URLs provided.' };
     }
 
+    // >>> ONLY CHANGE: normalize KIE download links to direct file links
+    image_urls = image_urls.map(u => {
+      try {
+        const url = new URL(u);
+        url.pathname = url.pathname.replace('/download/', '/files/');
+        return url.toString();
+      } catch { return u; }
+    });
+    // <<< ONLY CHANGE
+
     // Minimal, adapter-friendly input. Keep it simple.
     const outFormat = String(format).toLowerCase(); // 'png' | 'jpeg'
     const first     = image_urls[0];
