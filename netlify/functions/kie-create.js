@@ -1,16 +1,19 @@
 // netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
-// Fetch remote image and return { base64Data, contentType, fileName }
-// (with MIME sniffing to fix wrong/empty content-types)
+// Fetch remote image and return { base64Data, contentType, fileName } with MIME sniffing
 async function fetchUrlAsBase64(url, defaultName = 'image') {
-  const res = await fetch(url, { cache: 'no-store' });
+  // Be generous to CDNs: follow redirects, set UA, accept images
+  const res = await fetch(url, {
+    cache: 'no-store',
+    headers: { 'Accept': 'image/*', 'User-Agent': 'Mozilla/5.0' }
+  });
   if (!res.ok) throw new Error(`fetch ${res.status}`);
 
   const ab = await res.arrayBuffer();
   const bytes = new Uint8Array(ab);
 
-  // Simple magic-byte sniffers
+  // Magic-byte detection to fix wrong/empty content-types
   function detectImageMime(b) {
     // JPEG: FF D8 FF
     if (b.length > 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'image/jpeg';
@@ -76,7 +79,7 @@ async function uploadBase64ToKie({ base64Data, fileName }, KIE_API_KEY) {
   return uj.data.downloadUrl;
 }
 
-// Non-KIE links get rehosted; KIE-hosted links pass through
+// Treat KIE-hosted links as already-good
 function isKieHosted(u) {
   try {
     const h = new URL(u).hostname;
@@ -86,17 +89,6 @@ function isKieHosted(u) {
       h === 'kie.ai'
     );
   } catch { return false; }
-}
-
-// If a URL is flaky, we rehost it to KIE
-async function ensureKieFetchable(url, index, KIE_API_KEY) {
-  try {
-    const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'image/*' }, cache: 'no-store' });
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    if (res.ok && ct.startsWith('image/')) return url;
-  } catch (_) { /* fall through */ }
-  const base64Payload = await fetchUrlAsBase64(url, `img-${(index || 0) + 1}`);
-  return await uploadBase64ToKie(base64Payload, KIE_API_KEY);
 }
 
 export const handler = async (event) => {
@@ -184,7 +176,7 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // Input block (adds common aliases + init_image variants)
+    // Input block with common aliases + single-image variants
     const input = {
       prompt,
       image_urls,
@@ -201,7 +193,7 @@ export const handler = async (event) => {
 
     const payload = {
       model: 'google/nano-banana-edit',
-      // send both spellings so callback is picked up
+      // include both callback spellings so your Telegram flow triggers
       callbackUrl: callbackUrl,
       callBackUrl: callbackUrl,
       input
