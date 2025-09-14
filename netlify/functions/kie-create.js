@@ -1,6 +1,61 @@
 // netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
+// Fetch remote image and return { base64Data, contentType, fileName }
+async function fetchUrlAsBase64(url, defaultName = 'image') {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`fetch ${res.status}`);
+  const ct = res.headers.get('content-type') || 'application/octet-stream';
+  const ab = await res.arrayBuffer();
+  const b64 = Buffer.from(ab).toString('base64');
+  // try to keep extension sensible
+  const ext =
+    ct.includes('png')  ? 'png' :
+    (ct.includes('jpeg') || ct.includes('jpg')) ? 'jpg' :
+    ct.includes('webp') ? 'webp' : 'bin';
+  return {
+    base64Data: `data:${ct};base64,${b64}`,
+    contentType: ct,
+    fileName: `${defaultName}.${ext}`
+  };
+}
+
+// Upload base64 to KIE to get a permanent, KIE-hosted URL
+async function uploadBase64ToKie({ base64Data, fileName }, KIE_API_KEY) {
+  const up = await fetch(UPLOAD_BASE64_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${KIE_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      base64Data,
+      uploadPath: 'images/user-uploads',
+      fileName
+    })
+  });
+  const uj = await up.json().catch(()=> ({}));
+  if (!up.ok || !uj?.data?.downloadUrl) {
+    throw new Error(`rehost failed: ${up.status} ${JSON.stringify(uj)}`);
+  }
+  return uj.data.downloadUrl;
+}
+
+// Self-heal a URL: if not image/* or fails, rehost to KIE and return KIE URL
+async function ensureKieFetchable(url, index, KIE_API_KEY) {
+  try {
+    const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'image/*' }, cache: 'no-store' });
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (res.ok && ct.startsWith('image/')) return url; // good as-is
+  } catch (_) {
+    // fall through to rehost
+  }
+  const base64Payload = await fetchUrlAsBase64(url, `img-${(index || 0) + 1}`);
+  const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
+  return hosted;
+}
+
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS')
@@ -26,17 +81,24 @@ export const handler = async (event) => {
     const { prompt, format = 'png', files = [], imageUrls = [], uid = '', run_id = '' } = bodyIn;
     if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
-    // Build image list: prefer direct URLs from client; otherwise legacy base64 upload path
     let image_urls = [];
+
     if (Array.isArray(imageUrls) && imageUrls.length) {
-      image_urls = imageUrls;
+      // For each client URL, keep it if it's truly image/*; otherwise rehost to KIE
+      const out = [];
+      for (let i = 0; i < imageUrls.length; i++) {
+        const hostedOrSame = await ensureKieFetchable(imageUrls[i], i, KIE_API_KEY);
+        out.push(hostedOrSame);
+      }
+      image_urls = out;
     } else {
+      // Legacy base64 "files" path (kept exactly as you had it)
       if (!files.length)  return { statusCode: 400, headers: cors(), body: 'Provide at least one file or imageUrls' };
       if (files.length>4) return { statusCode: 400, headers: cors(), body: 'Up to 4 files allowed' };
 
       for (const f of files) {
         const dataUrl = `data:${f.contentType || 'application/octet-stream'};base64,${f.data}`;
-        const up = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
+        const up = await fetch(UPLOAD_BASE64_URL, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${KIE_API_KEY}`,
@@ -58,7 +120,7 @@ export const handler = async (event) => {
     }
 
     if (!image_urls.length) {
-      return { statusCode: 400, headers: cors(), body: 'No image URLs provided.' };
+      return { statusCode: 400, headers: cors(), body: 'No usable image URLs after rehost.' };
     }
 
     const COST = 1.5;
@@ -76,7 +138,7 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // Minimal, adapter-friendly input (adds only 2 single-image aliases)
+    // Provide generous field coverage for KIE adapters
     const input = {
       prompt,
       image_urls,
@@ -86,11 +148,7 @@ export const handler = async (event) => {
       images: image_urls,
       reference_images: image_urls,
       image_url: image_urls[0],
-      imageUrl: image_urls[0],
-
-      // ✅ critical aliases for many img→img adapters:
-      init_image: image_urls[0],
-      init_image_url: image_urls[0],
+      imageUrl: image_urls[0]
     };
 
     const payload = {
