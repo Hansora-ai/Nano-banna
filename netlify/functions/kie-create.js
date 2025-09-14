@@ -1,42 +1,6 @@
 // netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
-// Fetch remote image and return { base64Data, contentType, fileName }
-async function fetchUrlAsBase64(url, defaultName = 'image') {
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`fetch ${res.status}`);
-  const ct = res.headers.get('content-type') || 'application/octet-stream';
-  const ab = await res.arrayBuffer();
-  const b64 = Buffer.from(ab).toString('base64');
-  // try to keep extension sensible
-  const ext = ct.includes('png') ? 'png' : (ct.includes('jpeg') || ct.includes('jpg')) ? 'jpg'
-            : ct.includes('webp') ? 'webp'
-            : 'bin';
-  return { base64Data: `data:${ct};base64,${b64}`, contentType: ct, fileName: `${defaultName}.${ext}` };
-}
-
-// Upload base64 to KIE to get a permanent, KIE-hosted URL
-async function uploadBase64ToKie({ base64Data, fileName }, KIE_API_KEY) {
-  const up = await fetch(UPLOAD_BASE64_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${KIE_API_KEY}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-      base64Data,
-      uploadPath: 'images/user-uploads',
-      fileName
-    })
-  });
-  const uj = await up.json().catch(()=> ({}));
-  if (!up.ok || !uj?.data?.downloadUrl) {
-    throw new Error(`rehost failed: ${up.status} ${JSON.stringify(uj)}`);
-  }
-  return uj.data.downloadUrl;
-}
-
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS')
@@ -62,31 +26,17 @@ export const handler = async (event) => {
     const { prompt, format = 'png', files = [], imageUrls = [], uid = '', run_id = '' } = bodyIn;
     if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
+    // Build image list: prefer direct URLs from client; otherwise legacy base64 upload path
     let image_urls = [];
-
     if (Array.isArray(imageUrls) && imageUrls.length) {
-      // ALWAYS rehost client URLs onto KIE’s storage so KIE can fetch reliably
-      const out = [];
-      for (let i = 0; i < imageUrls.length; i++) {
-        const src = imageUrls[i];
-        try {
-          const base64Payload = await fetchUrlAsBase64(src, `img-${i+1}`);
-          const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
-          out.push(hosted);
-        } catch (e) {
-          // If any single URL fails to fetch, stop and report (prevents prompt-only)
-          return { statusCode: 400, headers: cors(), body: `Image URL fetch/rehost failed for index ${i}: ${e.message}` };
-        }
-      }
-      image_urls = out;
+      image_urls = imageUrls;
     } else {
-      // Legacy base64 "files" path (kept exactly as you had it)
       if (!files.length)  return { statusCode: 400, headers: cors(), body: 'Provide at least one file or imageUrls' };
       if (files.length>4) return { statusCode: 400, headers: cors(), body: 'Up to 4 files allowed' };
 
       for (const f of files) {
         const dataUrl = `data:${f.contentType || 'application/octet-stream'};base64,${f.data}`;
-        const up = await fetch(UPLOAD_BASE64_URL, {
+        const up = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${KIE_API_KEY}`,
@@ -108,7 +58,7 @@ export const handler = async (event) => {
     }
 
     if (!image_urls.length) {
-      return { statusCode: 400, headers: cors(), body: 'No usable image URLs after rehost.' };
+      return { statusCode: 400, headers: cors(), body: 'No image URLs provided.' };
     }
 
     const COST = 1.5;
@@ -126,7 +76,7 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // Provide generous field coverage for KIE adapters (INSIDE input only)
+    // Minimal, adapter-friendly input (adds only 2 single-image aliases)
     const input = {
       prompt,
       image_urls,
@@ -138,9 +88,9 @@ export const handler = async (event) => {
       image_url: image_urls[0],
       imageUrl: image_urls[0],
 
-      // ✅ Added: single-image keys many adapters require
+      // ✅ critical aliases for many img→img adapters:
       init_image: image_urls[0],
-      init_image_url: image_urls[0]
+      init_image_url: image_urls[0],
     };
 
     const payload = {
