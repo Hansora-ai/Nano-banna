@@ -63,6 +63,7 @@ export const handler = async (event) => {
     if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
     let image_urls = [];
+    const image_data_uris = []; // <-- ADDED: collect base64 data URIs alongside URLs
 
     if (Array.isArray(imageUrls) && imageUrls.length) {
       // ALWAYS rehost client URLs onto KIE’s storage so KIE can fetch reliably
@@ -71,6 +72,8 @@ export const handler = async (event) => {
         const src = imageUrls[i];
         try {
           const base64Payload = await fetchUrlAsBase64(src, `img-${i+1}`);
+          // keep the data URI for adapters that accept base64 directly
+          image_data_uris.push(base64Payload.base64Data); // <-- ADDED
           const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
           out.push(hosted);
         } catch (e) {
@@ -86,6 +89,7 @@ export const handler = async (event) => {
 
       for (const f of files) {
         const dataUrl = `data:${f.contentType || 'application/octet-stream'};base64,${f.data}`;
+        image_data_uris.push(dataUrl); // <-- ADDED: keep the data URI
         const up = await fetch(UPLOAD_BASE64_URL, {
           method: 'POST',
           headers: {
@@ -126,27 +130,31 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // === ONLY CHANGE STARTS HERE (aliases + top-level mirrors) ===
+    // Provide generous field coverage for KIE adapters
     const input = {
       prompt,
       output_format: String(format).toLowerCase(), // png | jpeg
       image_size: 'auto',
 
-      // Primary list
+      // URL variants
       image_urls,
-
-      // Common aliases (harmless if adapter ignores them)
       imageUrls: image_urls,
       images: image_urls,
       reference_images: image_urls,
-
-      // Single-image aliases for adapters that only take one
       image_url: image_urls[0],
       imageUrl: image_urls[0],
       init_image: image_urls[0],
       init_image_url: image_urls[0],
       source_image_url: image_urls[0],
-      base_image_url: image_urls[0]
+      base_image_url: image_urls[0],
+
+      // <-- ADDED: base64 variants (some adapters expect data URIs)
+      image_base64: image_data_uris,
+      imageBase64: image_data_uris,
+      images_base64: image_data_uris,
+      reference_images_base64: image_data_uris,
+      init_image_base64: image_data_uris[0],
+      initImageBase64: image_data_uris[0]
     };
 
     const payload = {
@@ -165,10 +173,17 @@ export const handler = async (event) => {
       source_image_url: image_urls[0],
       base_image_url: image_urls[0],
 
+      // <-- ADDED: top-level base64 mirrors
+      image_base64: image_data_uris,
+      imageBase64: image_data_uris,
+      images_base64: image_data_uris,
+      reference_images_base64: image_data_uris,
+      init_image_base64: image_data_uris[0],
+      initImageBase64: image_data_uris[0],
+
       // Canonical input block
       input
     };
-    // === ONLY CHANGE ENDS HERE ===
 
     const resp = await fetch(KIE_API_URL, {
       method: 'POST',
