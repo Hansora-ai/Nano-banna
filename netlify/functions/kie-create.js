@@ -1,9 +1,7 @@
 // netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
-// Fetch remote image bytes and return { base64Data, contentType, fileName }.
-// We sniff the real MIME and only allow JPEG/PNG/WEBP. Others are rejected
-// with a clear error to avoid "prompt-only" fallbacks.
+// Fetch remote image bytes and return { base64Data, contentType, fileName } with MIME sniffing
 async function fetchUrlAsBase64(url, defaultName = 'image') {
   const res = await fetch(url, {
     cache: 'no-store',
@@ -25,14 +23,11 @@ async function fetchUrlAsBase64(url, defaultName = 'image') {
     if (b.length > 12 &&
         b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
         b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return { ct: 'image/webp', ext: 'webp' };
-    // Unknown (HEIC/AVIF/etc.) -> reject here so we don't get prompt-only runs
-    return { ct: '', ext: '' };
+    return { ct: '', ext: '' }; // reject HEIC/AVIF/unknown to avoid prompt-only
   }
 
   let { ct, ext } = sniff(bytes);
-  // If server sent a good image content-type that matches our sniff, keep it.
   if (!ct) {
-    // Try trusting the header only if it's an image we support
     const hdr = (res.headers.get('content-type') || '').toLowerCase();
     if (hdr.startsWith('image/')) {
       if (hdr.includes('jpeg') || hdr.includes('jpg')) { ct = 'image/jpeg'; ext = 'jpg'; }
@@ -40,10 +35,7 @@ async function fetchUrlAsBase64(url, defaultName = 'image') {
       else if (hdr.includes('webp')) { ct = 'image/webp'; ext = 'webp'; }
     }
   }
-  if (!ct) {
-    // Hard stop; tell the user to use JPEG/PNG/WebP (prevents silent prompt-only)
-    throw new Error('unsupported image type (use JPEG/PNG/WebP)');
-  }
+  if (!ct) throw new Error('unsupported image type (use JPEG/PNG/WebP)');
 
   const b64 = Buffer.from(ab).toString('base64');
   return {
@@ -103,11 +95,10 @@ export const handler = async (event) => {
     let image_urls = [];
 
     if (Array.isArray(imageUrls) && imageUrls.length) {
-      // *** ALWAYS rehost incoming URLs (forces stable, correct mime) ***
+      // Always rehost incoming URLs (stable, correct MIME)
       const out = [];
       for (let i = 0; i < imageUrls.length; i++) {
-        const src = imageUrls[i];
-        const base64Payload = await fetchUrlAsBase64(src, `img-${i + 1}`);
+        const base64Payload = await fetchUrlAsBase64(imageUrls[i], `img-${i + 1}`);
         const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
         out.push(hosted);
       }
@@ -159,27 +150,42 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // Input block with common aliases and single-image keys
+    // Single source of truth for values
+    const outFormat = String(format).toLowerCase(); // 'png' | 'jpeg'
+    const size = 'auto';
+    const first = image_urls[0];
+
+    // NESTED version (for REST-style endpoints)
     const input = {
       prompt,
       image_urls,
-      output_format: String(format).toLowerCase(), // png | jpeg
-      image_size: 'auto',
+      output_format: outFormat,
+      image_size: size,
+      // aliases to satisfy picky adapters
       imageUrls: image_urls,
       images: image_urls,
       reference_images: image_urls,
-      image_url: image_urls[0],
-      imageUrl: image_urls[0],
-      init_image: image_urls[0],
-      init_image_url: image_urls[0]
+      image_url: first,
+      imageUrl: first,
+      init_image: first,
+      init_image_url: first
     };
 
+    // Build payload with BOTH shapes so Kie will accept one of them
     const payload = {
       model: 'google/nano-banana-edit',
-      // Both variants to ensure webhook fires
+      // both callback spellings
       callbackUrl: callbackUrl,
       callBackUrl: callbackUrl,
-      input
+
+      // nested shape
+      input,
+
+      // flattened shape (page-style endpoints)
+      'input.prompt': prompt,
+      'input.image_urls': image_urls,
+      'input.output_format': outFormat,
+      'input.image_size': size
     };
 
     const resp = await fetch(KIE_API_URL, {
