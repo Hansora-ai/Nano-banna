@@ -136,7 +136,11 @@ export const handler = async (event) => {
       images: image_urls,
       reference_images: image_urls,
       image_url: image_urls[0],
-      imageUrl: image_urls[0]
+      imageUrl: image_urls[0],
+
+      // ✅ Added: single-image keys many adapters require
+      init_image: image_urls[0],
+      init_image_url: image_urls[0]
     };
 
     const payload = {
