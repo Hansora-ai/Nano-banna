@@ -156,29 +156,6 @@ async function normalizeIfRotated(file) {
   return new File([blob], file.name.replace(/\.[^.]+$/, file.type.includes('png') ? '.png' : '.jpg'), { type: blob.type });
 }
 
-/* NEW: verify that a URL is truly an image the KIE fetcher can GET */
-async function verifyImageUrl(url){
-  try {
-    // Use GET (not HEAD); some CDNs block HEAD. Fetch a tiny chunk and abort.
-    const ctrl = new AbortController();
-    const t = setTimeout(()=>ctrl.abort(), 6000);
-    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
-      method: 'GET',
-      signal: ctrl.signal,
-      cache: 'no-store',
-      headers: { 'Accept': 'image/*' }
-    });
-    clearTimeout(t);
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    if (!res.ok || !ct.startsWith('image/')) {
-      throw new Error(`Not an image (${res.status}, ${ct || 'no content-type'})`);
-    }
-    return true;
-  } catch (e) {
-    throw new Error(`URL not image-fetchable: ${e.message}`);
-  }
-}
-
 /* multipart upload */
 async function uploadViaFn(file, rid, index){
   const supported = await ensureSupported(file);          // keeps HEIC/HEIF safe
@@ -195,8 +172,7 @@ async function uploadViaFn(file, rid, index){
   }
 
   const url = j.downloadUrl;
-  // NEW: verify the URL is truly an image before we pass it to KIE
-  await verifyImageUrl(url);
+  // removed client-side URL verification to avoid false failures
   return url;
 }
 
@@ -258,7 +234,7 @@ window.__run = async function(){
     }
   } catch (err) {
     log('RUN ERROR:', String(err));
-    showStatus('❌ ' + String(err.message || err), 'err'); // NEW: surface exact reason
+    showStatus('❌ ' + String(err.message || err), 'err'); // surface exact reason
   } finally {
     runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy='';
   }
