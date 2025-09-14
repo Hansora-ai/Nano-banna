@@ -8,7 +8,6 @@ async function fetchUrlAsBase64(url, defaultName = 'image') {
   const ct = res.headers.get('content-type') || 'application/octet-stream';
   const ab = await res.arrayBuffer();
   const b64 = Buffer.from(ab).toString('base64');
-  // try to keep extension sensible
   const ext =
     ct.includes('png')  ? 'png' :
     (ct.includes('jpeg') || ct.includes('jpg')) ? 'jpg' :
@@ -42,15 +41,25 @@ async function uploadBase64ToKie({ base64Data, fileName }, KIE_API_KEY) {
   return uj.data.downloadUrl;
 }
 
-// Self-heal a URL: if not image/* or fails, rehost to KIE and return KIE URL
+// (new) detect if a URL is already KIE-hosted (safe to keep)
+function isKieHosted(u) {
+  try {
+    const h = new URL(u).hostname;
+    return (
+      h.endsWith('kieai.redpandaai.co') ||
+      h.endsWith('api.kie.ai') ||
+      h === 'kie.ai'
+    );
+  } catch { return false; }
+}
+
+// (kept) fallback helper – not strictly needed now, but harmless
 async function ensureKieFetchable(url, index, KIE_API_KEY) {
   try {
     const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'image/*' }, cache: 'no-store' });
     const ct = (res.headers.get('content-type') || '').toLowerCase();
     if (res.ok && ct.startsWith('image/')) return url; // good as-is
-  } catch (_) {
-    // fall through to rehost
-  }
+  } catch (_) { /* fall through */ }
   const base64Payload = await fetchUrlAsBase64(url, `img-${(index || 0) + 1}`);
   const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
   return hosted;
@@ -84,11 +93,14 @@ export const handler = async (event) => {
     let image_urls = [];
 
     if (Array.isArray(imageUrls) && imageUrls.length) {
-      // For each client URL, keep it if it's truly image/*; otherwise rehost to KIE
+      // For each client URL: if not KIE-hosted, rehost; otherwise keep as-is.
       const out = [];
       for (let i = 0; i < imageUrls.length; i++) {
-        const hostedOrSame = await ensureKieFetchable(imageUrls[i], i, KIE_API_KEY);
-        out.push(hostedOrSame);
+        const src = imageUrls[i];
+        const url = isKieHosted(src)
+          ? src
+          : await uploadBase64ToKie(await fetchUrlAsBase64(src, `img-${i + 1}`), KIE_API_KEY);
+        out.push(url);
       }
       image_urls = out;
     } else {
@@ -148,11 +160,16 @@ export const handler = async (event) => {
       images: image_urls,
       reference_images: image_urls,
       image_url: image_urls[0],
-      imageUrl: image_urls[0]
+      imageUrl: image_urls[0],
+      // add the two most common init aliases (won’t hurt, often required)
+      init_image: image_urls[0],
+      init_image_url: image_urls[0]
     };
 
     const payload = {
       model: 'google/nano-banana-edit',
+      // include both callback spellings so your Telegram bot gets triggered
+      callbackUrl: callbackUrl,
       callBackUrl: callbackUrl,
       input
     };
