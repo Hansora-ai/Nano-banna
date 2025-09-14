@@ -6,6 +6,48 @@
 
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
+// NEW: accept multiple synonyms and map -> KIE enum
+function normalizeImageSize(v) {
+  if (!v) return 'auto';
+  const raw = String(v).toLowerCase().trim();
+
+  // allow human labels like "Portrait 9:16", "9:16", "portrait-9-16"
+  const s = raw
+    .replace(/\s+/g, '_')
+    .replace(/-/g, '_')
+    .replace(/:/g, '_');
+
+  const ALLOWED = new Set([
+    'auto',
+    'square',
+    'portrait_3_4',
+    'portrait_9_16',
+    'landscape_4_3',
+    'landscape_16_9'
+  ]);
+
+  // common shorthands
+  const MAP = {
+    '1_1': 'square',
+    '3_4': 'portrait_3_4',
+    '9_16': 'portrait_9_16',
+    '4_3': 'landscape_4_3',
+    '16_9': 'landscape_16_9',
+    // generic fallbacks if someone ever passes just "portrait"/"landscape"
+    'portrait': 'portrait_3_4',
+    'landscape': 'landscape_16_9',
+  };
+
+  if (ALLOWED.has(s)) return s;
+  if (MAP[s]) return MAP[s];
+
+  // try to catch "portrait_9_16_" with stray chars, etc.
+  const cleaned = s.replace(/[^a-z0-9_]/g, '');
+  if (ALLOWED.has(cleaned)) return cleaned;
+
+  return 'auto';
+}
+
 export const handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS') {
@@ -40,7 +82,8 @@ export const handler = async (event) => {
       files = [],          // legacy path (base64)
       imageUrls = [],      // preferred path from your front-end
       uid = '',
-      run_id = ''
+      run_id = '',
+      image_size = 'auto'  // NEW: read from client
     } = bodyIn;
 
     if (!prompt) {
@@ -84,7 +127,7 @@ export const handler = async (event) => {
       return { statusCode: 400, headers: cors(), body: 'No image URLs provided.' };
     }
 
-    // >>> ONLY CHANGE: normalize KIE download links to direct file links
+    // normalize KIE download links to direct file links
     image_urls = image_urls.map(u => {
       try {
         const url = new URL(u);
@@ -92,9 +135,7 @@ export const handler = async (event) => {
         return url.toString();
       } catch { return u; }
     });
-    // <<< ONLY CHANGE
 
-    // Minimal, adapter-friendly input. Keep it simple.
     const outFormat = String(format).toLowerCase(); // 'png' | 'jpeg'
     const first     = image_urls[0];
 
@@ -113,13 +154,16 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
+    // NEW: forward normalized size to KIE (default remains 'auto')
+    const normalizedSize = normalizeImageSize(image_size);
+
     const input = {
       prompt,
       image_urls,                    // <-- main field KIE expects
       init_image: first,             // <-- common single-image alias
       init_image_url: first,         // <-- common single-image alias
       output_format: outFormat,
-      image_size: 'auto'
+      image_size: normalizedSize     // NEW
     };
 
     const payload = {
