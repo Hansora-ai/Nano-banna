@@ -126,24 +126,49 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // Provide generous field coverage for KIE adapters
+    // === ONLY CHANGE STARTS HERE (aliases + top-level mirrors) ===
     const input = {
       prompt,
-      image_urls,
       output_format: String(format).toLowerCase(), // png | jpeg
       image_size: 'auto',
+
+      // Primary list
+      image_urls,
+
+      // Common aliases (harmless if adapter ignores them)
       imageUrls: image_urls,
       images: image_urls,
       reference_images: image_urls,
+
+      // Single-image aliases for adapters that only take one
       image_url: image_urls[0],
-      imageUrl: image_urls[0]
+      imageUrl: image_urls[0],
+      init_image: image_urls[0],
+      init_image_url: image_urls[0],
+      source_image_url: image_urls[0],
+      base_image_url: image_urls[0]
     };
 
     const payload = {
       model: 'google/nano-banana-edit',
       callBackUrl: callbackUrl,
+
+      // Some adapters read from top-level too — mirror the same keys here
+      image_urls,
+      imageUrls: image_urls,
+      images: image_urls,
+      reference_images: image_urls,
+      image_url: image_urls[0],
+      imageUrl: image_urls[0],
+      init_image: image_urls[0],
+      init_image_url: image_urls[0],
+      source_image_url: image_urls[0],
+      base_image_url: image_urls[0],
+
+      // Canonical input block
       input
     };
+    // === ONLY CHANGE ENDS HERE ===
 
     const resp = await fetch(KIE_API_URL, {
       method: 'POST',
