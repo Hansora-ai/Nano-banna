@@ -1,25 +1,40 @@
 // netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
-// NEW: tiny helper to validate that a URL is actually an image
-async function isImageUrl(url, timeoutMs = 6000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    // Use GET (some CDNs block HEAD); ask for images; add cache-buster
-    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
-      method: 'GET',
-      headers: { 'Accept': 'image/*' },
-      cache: 'no-store',
-      signal: ctrl.signal
-    });
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    return res.ok && ct.startsWith('image/');
-  } catch (_) {
-    return false;
-  } finally {
-    clearTimeout(timer);
+// Fetch remote image and return { base64Data, contentType, fileName }
+async function fetchUrlAsBase64(url, defaultName = 'image') {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`fetch ${res.status}`);
+  const ct = res.headers.get('content-type') || 'application/octet-stream';
+  const ab = await res.arrayBuffer();
+  const b64 = Buffer.from(ab).toString('base64');
+  // try to keep extension sensible
+  const ext = ct.includes('png') ? 'png' : (ct.includes('jpeg') || ct.includes('jpg')) ? 'jpg'
+            : ct.includes('webp') ? 'webp'
+            : 'bin';
+  return { base64Data: `data:${ct};base64,${b64}`, contentType: ct, fileName: `${defaultName}.${ext}` };
+}
+
+// Upload base64 to KIE to get a permanent, KIE-hosted URL
+async function uploadBase64ToKie({ base64Data, fileName }, KIE_API_KEY) {
+  const up = await fetch(UPLOAD_BASE64_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${KIE_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      base64Data,
+      uploadPath: 'images/user-uploads',
+      fileName
+    })
+  });
+  const uj = await up.json().catch(()=> ({}));
+  if (!up.ok || !uj?.data?.downloadUrl) {
+    throw new Error(`rehost failed: ${up.status} ${JSON.stringify(uj)}`);
   }
+  return uj.data.downloadUrl;
 }
 
 export const handler = async (event) => {
@@ -44,15 +59,28 @@ export const handler = async (event) => {
     try { bodyIn = JSON.parse(event.body || '{}'); }
     catch { return { statusCode: 400, headers: cors(), body: 'Bad JSON' }; }
 
-    // ⬇️ ADDED earlier: run_id (kept)
     const { prompt, format = 'png', files = [], imageUrls = [], uid = '', run_id = '' } = bodyIn;
     if (!prompt) return { statusCode: 400, headers: cors(), body: 'Missing "prompt"' };
 
-    // Build image_urls from URLs (preferred) or from base64 (legacy)
     let image_urls = [];
+
     if (Array.isArray(imageUrls) && imageUrls.length) {
-      image_urls = imageUrls;
+      // ALWAYS rehost client URLs onto KIE’s storage so KIE can fetch reliably
+      const out = [];
+      for (let i = 0; i < imageUrls.length; i++) {
+        const src = imageUrls[i];
+        try {
+          const base64Payload = await fetchUrlAsBase64(src, `img-${i+1}`);
+          const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
+          out.push(hosted);
+        } catch (e) {
+          // If any single URL fails to fetch, stop and report (prevents prompt-only)
+          return { statusCode: 400, headers: cors(), body: `Image URL fetch/rehost failed for index ${i}: ${e.message}` };
+        }
+      }
+      image_urls = out;
     } else {
+      // Legacy base64 "files" path (kept exactly as you had it)
       if (!files.length)  return { statusCode: 400, headers: cors(), body: 'Provide at least one file or imageUrls' };
       if (files.length>4) return { statusCode: 400, headers: cors(), body: 'Up to 4 files allowed' };
 
@@ -79,23 +107,11 @@ export const handler = async (event) => {
       }
     }
 
-    // NEW: validate each URL is actually image/*; drop any bad ones
-    if (image_urls.length) {
-      const checks = await Promise.all(
-        image_urls.map(async (u) => (await isImageUrl(u)) ? u : null)
-      );
-      image_urls = checks.filter(Boolean);
-    }
-
-    // NEW: fail closed if we don't have at least one usable image URL
     if (!image_urls.length) {
-      return { statusCode: 400, headers: cors(), body: 'No usable image URLs (make sure images are JPEG/PNG/WebP and publicly fetchable).' };
+      return { statusCode: 400, headers: cors(), body: 'No usable image URLs after rehost.' };
     }
 
-    // ⬇️ fixed cost (unchanged)
     const COST = 1.5;
-
-    // Client context for debugging (kept)
     const clientContext = {
       prompt,
       format,
@@ -104,23 +120,18 @@ export const handler = async (event) => {
       uid
     };
 
-    // ADDED earlier: include run_id + uid in the callback URL (kept)
     const callbackUrl =
       `${MAKE_WEBHOOK_URL}?ctx=${encodeURIComponent(JSON.stringify(clientContext))}` +
       `&uid=${encodeURIComponent(uid)}` +
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // NEW: be generous with field names inside `input`
-    // Some Kie adapters read snake_case, others camelCase, others `images`/`reference_images`
+    // Provide generous field coverage for KIE adapters
     const input = {
       prompt,
-      // primary fields
       image_urls,
       output_format: String(format).toLowerCase(), // png | jpeg
       image_size: 'auto',
-
-      // compatibility duplicates (harmless if unused)
       imageUrls: image_urls,
       images: image_urls,
       reference_images: image_urls,
@@ -130,9 +141,8 @@ export const handler = async (event) => {
 
     const payload = {
       model: 'google/nano-banana-edit',
-      callBackUrl: callbackUrl, // unchanged
+      callBackUrl: callbackUrl,
       input
-      // metadata: { uid, run_id } // leave commented to avoid breaking strict schemas
     };
 
     const resp = await fetch(KIE_API_URL, {
