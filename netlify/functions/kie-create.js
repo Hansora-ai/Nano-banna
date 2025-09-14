@@ -1,9 +1,10 @@
 // netlify/functions/kie-create.js
 const UPLOAD_BASE64_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
 
-// Fetch remote image and return { base64Data, contentType, fileName } with MIME sniffing
+// Fetch remote image bytes and return { base64Data, contentType, fileName }.
+// We sniff the real MIME and only allow JPEG/PNG/WEBP. Others are rejected
+// with a clear error to avoid "prompt-only" fallbacks.
 async function fetchUrlAsBase64(url, defaultName = 'image') {
-  // Be generous to CDNs: follow redirects, set UA, accept images
   const res = await fetch(url, {
     cache: 'no-store',
     headers: { 'Accept': 'image/*', 'User-Agent': 'Mozilla/5.0' }
@@ -13,43 +14,38 @@ async function fetchUrlAsBase64(url, defaultName = 'image') {
   const ab = await res.arrayBuffer();
   const bytes = new Uint8Array(ab);
 
-  // Magic-byte detection to fix wrong/empty content-types
-  function detectImageMime(b) {
+  function sniff(b) {
     // JPEG: FF D8 FF
-    if (b.length > 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'image/jpeg';
+    if (b.length > 3 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return { ct: 'image/jpeg', ext: 'jpg' };
     // PNG: 89 50 4E 47 0D 0A 1A 0A
     if (b.length > 8 &&
         b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47 &&
-        b[4] === 0x0D && b[5] === 0x0A && b[6] === 0x1A && b[7] === 0x0A) return 'image/png';
+        b[4] === 0x0D && b[5] === 0x0A && b[6] === 0x1A && b[7] === 0x0A) return { ct: 'image/png', ext: 'png' };
     // WEBP: "RIFF"...."WEBP"
     if (b.length > 12 &&
         b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
-        b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
-    // ISO-BMFF (HEIC/HEIF/AVIF): bytes 4..7 = "ftyp"
-    if (b.length > 12 &&
-        b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) {
-      const brand = String.fromCharCode(b[8], b[9], b[10], b[11]).toLowerCase();
-      if (brand.includes('heic') || brand.includes('heif') || brand.includes('hevx') || brand.includes('mif1') || brand.includes('msf1')) {
-        return 'image/heic';
-      }
-      if (brand.includes('avif') || brand.includes('avis')) return 'image/avif';
-    }
-    return '';
+        b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return { ct: 'image/webp', ext: 'webp' };
+    // Unknown (HEIC/AVIF/etc.) -> reject here so we don't get prompt-only runs
+    return { ct: '', ext: '' };
   }
 
-  let ct = (res.headers.get('content-type') || '').toLowerCase();
-  const sniffed = detectImageMime(bytes);
-  if (!ct.startsWith('image/') && sniffed) ct = sniffed;
-  if (!ct.startsWith('image/')) throw new Error('unsupported content (not an image)');
+  let { ct, ext } = sniff(bytes);
+  // If server sent a good image content-type that matches our sniff, keep it.
+  if (!ct) {
+    // Try trusting the header only if it's an image we support
+    const hdr = (res.headers.get('content-type') || '').toLowerCase();
+    if (hdr.startsWith('image/')) {
+      if (hdr.includes('jpeg') || hdr.includes('jpg')) { ct = 'image/jpeg'; ext = 'jpg'; }
+      else if (hdr.includes('png')) { ct = 'image/png'; ext = 'png'; }
+      else if (hdr.includes('webp')) { ct = 'image/webp'; ext = 'webp'; }
+    }
+  }
+  if (!ct) {
+    // Hard stop; tell the user to use JPEG/PNG/WebP (prevents silent prompt-only)
+    throw new Error('unsupported image type (use JPEG/PNG/WebP)');
+  }
 
   const b64 = Buffer.from(ab).toString('base64');
-  const ext =
-    ct.includes('png')  ? 'png'  :
-    ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' :
-    ct.includes('webp') ? 'webp' :
-    ct.includes('avif') ? 'avif' :
-    (ct.includes('heic') || ct.includes('heif')) ? 'heic' : 'bin';
-
   return {
     base64Data: `data:${ct};base64,${b64}`,
     contentType: ct,
@@ -77,18 +73,6 @@ async function uploadBase64ToKie({ base64Data, fileName }, KIE_API_KEY) {
     throw new Error(`rehost failed: ${up.status} ${JSON.stringify(uj)}`);
   }
   return uj.data.downloadUrl;
-}
-
-// Treat KIE-hosted links as already-good
-function isKieHosted(u) {
-  try {
-    const h = new URL(u).hostname;
-    return (
-      h.endsWith('kieai.redpandaai.co') ||
-      h.endsWith('api.kie.ai') ||
-      h === 'kie.ai'
-    );
-  } catch { return false; }
 }
 
 export const handler = async (event) => {
@@ -119,14 +103,13 @@ export const handler = async (event) => {
     let image_urls = [];
 
     if (Array.isArray(imageUrls) && imageUrls.length) {
-      // Rehost any non-KIE URL; keep KIE-hosted as-is
+      // *** ALWAYS rehost incoming URLs (forces stable, correct mime) ***
       const out = [];
       for (let i = 0; i < imageUrls.length; i++) {
         const src = imageUrls[i];
-        const finalUrl = isKieHosted(src)
-          ? src
-          : await uploadBase64ToKie(await fetchUrlAsBase64(src, `img-${i + 1}`), KIE_API_KEY);
-        out.push(finalUrl);
+        const base64Payload = await fetchUrlAsBase64(src, `img-${i + 1}`);
+        const hosted = await uploadBase64ToKie(base64Payload, KIE_API_KEY);
+        out.push(hosted);
       }
       image_urls = out;
     } else {
@@ -176,7 +159,7 @@ export const handler = async (event) => {
       `&run_id=${encodeURIComponent(run_id)}` +
       `&cost=${encodeURIComponent(COST)}`;
 
-    // Input block with common aliases + single-image variants
+    // Input block with common aliases and single-image keys
     const input = {
       prompt,
       image_urls,
@@ -193,7 +176,7 @@ export const handler = async (event) => {
 
     const payload = {
       model: 'google/nano-banana-edit',
-      // include both callback spellings so your Telegram flow triggers
+      // Both variants to ensure webhook fires
       callbackUrl: callbackUrl,
       callBackUrl: callbackUrl,
       input
