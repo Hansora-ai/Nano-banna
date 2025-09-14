@@ -84,6 +84,20 @@
           <option value="png" selected>PNG</option>
           <option value="jpeg">JPEG</option>
         </select>
+
+        <!-- NEW: Image size control (above Run) -->
+        <div style="height:10px"></div>
+        <label for="imageSize">Image size</label>
+        <select id="imageSize">
+          <option value="auto" selected>Auto</option>
+          <option value="square">Square (1:1)</option>
+          <option value="portrait_3_4">Portrait 3:4</option>
+          <option value="portrait_9_16">Portrait 9:16</option>
+          <option value="landscape_4_3">Landscape 4:3</option>
+          <option value="landscape_16_9">Landscape 16:9</option>
+        </select>
+        <!-- /NEW -->
+
         <div style="height:14px"></div>
         <button id="runBtn" type="button" onclick="window.__run && window.__run()">Run</button>
         <div id="status" class="banner" role="status" aria-live="polite" hidden></div>
@@ -106,6 +120,7 @@ const filesEl = document.getElementById('files');
 const thumbsEl= document.getElementById('thumbs');
 const promptEl= document.getElementById('prompt');
 const formatEl= document.getElementById('format');
+const imageSizeEl = document.getElementById('imageSize'); // NEW
 const runBtn  = document.getElementById('runBtn');
 const statusEl= document.getElementById('status');
 
@@ -206,6 +221,7 @@ window.__run = async function(){
     const payload = {
       prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
+      image_size: (imageSizeEl?.value || 'auto'),   // NEW: pass selected size
       imageUrls: urls,
       uid: userId,
       run_id
