@@ -5,32 +5,35 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Nano Banana — Image-to-Image</title>
 
-  <!-- CSP: no S3/R2; allow unpkg (exifr) and your endpoints -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  img-src * data: blob:;
                  connect-src 'self' https://api.kie.ai https://kieai.redpandaai.co https://hook.make.com;
                  style-src 'self' 'unsafe-inline';
                  script-src 'self' 'unsafe-inline' https://unpkg.com">
-
-  <!-- Avoid stale caching during upload/create -->
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
-  <!-- EXIF orientation reader -->
+  <!-- EXIF -->
   <script src="https://unpkg.com/exifr/dist/lite.umd.js"></script>
 
-  <!-- ADDED: tiny HEIC→JPEG converter (fits CSP via unpkg) -->
+  <!-- HEIC→JPEG converter -->
   <script src="https://unpkg.com/heic2any/dist/heic2any.min.js"></script>
   <script>
-    // ADDED: normalize unsupported HEIC/HEIF to JPEG before upload
+    // CHANGED/NEW: robust HEIC normalization with fail-closed behavior
     async function ensureSupported(file){
       const t = (file.type || '').toLowerCase();
       if (t === 'image/heic' || t === 'image/heif' || t === 'image/heif-sequence') {
-        const base = (file.name?.replace(/\.[^.]+$/, '') || 'image');
-        const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-        return new File([blob], base + '.jpg', { type: 'image/jpeg' });
+        try {
+          const base = (file.name?.replace(/\.[^.]+$/, '') || 'image');
+          const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+          if (!blob || !blob.size) throw new Error('Empty JPEG after convert');
+          return new File([blob], base + '.jpg', { type: 'image/jpeg' });
+        } catch (e) {
+          // Stop here: better to fail than to run prompt-only
+          throw new Error('HEIC/HEIF conversion failed. Please use JPEG/PNG/WebP.');
+        }
       }
       return file;
     }
@@ -52,7 +55,6 @@
     details{margin-top:16px; background:#0f0f15; border:1px solid #262634; border-radius:12px; padding:10px 12px}
     pre{white-space:pre-wrap; word-break:break-word; margin:0}
 
-    /* Status banner */
     .banner{margin-top:12px; padding:12px 14px; border-radius:12px; border:1px solid transparent; font-weight:600}
     .banner.ok{background:#0f1a12; border-color:#1f6d3d; color:#b9f3cf}
     .banner.err{background:#1a1110; border-color:#a24a4a; color:#ffd1d1}
@@ -95,10 +97,8 @@
   </div>
 
 <script>
-/* ===================== DEBUG & ELEMENTS ===================== */
 const dbg = document.getElementById('debug');
 const log = (...a) => { dbg.textContent += '\n' + a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); };
-
 window.addEventListener('error', e => log('Window error:', e.message));
 window.addEventListener('unhandledrejection', e => log('Unhandled promise:', String(e.reason)));
 
@@ -109,16 +109,12 @@ const formatEl= document.getElementById('format');
 const runBtn  = document.getElementById('runBtn');
 const statusEl= document.getElementById('status');
 
-log('BOOT: elements wired.');
-
-/* User-facing status helpers (UI only) */
 function showStatus(msg, kind){
   statusEl.textContent = msg;
   statusEl.className = 'banner ' + (kind === 'ok' ? 'ok' : 'err');
   statusEl.hidden = false;
 }
 
-/* ===================== THUMBNAILS ===================== */
 filesEl.addEventListener('change', () => {
   thumbsEl.innerHTML = '';
   [...filesEl.files].slice(0,4).forEach(f=>{
@@ -129,26 +125,22 @@ filesEl.addEventListener('change', () => {
   });
 });
 
-/* ===================== RUN-ID ===================== */
 function newRunId(userId){
   const r = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
   return `${userId}-${Date.now()}-${r}`;
 }
 
-/* ===================== OPTIONAL ORIENTATION FIX ===================== */
-/* Only rotate when EXIF != 1; otherwise send original bytes unchanged */
+/* EXIF rotate */
 async function normalizeIfRotated(file) {
   let orientation = 1;
   try { orientation = await exifr.orientation(file) || 1; } catch {}
   if (orientation === 1) return file;
-
   const bmp = await createImageBitmap(file);
   const rotated = [5,6,7,8].includes(orientation);
   const c = document.createElement('canvas');
   c.width = rotated ? bmp.height : bmp.width;
   c.height = rotated ? bmp.width : bmp.height;
   const ctx = c.getContext('2d');
-
   switch (orientation) {
     case 2: ctx.translate(c.width,0); ctx.scale(-1,1); break;
     case 3: ctx.translate(c.width,c.height); ctx.rotate(Math.PI); break;
@@ -160,67 +152,87 @@ async function normalizeIfRotated(file) {
     default: ;
   }
   ctx.drawImage(bmp, 0, 0);
-
   const blob = await new Promise(r => c.toBlob(r, file.type.includes('png') ? 'image/png' : 'image/jpeg', 0.95));
   return new File([blob], file.name.replace(/\.[^.]+$/, file.type.includes('png') ? '.png' : '.jpg'), { type: blob.type });
 }
 
-/* ===================== MULTIPART UPLOAD (NO BASE64) ===================== */
-/* Posts raw bytes to /.netlify/functions/kie-upload and expects { downloadUrl } */
+/* NEW: verify that a URL is truly an image the KIE fetcher can GET */
+async function verifyImageUrl(url){
+  try {
+    // Use GET (not HEAD); some CDNs block HEAD. Fetch a tiny chunk and abort.
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 6000);
+    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
+      method: 'GET',
+      signal: ctrl.signal,
+      cache: 'no-store',
+      headers: { 'Accept': 'image/*' }
+    });
+    clearTimeout(t);
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (!res.ok || !ct.startsWith('image/')) {
+      throw new Error(`Not an image (${res.status}, ${ct || 'no content-type'})`);
+    }
+    return true;
+  } catch (e) {
+    throw new Error(`URL not image-fetchable: ${e.message}`);
+  }
+}
+
+/* multipart upload */
 async function uploadViaFn(file, rid, index){
-  const supported = await ensureSupported(file);          // ADDED: convert HEIC/HEIF → JPEG first
-  const prepared  = await normalizeIfRotated(supported);  // keep your rotation logic
+  const supported = await ensureSupported(file);          // keeps HEIC/HEIF safe
+  const prepared  = await normalizeIfRotated(supported);
 
   const fd = new FormData();
-  // unique filename prevents collisions across users/runs
   fd.append('file', prepared, `${rid}-${index}-${prepared.name || 'image'}`);
   fd.append('run_id', rid);
 
   const res = await fetch('/.netlify/functions/kie-upload', { method: 'POST', body: fd });
   const j = await res.json().catch(()=>null);
   if (!res.ok || !j || !j.downloadUrl) {
-    // small enhancement: show backend reason if present
     throw new Error((j && j.error) ? j.error : `kie-upload failed (${res.status})`);
   }
-  return j.downloadUrl; // URL to pass to Kie
+
+  const url = j.downloadUrl;
+  // NEW: verify the URL is truly an image before we pass it to KIE
+  await verifyImageUrl(url);
+  return url;
 }
 
-/* ===================== MAIN RUN ===================== */
 window.__run = async function(){
-  if (runBtn.disabled || runBtn.dataset.busy === '1') return; // anti double-click
-  log('RUN: clicked (handler).');
-
+  if (runBtn.disabled || runBtn.dataset.busy === '1') return;
   const files = [...filesEl.files];
   if (!files.length) { alert('Choose at least one image.'); return; }
   if (files.length > 4) { alert('Max 4 images.'); return; }
-  // Per-file limit (~10MB via Netlify/API Gateway)
   for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
 
   const oldText = runBtn.textContent;
-  statusEl.hidden = true; // reset banner
+  statusEl.hidden = true;
   runBtn.dataset.busy = '1';
   runBtn.disabled = true; runBtn.textContent = 'Working…';
   try {
-    // Prefer Telegram user id; else ?uid=...; else random
     const tg = window.Telegram?.WebApp;
     const deepUid = new URLSearchParams(location.search).get('uid') || '';
     const userId = tg?.initDataUnsafe?.user?.id || deepUid || `web-${Math.random().toString(36).slice(2,8)}`;
     const run_id = newRunId(userId);
 
-    // Upload each file (multipart, raw bytes)
     const urls = [];
     for (let i=0;i<files.length;i++){
       const u = await uploadViaFn(files[i], run_id, i);
       urls.push(u);
     }
-    log('Got KIE download URLs:', urls);
+    if (!urls.length){ // NEW: fail closed
+      showStatus('❌ No images uploaded. Try JPEG/PNG/WebP.', 'err');
+      return;
+    }
 
     const payload = {
       prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
       imageUrls: urls,
       uid: userId,
-      run_id // will be added to Kie metadata in your function
+      run_id
     };
 
     const res = await fetch('/.netlify/functions/kie-create' + `?rid=${encodeURIComponent(run_id)}&t=${Date.now()}`, {
@@ -231,32 +243,27 @@ window.__run = async function(){
 
     const ct  = res.headers.get('content-type') || '';
     const txt = await res.text();
-    log(`CREATE: status=${res.status} ct=${ct}`);
     try {
       const j = JSON.parse(txt);
-      log('CREATE JSON:', j);
       const data = j?.data || j?.response?.data || {};
       const taskId   = data.taskId || data.id || '';
       const recordId = data.recordId || '';
       if (taskId || recordId) {
-        log('SUBMITTED ✔', { taskId, recordId });
         showStatus('✅ Submitted successfully. If you have enough credits, your image will be delivered in Telegram within ~30 seconds.\n\n✅ Запрос успешно принят. Если у вас достаточно кредитов, изображение будет доставлено в Telegram в течение ~30 секунд.', 'ok');
       } else {
         showStatus('✅ Submitted. Check Telegram for the result.', 'ok');
       }
     } catch {
-      log('CREATE TEXT:', txt);
+      // fall back to plain text log for debugging
     }
   } catch (err) {
     log('RUN ERROR:', String(err));
-    showStatus('❌ Error occurred. Please try again.', 'err');
+    showStatus('❌ ' + String(err.message || err), 'err'); // NEW: surface exact reason
   } finally {
     runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy='';
   }
 };
 
-/* (no extra bindings; the inline onclick calls __run) */
-log('BOOT: handler attached.');
 </script>
 </body>
 </html>
