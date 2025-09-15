@@ -15,27 +15,11 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
-  <!-- EXIF -->
-  <script src="https://unpkg.com/exifr/dist/lite.umd.js"></script>
+  <!-- EXIF (NEW: use full build so HEIC orientation is read) -->
+  <script src="https://unpkg.com/exifr/dist/full.umd.js"></script>
 
   <!-- HEIC→JPEG converter -->
   <script src="https://unpkg.com/heic2any/dist/heic2any.min.js"></script>
-  <script>
-    async function ensureSupported(file){
-      const t = (file.type || '').toLowerCase();
-      if (t === 'image/heic' || t === 'image/heif' || t === 'image/heif-sequence') {
-        try {
-          const base = (file.name?.replace(/\.[^.]+$/, '') || 'image');
-          const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-          if (!blob || !blob.size) throw new Error('Empty JPEG after convert');
-          return new File([blob], base + '.jpg', { type: 'image/jpeg' });
-        } catch (e) {
-          throw new Error('HEIC/HEIF conversion failed. Please use JPEG/PNG/WebP.');
-        }
-      }
-      return file;
-    }
-  </script>
 
   <style>
     body { background:#0b0b0f; color:#eaeaf0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
@@ -83,7 +67,7 @@
           <option value="jpeg">JPEG</option>
         </select>
 
-        <!-- Image size control (above Run). Values = KIE tokens -->
+        <!-- Image size control (KIE tokens) -->
         <div style="height:10px"></div>
         <label for="imageSize">Image size</label>
         <select id="imageSize">
@@ -94,7 +78,6 @@
           <option value="4:3">Landscape 4:3</option>
           <option value="16:9">Landscape 16:9</option>
         </select>
-        <!-- / -->
 
         <div style="height:14px"></div>
         <button id="runBtn" type="button" onclick="window.__run && window.__run()">Run</button>
@@ -143,36 +126,106 @@ function newRunId(userId){
   return `${userId}-${Date.now()}-${r}`;
 }
 
-/* EXIF rotate */
-async function normalizeIfRotated(file) {
-  let orientation = 1;
-  try { orientation = await exifr.orientation(file) || 1; } catch {}
-  if (orientation === 1) return file;
+/* ---------- IMAGE PREP: HEIC/JPEG orientation + optional center-crop ---------- */
+
+// Map KIE token -> aspect ratio (width/height)
+function ratioFromToken(tok){
+  if (!tok || tok === 'auto') return null;
+  const [w,h] = tok.split(':').map(Number);
+  if (!w || !h) return null;
+  return w / h;
+}
+
+// draw source bitmap onto a new canvas with an EXIF-aware transform
+async function drawOrientedToCanvas(file, orientation){
   const bmp = await createImageBitmap(file);
   const rotated = [5,6,7,8].includes(orientation);
   const c = document.createElement('canvas');
   c.width = rotated ? bmp.height : bmp.width;
   c.height = rotated ? bmp.width : bmp.height;
   const ctx = c.getContext('2d');
+
   switch (orientation) {
-    case 2: ctx.translate(c.width,0); ctx.scale(-1,1); break;
-    case 3: ctx.translate(c.width,c.height); ctx.rotate(Math.PI); break;
-    case 4: ctx.translate(0,c.height); ctx.scale(1,-1); break;
+    case 2: ctx.translate(c.width,0); ctx.scale(-1,1); break;               // flip X
+    case 3: ctx.translate(c.width,c.height); ctx.rotate(Math.PI); break;    // 180
+    case 4: ctx.translate(0,c.height); ctx.scale(1,-1); break;              // flip Y
     case 5: ctx.rotate(.5*Math.PI); ctx.scale(1,-1); ctx.translate(0,-c.width); break;
-    case 6: ctx.rotate(.5*Math.PI); ctx.translate(0,-c.height); break;
+    case 6: ctx.rotate(.5*Math.PI); ctx.translate(0,-c.height); break;      // 90 CW
     case 7: ctx.rotate(.5*Math.PI); ctx.scale(-1,1); ctx.translate(-c.width,-c.height); break;
-    case 8: ctx.rotate(-.5*Math.PI); ctx.translate(-c.height,0); break;
-    default: ;
+    case 8: ctx.rotate(-.5*Math.PI); ctx.translate(-c.height,0); break;     // 90 CCW
+    default: /* 1 = no rotation */;
   }
   ctx.drawImage(bmp, 0, 0);
-  const blob = await new Promise(r => c.toBlob(r, file.type.includes('png') ? 'image/png' : 'image/jpeg', 0.95));
-  return new File([blob], file.name.replace(/\.[^.]+$/, file.type.includes('png') ? '.png' : '.jpg'), { type: blob.type });
+  return c;
 }
 
+// Center-crop a canvas to the requested ratio ("cover" behavior)
+function cropCanvasToRatio(canvas, targetRatio){
+  if (!targetRatio) return canvas;
+  const w = canvas.width, h = canvas.height, r = w / h;
+  if (Math.abs(r - targetRatio) < 0.002) return canvas; // close enough
+
+  let sx=0, sy=0, sw=w, sh=h;
+  if (r > targetRatio) {
+    // too wide -> crop width
+    sw = Math.round(h * targetRatio);
+    sx = Math.floor((w - sw) / 2);
+  } else {
+    // too tall -> crop height
+    sh = Math.round(w / targetRatio);
+    sy = Math.floor((h - sh) / 2);
+  }
+  const out = document.createElement('canvas');
+  out.width = sw; out.height = sh;
+  const ctx = out.getContext('2d');
+  ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  return out;
+}
+
+// Prepare final uploadable file: convert HEIC -> JPEG, rotate by EXIF, optional crop
+async function prepareImageForUpload(file, desiredToken){
+  const isHeic = /image\/hei(c|f)/i.test(file.type);
+  let orientation = 1;
+  try { orientation = await exifr.orientation(file) || 1; } catch {}
+
+  let working = file;
+
+  if (isHeic) {
+    // Convert first
+    const base = (file.name?.replace(/\.[^.]+$/, '') || 'image');
+    const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
+    working = new File([blob], base + '.jpg', { type: 'image/jpeg' });
+    // Keep the orientation we read from the *original* HEIC
+  }
+
+  // Apply orientation if needed
+  if (orientation && orientation !== 1) {
+    const c = await drawOrientedToCanvas(working, orientation);
+    working = await new Promise(res => c.toBlob(b => res(new File([b], (working.name||'image').replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })), 'image/jpeg', 0.95));
+  }
+
+  // Optional center-crop to requested ratio (prevents KIE black bars)
+  const targetRatio = ratioFromToken(desiredToken);
+  if (targetRatio) {
+    const c = await drawOrientedToCanvas(working, 1);
+    const cropped = cropCanvasToRatio(c, targetRatio);
+    working = await new Promise(res => cropped.toBlob(b => res(new File([b], (working.name||'image').replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })), 'image/jpeg', 0.95));
+  }
+
+  return working;
+}
+/* --------------------------------------------------------------------------- */
+
 /* multipart upload */
-async function uploadViaFn(file, rid, index){
-  const supported = await ensureSupported(file);
-  const prepared  = await normalizeIfRotated(supported);
+async function uploadViaFn(file, rid, index, sizeToken){
+  // Prepare (HEIC fix + EXIF rotate + optional crop)
+  let prepared = file;
+  try {
+    prepared = await prepareImageForUpload(file, sizeToken);
+  } catch (e) {
+    // If prep fails, fall back to original file (still uploaded)
+    console.warn('prep failed, falling back:', e);
+  }
 
   const fd = new FormData();
   fd.append('file', prepared, `${rid}-${index}-${prepared.name || 'image'}`);
@@ -204,8 +257,9 @@ window.__run = async function(){
     const run_id = newRunId(userId);
 
     const urls = [];
+    const sizeToken = (imageSizeEl?.value || 'auto');   // KIE tokens: auto, 1:1, 3:4, 9:16, 4:3, 16:9
     for (let i=0;i<files.length;i++){
-      const u = await uploadViaFn(files[i], run_id, i);
+      const u = await uploadViaFn(files[i], run_id, i, sizeToken);
       urls.push(u);
     }
     if (!urls.length){
@@ -216,7 +270,7 @@ window.__run = async function(){
     const payload = {
       prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
-      image_size: (imageSizeEl?.value || 'auto'),   // pass KIE token directly
+      image_size: sizeToken,
       imageUrls: urls,
       uid: userId,
       run_id
@@ -228,7 +282,6 @@ window.__run = async function(){
       body: JSON.stringify(payload)
     });
 
-    const ct  = res.headers.get('content-type') || '';
     const txt = await res.text();
     try {
       const j = JSON.parse(txt);
@@ -240,7 +293,9 @@ window.__run = async function(){
       } else {
         showStatus('✅ Submitted. Check Telegram for the result.', 'ok');
       }
-    } catch { /* ignore plain text */ }
+    } catch {
+      // plain text -> ignore
+    }
   } catch (err) {
     log('RUN ERROR:', String(err));
     showStatus('❌ ' + String(err.message || err), 'err');
