@@ -21,7 +21,6 @@
   <!-- HEIC→JPEG converter -->
   <script src="https://unpkg.com/heic2any/dist/heic2any.min.js"></script>
   <script>
-    // CHANGED/NEW: robust HEIC normalization with fail-closed behavior
     async function ensureSupported(file){
       const t = (file.type || '').toLowerCase();
       if (t === 'image/heic' || t === 'image/heif' || t === 'image/heif-sequence') {
@@ -31,7 +30,6 @@
           if (!blob || !blob.size) throw new Error('Empty JPEG after convert');
           return new File([blob], base + '.jpg', { type: 'image/jpeg' });
         } catch (e) {
-          // Stop here: better to fail than to run prompt-only
           throw new Error('HEIC/HEIF conversion failed. Please use JPEG/PNG/WebP.');
         }
       }
@@ -85,18 +83,18 @@
           <option value="jpeg">JPEG</option>
         </select>
 
-        <!-- NEW: Image size control (above Run) -->
+        <!-- Image size control (above Run). Values = KIE tokens -->
         <div style="height:10px"></div>
         <label for="imageSize">Image size</label>
         <select id="imageSize">
           <option value="auto" selected>Auto</option>
-          <option value="square">Square (1:1)</option>
-          <option value="portrait_3_4">Portrait 3:4</option>
-          <option value="portrait_9_16">Portrait 9:16</option>
-          <option value="landscape_4_3">Landscape 4:3</option>
-          <option value="landscape_16_9">Landscape 16:9</option>
+          <option value="1:1">Square (1:1)</option>
+          <option value="3:4">Portrait 3:4</option>
+          <option value="9:16">Portrait 9:16</option>
+          <option value="4:3">Landscape 4:3</option>
+          <option value="16:9">Landscape 16:9</option>
         </select>
-        <!-- /NEW -->
+        <!-- / -->
 
         <div style="height:14px"></div>
         <button id="runBtn" type="button" onclick="window.__run && window.__run()">Run</button>
@@ -120,7 +118,7 @@ const filesEl = document.getElementById('files');
 const thumbsEl= document.getElementById('thumbs');
 const promptEl= document.getElementById('prompt');
 const formatEl= document.getElementById('format');
-const imageSizeEl = document.getElementById('imageSize'); // NEW
+const imageSizeEl = document.getElementById('imageSize');
 const runBtn  = document.getElementById('runBtn');
 const statusEl= document.getElementById('status');
 
@@ -173,7 +171,7 @@ async function normalizeIfRotated(file) {
 
 /* multipart upload */
 async function uploadViaFn(file, rid, index){
-  const supported = await ensureSupported(file);          // keeps HEIC/HEIF safe
+  const supported = await ensureSupported(file);
   const prepared  = await normalizeIfRotated(supported);
 
   const fd = new FormData();
@@ -185,10 +183,7 @@ async function uploadViaFn(file, rid, index){
   if (!res.ok || !j || !j.downloadUrl) {
     throw new Error((j && j.error) ? j.error : `kie-upload failed (${res.status})`);
   }
-
-  const url = j.downloadUrl;
-  // removed client-side URL verification to avoid false failures
-  return url;
+  return j.downloadUrl;
 }
 
 window.__run = async function(){
@@ -213,7 +208,7 @@ window.__run = async function(){
       const u = await uploadViaFn(files[i], run_id, i);
       urls.push(u);
     }
-    if (!urls.length){ // NEW: fail closed
+    if (!urls.length){
       showStatus('❌ No images uploaded. Try JPEG/PNG/WebP.', 'err');
       return;
     }
@@ -221,7 +216,7 @@ window.__run = async function(){
     const payload = {
       prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
       format: (formatEl.value || 'png').toLowerCase(),
-      image_size: (imageSizeEl?.value || 'auto'),   // NEW: pass selected size
+      image_size: (imageSizeEl?.value || 'auto'),   // pass KIE token directly
       imageUrls: urls,
       uid: userId,
       run_id
@@ -245,17 +240,14 @@ window.__run = async function(){
       } else {
         showStatus('✅ Submitted. Check Telegram for the result.', 'ok');
       }
-    } catch {
-      // fall back to plain text log for debugging
-    }
+    } catch { /* ignore plain text */ }
   } catch (err) {
     log('RUN ERROR:', String(err));
-    showStatus('❌ ' + String(err.message || err), 'err'); // surface exact reason
+    showStatus('❌ ' + String(err.message || err), 'err');
   } finally {
     runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy='';
   }
 };
-
 </script>
 </body>
 </html>
