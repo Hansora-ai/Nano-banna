@@ -56,7 +56,7 @@
   </style>
 
   <!-- Supabase client for direct Storage upload (Nano Banana 1:1 upload path) -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  
   <script>
     const SUPABASE_URL  = 'https://qmaealblegvcwodlmeht.supabase.co';
     const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
@@ -157,92 +157,39 @@ function newRunId(userId){
 async function normalizeIfRotated(file) { return file; }
 
 /* upload (HEIC convert only; no crop/rotate/resize) */
-async function uploadViaFn(file, rid, index){
-  // 1:1 Nano Banana approach: direct upload to Supabase public bucket, return public URL
-  const supported = await ensureSupported(file);
-  const prepared  = await normalizeIfRotated(supported); // no-op now
 
-  // Build a deterministic path: bot/{YYYY}/{MM}/{rid}/idx-name.ext
+async function uploadViaFn(file, rid, index){
+  // Direct REST upload to Supabase Storage (no SDK). Same 1:1 behavior.
+  // Build deterministic object path
   const d = new Date();
   const yr = d.getUTCFullYear();
   const mo = String(d.getUTCMonth()+1).padStart(2,'0');
-  const safeBase = (prepared.name || 'image').replace(/[^a-z0-9_.-]/gi,'_').toLowerCase();
+  const safeBase = (file.name || 'image').replace(/[^a-z0-9_.-]/gi,'_').toLowerCase();
   const path = `bot/${yr}/${mo}/${rid}/${index}-${safeBase}`;
 
-  // Upload with upsert=false to avoid accidental overwrite collisions
-  const { data, error } = await ensureSupa().storage.from(SUPA_BUCKET).upload(path, prepared, {
-    contentType: prepared.type || 'application/octet-stream',
-    cacheControl: '3600',
-    upsert: false
+  // PUT object via Storage REST
+  const endpoint = `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(SUPA_BUCKET)}/${encodeURIComponent(path)}`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'apikey': SUPABASE_ANON,
+      'Cache-Control': 'no-cache',
+      // let browser set correct content-type for the binary body when using FormData; otherwise set file.type
+      'Content-Type': file.type || 'application/octet-stream'
+    },
+    body: file
   });
-  if (error) { throw new Error('Supabase upload failed: ' + error.message); }
+  if (!res.ok){
+    const txt = await res.text().catch(()=>'');
+    throw new Error(`Supabase upload failed: ${res.status} ${txt}`);
+  }
 
   const url = supaPublicUrl(path);
   try { await fetch(url, { method:'HEAD', cache:'no-store' }); } catch {}
   return url;
 }
-
-window.__run = async function(){
-  if (runBtn.disabled || runBtn.dataset.busy === '1') return;
-  const files = [...filesEl.files];
-  if (!files.length) { alert('Choose at least one image.'); return; }
-  if (files.length > 4) { alert('Max 4 images.'); return; }
-  for (const f of files){ if (f.size > 10*1024*1024){ alert(`"${f.name}" exceeds 10MB.`); return; } }
-
-  const oldText = runBtn.textContent;
-  statusEl.hidden = true;
-  runBtn.dataset.busy = '1';
-  runBtn.disabled = true; runBtn.textContent = 'Working…';
-  try {
-    const tg = window.Telegram?.WebApp;
-    const deepUid = new URLSearchParams(location.search).get('uid') || '';
-    const userId = tg?.initDataUnsafe?.user?.id || deepUid || `web-${Math.random().toString(36).slice(2,8)}`;
-    const run_id = newRunId(userId);
-
-    const urls = [];
-    for (let i=0;i<files.length;i++){
-      const u = await uploadViaFn(files[i], run_id, i);
-      urls.push(u);
-    }
-    if (!urls.length){
-      showStatus('❌ No images uploaded. Try JPEG/PNG/WebP.', 'err');
-      return;
-    }
-
-    const payload = {
-      prompt: ((promptEl.value ?? '').toString().replace(/\u00A0/g,' ').trim()) || '.',
-      format: (formatEl.value || 'png').toLowerCase(),
-      image_size: (imageSizeEl?.value || 'auto'),   // exact KIE tokens
-      imageUrls: urls,
-      uid: userId,
-      run_id
-    };
-
-    const res = await fetch('/.netlify/functions/kie-create' + `?rid=${encodeURIComponent(run_id)}&t=${Date.now()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-      body: JSON.stringify(payload)
-    });
-
-    const txt = await res.text();
-    try {
-      const j = JSON.parse(txt);
-      const data = j?.data || j?.response?.data || {};
-      const taskId   = data.taskId || data.id || '';
-      const recordId = data.recordId || '';
-      if (taskId || recordId) {
-        showStatus('✅ Submitted successfully. If you have enough credits, your image will be delivered in Telegram within ~30 seconds.\n\n✅ Запрос успешно принят. Если у вас достаточно кредитов, изображение будет доставлено в Telegram в течение ~30 секунд.', 'ok');
-      } else {
-        showStatus('✅ Submitted. Check Telegram for the result.', 'ok');
-      }
-    } catch { /* plain text body -> ignore */ }
-  } catch (err) {
-    log('RUN ERROR:', String(err));
-    showStatus('❌ ' + String(err.message || err), 'err');
-  } finally {
-    runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy='';
-  }
-};
+;
 </script>
 </body>
 </html>
