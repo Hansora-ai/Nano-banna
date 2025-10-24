@@ -47,13 +47,27 @@
     button[disabled]{opacity:.6; cursor:not-allowed}
     #thumbs{display:flex; gap:8px; flex-wrap:wrap}
     .thumb{margin-top:8px; width:160px; height:160px; object-fit:cover; border-radius:10px; border:1px solid #262634}
+    .thumbWrap{position:relative; display:inline-block}
+    .thumbX{
+      position:absolute; top:6px; right:6px;
+      width:22px; height:22px; line-height:20px; text-align:center;
+      border-radius:999px;
+      background:#12131a; color:#fff; border:1px solid #2f3040;
+      box-shadow:0 2px 6px rgba(0,0,0,.35);
+      font-weight:700; font-size:14px;
+      cursor:pointer; padding:0;
+    }
+    .thumbX:hover{background:#191b24}
+    .thumbX:focus{outline:none; box-shadow:0 0 0 2px rgba(107,91,209,.35)}
+    
     details{margin-top:16px; background:#0f0f15; border:1px solid #262634; border-radius:12px; padding:10px 12px}
     pre{white-space:pre-wrap; word-break:break-word; margin:0}
 
     .banner{margin-top:12px; padding:12px 14px; border-radius:12px; border:1px solid transparent; font-weight:600}
     .banner.ok{background:#0f1a12; border-color:#1f6d3d; color:#b9f3cf}
     .banner.err{background:#1a1110; border-color:#a24a4a; color:#ffd1d1}
-  </style>
+  
+</style>
 </head>
 <body>
   <noscript><div style="background:#ffdbdb;color:#300;padding:10px;border-radius:8px">
@@ -117,6 +131,48 @@ const formatEl= document.getElementById('format');
 const imageSizeEl = document.getElementById('imageSize');
 const runBtn  = document.getElementById('runBtn');
 const statusEl= document.getElementById('status');
+// Maintain an editable list of selected files (FileList is immutable)
+let selectedFiles = [];
+
+function syncInputFromSelected(){
+  const dt = new DataTransfer();
+  selectedFiles.forEach(f => dt.items.add(f));
+  filesEl.files = dt.files;
+}
+
+function renderThumbs(){
+  thumbsEl.innerHTML = '';
+  selectedFiles.slice(0,4).forEach((f, idx)=>{
+    const url = URL.createObjectURL(f);
+    const wrap = document.createElement('div');
+    wrap.className = 'thumbWrap';
+    const img = document.createElement('img');
+    img.src = url; img.className = 'thumb';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'thumbX';
+    btn.textContent = '×';
+    btn.setAttribute('aria-label','Remove image');
+    btn.addEventListener('click', () => {
+      // remove this index
+      selectedFiles.splice(idx, 1);
+      syncInputFromSelected();
+      renderThumbs();
+    });
+    wrap.appendChild(img);
+    wrap.appendChild(btn);
+    thumbsEl.appendChild(wrap);
+  });
+}
+
+filesEl.addEventListener('change', () => {
+  // merge new files then cap to 4
+  selectedFiles = [...filesEl.files];
+  if (selectedFiles.length > 4) selectedFiles = selectedFiles.slice(0,4);
+  syncInputFromSelected();
+  renderThumbs();
+});
+
 
 function showStatus(msg, kind){
   statusEl.textContent = msg;
@@ -124,15 +180,7 @@ function showStatus(msg, kind){
   statusEl.hidden = false;
 }
 
-filesEl.addEventListener('change', () => {
-  thumbsEl.innerHTML = '';
-  [...filesEl.files].slice(0,4).forEach(f=>{
-    const url = URL.createObjectURL(f);
-    const img = document.createElement('img');
-    img.src = url; img.className = 'thumb';
-    thumbsEl.appendChild(img);
-  });
-});
+// replaced by renderThumbs with remove buttons
 
 function newRunId(userId){
   const r = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
@@ -173,7 +221,7 @@ async function uploadViaFn(file, rid, index){
 
 window.__run = async function(){
   if (runBtn.disabled || runBtn.dataset.busy === '1') return;
-  const files = [...filesEl.files];
+  const files = [...selectedFiles];
   if (!files.length) { alert('Choose at least one image.'); return; }
   if (files.length > 4) { alert('Max 4 images.'); return; }
   for (const f of files){ if (f.size > 10*1024*1024){ alert(`\"${f.name}\" exceeds 10MB.`); return; } }
@@ -229,7 +277,7 @@ window.__run = async function(){
     log('RUN ERROR:', String(err));
     showStatus('❌ ' + String(err.message || err), 'err');
   } finally {
-    runBtn.textContent = oldText; runBtn.disabled = false; runBtn.dataset.busy='';
+    runBtn.textContent = 'Run'; runBtn.disabled = false; runBtn.dataset.busy='';
   }
 };
 </script>
