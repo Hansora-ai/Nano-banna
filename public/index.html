@@ -54,6 +54,16 @@
     .banner.ok{background:#0f1a12; border-color:#1f6d3d; color:#b9f3cf}
     .banner.err{background:#1a1110; border-color:#a24a4a; color:#ffd1d1}
   </style>
+
+  <!-- Supabase client for direct Storage upload (Nano Banana 1:1 upload path) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL  = 'https://qmaealblegvcwodlmeht.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
+    const __supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    const SUPA_BUCKET = 'downloads'; // uses the same public bucket as website
+    function supaPublicUrl(path){ return `${SUPABASE_URL}/storage/v1/object/public/${SUPA_BUCKET}/${path}`; }
+  </script>
 </head>
 <body>
   <noscript><div style="background:#ffdbdb;color:#300;padding:10px;border-radius:8px">
@@ -144,19 +154,28 @@ async function normalizeIfRotated(file) { return file; }
 
 /* upload (HEIC convert only; no crop/rotate/resize) */
 async function uploadViaFn(file, rid, index){
+  // 1:1 Nano Banana approach: direct upload to Supabase public bucket, return public URL
   const supported = await ensureSupported(file);
   const prepared  = await normalizeIfRotated(supported); // no-op now
 
-  const fd = new FormData();
-  fd.append('file', prepared, `${rid}-${index}-${prepared.name || 'image'}`);
-  fd.append('run_id', rid);
+  // Build a deterministic path: bot/{YYYY}/{MM}/{rid}/idx-name.ext
+  const d = new Date();
+  const yr = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth()+1).padStart(2,'0');
+  const safeBase = (prepared.name || 'image').replace(/[^a-z0-9_.-]/gi,'_').toLowerCase();
+  const path = `bot/${yr}/${mo}/${rid}/${index}-${safeBase}`;
 
-  const res = await fetch('/.netlify/functions/kie-upload', { method: 'POST', body: fd });
-  const j = await res.json().catch(()=>null);
-  if (!res.ok || !j || !j.downloadUrl) {
-    throw new Error((j && j.error) ? j.error : `kie-upload failed (${res.status})`);
-  }
-  return j.downloadUrl;
+  // Upload with upsert=false to avoid accidental overwrite collisions
+  const { data, error } = await __supa.storage.from(SUPA_BUCKET).upload(path, prepared, {
+    contentType: prepared.type || 'application/octet-stream',
+    cacheControl: '3600',
+    upsert: false
+  });
+  if (error) { throw new Error('Supabase upload failed: ' + error.message); }
+
+  const url = supaPublicUrl(path);
+  try { await fetch(url, { method:'HEAD', cache:'no-store' }); } catch {}
+  return url;
 }
 
 window.__run = async function(){
