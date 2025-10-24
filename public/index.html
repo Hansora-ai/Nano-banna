@@ -60,9 +60,13 @@
   <script>
     const SUPABASE_URL  = 'https://qmaealblegvcwodlmeht.supabase.co';
     const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
-    const __supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
     const SUPA_BUCKET = 'downloads'; // uses the same public bucket as website
     function supaPublicUrl(path){ return `${SUPABASE_URL}/storage/v1/object/public/${SUPA_BUCKET}/${path}`; }
+    function ensureSupa(){
+      if (!window.supabase || !window.supabase.createClient) throw new Error('Supabase library not loaded');
+      if (!window.__supa) { window.__supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
+      return window.__supa;
+    }
   </script>
 </head>
 <body>
@@ -166,7 +170,7 @@ async function uploadViaFn(file, rid, index){
   const path = `bot/${yr}/${mo}/${rid}/${index}-${safeBase}`;
 
   // Upload with upsert=false to avoid accidental overwrite collisions
-  const { data, error } = await __supa.storage.from(SUPA_BUCKET).upload(path, prepared, {
+  const { data, error } = await ensureSupa().storage.from(SUPA_BUCKET).upload(path, prepared, {
     contentType: prepared.type || 'application/octet-stream',
     cacheControl: '3600',
     upsert: false
