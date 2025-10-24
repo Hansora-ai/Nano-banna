@@ -189,7 +189,41 @@ async function uploadViaFn(file, rid, index){
   try { await fetch(url, { method:'HEAD', cache:'no-store' }); } catch {}
   return url;
 }
-;
+
+window.__run = async function(){
+  const statusEl = document.getElementById('status');
+  const runBtn = document.getElementById('runBtn');
+  const filesEl = document.getElementById('files');
+  try{
+    statusEl.hidden = false;
+    statusEl.className = 'banner';
+    statusEl.textContent = 'Uploading…';
+    runBtn.disabled = true
+
+    const files = Array.from(filesEl.files || []).slice(0,4);
+    if (files.length === 0) { throw new Error('Choose at least 1 image.'); }
+
+    const rid = 'anon-' + Date.now();
+    const urls = [];
+    for (let i=0;i<files.length;i++){
+      const prepared = await ensureSupported(files[i]);
+      const url = await uploadViaFn(prepared, rid, i+1);
+      urls.push(url);
+    }
+    statusEl.className = 'banner ok';
+    statusEl.textContent = 'Uploaded ' + urls.length + ' file(s). Ready to send to your bot.';
+
+    // Expose the urls to any existing logic (if present)
+    window.__lastUploadUrls = urls;
+  }catch(err){
+    statusEl.className = 'banner err';
+    statusEl.textContent = (err && err.message) ? err.message : String(err);
+  }finally{
+    runBtn.disabled = false;
+  }
+};
+
+
 </script>
 </body>
 </html>
