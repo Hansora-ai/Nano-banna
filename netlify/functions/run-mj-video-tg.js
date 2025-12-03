@@ -6,6 +6,19 @@
 const API_KEY = process.env.KIE_API_KEY;
 const KIE_URL = "https://api.kie.ai/api/v1/mj/generate";
 
+const { createClient } = require("@supabase/supabase-js");
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+function getSupabaseClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false }
+  });
+}
+
+
 // Make.com scenario callback – provided by user
 const MAKE_HOOK = "https://hook.eu2.make.com/l25fsaf15od9oywtqtm45zb0i7r7ff2o";
 
@@ -131,6 +144,20 @@ exports.handler = async function (event) {
     }
 
     const taskId = extractTaskId(data);
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        await supabase.from("telegram_generations").insert({
+          telegram_id: telegramId,
+          model: "MJ Video",
+          credits: cost,
+          prompt
+        });
+      } catch (e) {
+        console.error("telegram_generations insert failed", e && e.message ? e.message : e);
+      }
+    }
 
     return jsonResponse(200, {
       ok: true,
