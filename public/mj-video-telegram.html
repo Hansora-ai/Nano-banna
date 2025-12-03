@@ -107,12 +107,17 @@
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
                 Run (cost: 2⚡)
               </button>
-              <div id="statusBox" class="mt-3 rounded-2xl border border-green-600 bg-green-950/60 px-4 py-3 text-green-100 text-sm leading-snug hidden">
-  <div class="flex items-start gap-2">
-    <div class="text-2xl">✅</div>
-    <div id="statusText" class="flex-1"></div>
-  </div>
-</div>
+              <p id="statusText" class="text-[11px] text-zinc-500">
+                Ready.
+              </p>
+            </div>
+            <div id="successBox" class="mt-3 hidden">
+              <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
+                <div class="flex items-start gap-2">
+                  <div class="text-2xl">✅</div>
+                  <div id="successText" class="flex-1"></div>
+                </div>
+              </div>
             </div>
 
 
@@ -139,6 +144,8 @@
 
     const creditsDisplay = document.getElementById("creditsDisplay");
     const statusText = document.getElementById("statusText");
+    const successBox = document.getElementById("successBox");
+    const successText = document.getElementById("successText");
     const runBtn = document.getElementById("runBtn");
     const imageInput = document.getElementById("imageInput");
     const promptInput = document.getElementById("promptInput");
@@ -227,6 +234,8 @@
     }
 
     async function handleRun(){
+      if (successBox) successBox.classList.add("hidden");
+
       if (runBtn.disabled) return;
 
       if (!telegramId){
@@ -315,6 +324,10 @@
         }
 
         setStatus("✅ Request submitted. You will receive the video in Telegram when it is ready.", "text-emerald-300");
+        if (successBox && successText){
+          successBox.classList.remove("hidden");
+          successText.innerHTML = "✅ Submitted successfully. You will receive the video in Telegram when it is ready.<br/>✅ Запрос успешно принят. Вы получите видео в Telegram, когда он будет готов.";
+        }
       } catch (err) {
         console.error(err);
         setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
