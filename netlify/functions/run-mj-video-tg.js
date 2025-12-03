@@ -7,7 +7,7 @@ const API_KEY = process.env.KIE_API_KEY;
 const KIE_URL = "https://api.kie.ai/api/v1/mj/generate";
 
 // Make.com scenario callback – provided by user
-const MAKE_HOOK = "https://hook.eu2.make.com/s01gicgqpa42k1jwdoyli6puzr7djoh1";
+const MAKE_HOOK = "https://hook.eu2.make.com/l25fsaf15od9oywtqtm45zb0i7r7ff2o";
 
 /**
  * Basic JSON response helper
