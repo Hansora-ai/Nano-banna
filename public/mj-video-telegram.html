@@ -65,8 +65,7 @@
               Midjourney (Image → Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
-              Upload 1 Midjourney image, write a short movement description, and Hansora will ask KIE to generate a video.
-              You will receive the final video directly in Telegram.
+              Upload 1 image, write your prompt, and that's it
             </p>
           </div>
         </div>
@@ -83,7 +82,7 @@
               />
               <div id="thumbs" class="mt-2 flex gap-2 flex-wrap"></div>
               <p class="text-[11px] text-zinc-500">
-                Use a square or portrait Midjourney image for best results. Max size 10MB.
+                Max size 10MB.
               </p>
             </div>
 
@@ -123,12 +122,12 @@
 
           <div class="space-y-3">
             <div class="rounded-2xl border border-base-line bg-black/40 p-3 md:p-4">
-              <h2 class="text-xs font-semibold text-zinc-200 mb-1">What happens next?</h2>
+              <h2 class="text-xs font-semibold text-zinc-200 mb-1">Instructions</h2>
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
-                <li>We check if you have enough credits.</li>
-                <li>Your image is uploaded securely.</li>
-                <li>A Midjourney video job is created via KIE.</li>
-                <li>You will receive the final video in the Telegram bot chat.</li>
+                <li>Upload Your Image</li>
+                <li>Type your prompt</li>
+                <li>Click Run bottom</li>
+                <li>If you have enough credits, the result will be sent to your bot's chat</li>
               </ol>
             </div>
           </div>
@@ -323,10 +322,10 @@
           throw new Error(err || "Error submitting job");
         }
 
-        setStatus("✅ Request submitted. You will receive the video in Telegram when it is ready.", "text-emerald-300");
+        setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "✅ Submitted successfully. You will receive the video in Telegram when it is ready.<br/>✅ Запрос успешно принят. Вы получите видео в Telegram, когда он будет готов.";
+          successText.innerHTML = " Submitted successfully. You will receive the video in Telegram when it is ready.<br/>Запрос успешно принят. Вы получите видео в Telegram, когда он будет готов.";
         }
       } catch (err) {
         console.error(err);
