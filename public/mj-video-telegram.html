@@ -13,6 +13,10 @@
       --brand:#6366f1;
     }
     body{
+    .shadow-soft{box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .input-dark{background:rgba(255,255,255,.05)!important;color:#e5e7eb!important;border:1px solid rgba(255,255,255,.12)!important}
+    .input-dark::placeholder{color:#9ca3af}
+    select.input-dark option{background:#0b0d13;color:#e5e7eb}
       background:
         radial-gradient(1200px 600px at 20% 0%, rgba(99,102,241,.15), transparent 60%),
         radial-gradient(1200px 600px at 100% 100%, rgba(56,189,248,.12), transparent 60%),
@@ -54,7 +58,7 @@
 
   <main class="flex-1">
     <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <section class="rounded-2xl border border-base-line bg-black/40 p-4 md:p-6 space-y-4">
+      <section class="rounded-2xl p-5 border border-white/10 shadow-soft bg-white/5 space-y-4">
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
@@ -79,8 +83,9 @@
                 id="imageInput"
                 type="file"
                 accept="image/*"
-                class="block w-full text-xs text-zinc-300 border border-base-line rounded-xl bg-black/40 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
+                class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
               />
+              <div id="thumbs" class="mt-2 flex gap-2 flex-wrap"></div>
               <p class="text-[11px] text-zinc-500">
                 Use a square or portrait Midjourney image for best results. Max size 10MB.
               </p>
@@ -91,7 +96,7 @@
               <textarea
                 id="promptInput"
                 rows="4"
-                class="w-full text-xs rounded-xl border border-base-line bg-black/40 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 placeholder="Describe how the camera and subject should move. Example: slow cinematic zoom-in on the character, soft handheld motion, depth of field..."></textarea>
               <p class="text-[11px] text-zinc-500">
                 Keep it short and clear. Movements, camera style, mood.
@@ -102,7 +107,7 @@
               <label class="block text-xs font-medium text-zinc-300 mb-1">Aspect ratio</label>
               <select
                 id="ratioSelect"
-                class="w-full text-xs rounded-xl border border-base-line bg-black/40 px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
                 <option value="1:1">1:1 (Square)</option>
                 <option value="9:16">9:16 (Vertical)</option>
                 <option value="16:9">16:9 (Horizontal)</option>
@@ -147,6 +152,49 @@
     const runBtn = document.getElementById("runBtn");
     const imageInput = document.getElementById("imageInput");
     const promptInput = document.getElementById("promptInput");
+    const thumbsEl = document.getElementById("thumbs");
+
+    let lastObjURL = null;
+    function clearImageSelection(){
+      try {
+        if (lastObjURL) {
+          URL.revokeObjectURL(lastObjURL);
+          lastObjURL = null;
+        }
+      } catch {}
+      if (imageInput) imageInput.value = "";
+      if (thumbsEl) thumbsEl.innerHTML = "";
+    }
+
+    if (imageInput && thumbsEl){
+      imageInput.addEventListener("change", () => {
+        thumbsEl.innerHTML = "";
+        try {
+          if (lastObjURL) {
+            URL.revokeObjectURL(lastObjURL);
+            lastObjURL = null;
+          }
+        } catch {}
+        const f = imageInput.files && imageInput.files[0];
+        if (!f) return;
+        const u = URL.createObjectURL(f);
+        lastObjURL = u;
+        const img = new Image();
+        img.src = u;
+        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+        const wrap = document.createElement("div");
+        wrap.className = "relative inline-block";
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+        del.innerHTML = "\u00d7";
+        del.onclick = clearImageSelection;
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        thumbsEl.appendChild(wrap);
+      });
+    }
+
     const ratioSelect = document.getElementById("ratioSelect");
 
     function setStatus(msg, tone){
