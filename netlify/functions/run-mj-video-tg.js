@@ -108,6 +108,9 @@ exports.handler = async function (event) {
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Number(body.new_credits || 0);
 
+  const mode = (body.mode || body.modul || "").toString();
+  const leng = (body.leng || body.lang || "").toString();
+
   if (!telegramId) {
     return jsonResponse(400, { error: "Missing telegram_id" });
   }
@@ -126,7 +129,9 @@ exports.handler = async function (event) {
     "&run_id=" + encodeURIComponent(runId) +
     "&new_credits=" + encodeURIComponent(newCredits) +
     "&credits_before=" + encodeURIComponent(creditsBefore) +
-    "&cost=" + encodeURIComponent(cost);
+    "&cost=" + encodeURIComponent(cost) +
+    "&mode=" + encodeURIComponent(mode) +
+    "&leng=" + encodeURIComponent(leng);
 
   const kiePayload = {
     taskType: "mj_video",
