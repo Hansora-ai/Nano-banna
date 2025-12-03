@@ -6,17 +6,42 @@
 const API_KEY = process.env.KIE_API_KEY;
 const KIE_URL = "https://api.kie.ai/api/v1/mj/generate";
 
-const { createClient } = require("@supabase/supabase-js");
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const TG_TABLE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generations` : "";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+async function writeTelegramGeneration({ telegramId, cost, prompt }) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !TG_TABLE_URL) {
+    console.error("telegram_generations insert skipped: missing Supabase env");
+    return;
+  }
 
-function getSupabaseClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false }
-  });
+  try {
+    const resp = await fetch(TG_TABLE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify([{
+        telegram_id: telegramId,
+        model: "MJ Video",
+        credits: cost,
+        prompt
+      }])
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error("telegram_generations insert failed", resp.status, text);
+    }
+  } catch (e) {
+    console.error("telegram_generations insert error", e && e.message ? e.message : e);
+  }
 }
+
 
 
 // Make.com scenario callback – provided by user
@@ -144,20 +169,9 @@ exports.handler = async function (event) {
     }
 
     const taskId = extractTaskId(data);
+    await writeTelegramGeneration({ telegramId, cost, prompt });
 
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      try {
-        await supabase.from("telegram_generations").insert({
-          telegram_id: telegramId,
-          model: "MJ Video",
-          credits: cost,
-          prompt
-        });
-      } catch (e) {
-        console.error("telegram_generations insert failed", e && e.message ? e.message : e);
-      }
-    }
+
 
     return jsonResponse(200, {
       ok: true,
