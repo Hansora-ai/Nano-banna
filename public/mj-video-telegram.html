@@ -277,7 +277,7 @@
         }
 
         setStatus("✅ Request submitted. You will receive the video in Telegram when it is ready.", "text-emerald-300");
-      } catch (err):
+      } catch (err) {
         console.error(err);
         setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
       } finally {
