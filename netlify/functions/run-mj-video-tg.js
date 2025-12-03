@@ -108,8 +108,25 @@ exports.handler = async function (event) {
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Number(body.new_credits || 0);
 
-  const mode = (body.mode || body.modul || "").toString();
-  const leng = (body.leng || body.lang || "").toString();
+  // Try to capture mode / leng from body, query string, or Referer URL
+  const query = event.queryStringParameters || {};
+  const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
+  let mode = (body.mode || body.modul || query.mode || query.modul || "").toString();
+  let leng = (body.leng || body.lang || query.leng || query.lang || "").toString();
+
+  if (!mode && referer) {
+    try {
+      const u = new URL(referer);
+      mode = (u.searchParams.get("mode") || u.searchParams.get("modul") || mode || "").toString();
+    } catch (_) {}
+  }
+
+  if (!leng && referer) {
+    try {
+      const u2 = new URL(referer);
+      leng = (u2.searchParams.get("leng") || u2.searchParams.get("lang") || leng || "").toString();
+    } catch (_) {}
+  }
 
   if (!telegramId) {
     return jsonResponse(400, { error: "Missing telegram_id" });
