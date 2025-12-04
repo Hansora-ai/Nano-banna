@@ -88,7 +88,7 @@
             </div>
 
             <div class="space-y-2">
-              <label class="block text-xs font-medium text-zinc-300 mb-1">Prompt (optional)</label>
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Prompt (required)</label>
               <textarea
                 id="promptInput"
                 rows="4"
@@ -294,6 +294,10 @@ const sizeSelect = document.getElementById("sizeSelect");
       }
 
       const prompt = (promptInput.value || "").trim();
+      if (!prompt){
+        setStatus("Please enter a prompt.", "text-rose-300");
+        return;
+      }
       const sizeValue = sizeSelect ? sizeSelect.value : "auto";
 
       for (const file of files){
