@@ -124,7 +124,7 @@ exports.handler = async (event) => {
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng);
 
-  const endpoint = BASE + "/predictions";
+  const endpoint = `${BASE}/models/openai/gpt-image-1/predictions`;
 
   // Replicate input
   const input = { openai_api_key: OPENAI_API_KEY, prompt, aspect_ratio, output_format: "png" };
