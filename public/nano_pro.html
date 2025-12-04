@@ -114,6 +114,18 @@
             </div>
 
             <div class="space-y-2">
+              <label for="resolutionSelect" class="block text-xs font-medium text-zinc-300 mb-1">Quality</label>
+              <select
+                id="resolutionSelect"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="1K" selected>1K</option>
+                <option value="2K">2K</option>
+                <option value="4K">4K</option>
+              </select>
+            </div>
+
+            <div class="space-y-2">
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
@@ -218,6 +230,7 @@ if (imageInput && thumbsEl){
 }
 
 const sizeSelect = document.getElementById("sizeSelect");
+const resolutionSelect = document.getElementById("resolutionSelect");
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
@@ -288,7 +301,7 @@ const sizeSelect = document.getElementById("sizeSelect");
         setStatus("You can optionally upload images, up to 6 total.", "text-rose-300");
         return;
       }
-      if (files.length > 4){
+      if (files.length > 6){
         setStatus("You can upload up to 6 images.", "text-rose-300");
         return;
       }
@@ -299,6 +312,7 @@ const sizeSelect = document.getElementById("sizeSelect");
         return;
       }
       const sizeValue = sizeSelect ? sizeSelect.value : "auto";
+      const resolutionValue = resolutionSelect ? resolutionSelect.value : "1K";
 
       for (const file of files){
         if (file.size > 30 * 1024 * 1024){
@@ -365,6 +379,7 @@ const sizeSelect = document.getElementById("sizeSelect");
             prompt,
             urls: imageUrls,
             size: sizeValue,
+            resolution: resolutionValue,
             mode,
             leng
           })
