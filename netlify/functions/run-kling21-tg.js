@@ -10,7 +10,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const TG_TABLE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generations` : "";
 
-// Make.com scenario callback – same as other video mini apps
+// Make.com scenario callback – same as other Telegram video flows
 const MAKE_HOOK = "https://hook.eu2.make.com/l25fsaf15od9oywtqtm45zb0i7r7ff2o";
 
 function jsonResponse(statusCode, body){
@@ -54,7 +54,7 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
   }
 }
 
-// Extract a taskId from various KIE response shapes (mirrors run-kling.js / run-kling21.js)
+// Extract a taskId from various KIE response shapes (mirrors other Kling handlers)
 function extractTaskId(data){
   if (!data || typeof data !== 'object') return '';
   const cands = [
@@ -78,15 +78,6 @@ function extractTaskId(data){
   return scan(data) || '';
 }
 
-function normalizeUrl(u){
-  try {
-    const url = new URL(String(u || ""));
-    return url.href;
-  } catch {
-    return "";
-  }
-}
-
 exports.handler = async function(event){
   if (event.httpMethod !== "POST") {
     return jsonResponse(405, { ok:false, error: "method_not_allowed" });
@@ -105,8 +96,8 @@ exports.handler = async function(event){
 
   const telegramId = (body.telegram_id || "").toString();
   const prompt = (body.prompt || "").toString();
-  const firstFrameRaw = (body.firstFrameUrl || body.first_frame_url || body.imageUrl || body.image_url || "").toString();
-  const lastFrameRaw  = (body.lastFrameUrl  || body.last_frame_url  || "").toString();
+  const firstFrameRaw = (body.firstFrameUrl || body.imageUrl || "").toString();
+  const lastFrameRaw  = (body.lastFrameUrl  || body.tailImageUrl || "").toString();
 
   // Duration: 5 or 10 (seconds). Default 5.
   const duration = (body && (body.duration === 10 || String(body.duration) === "10")) ? 10 : 5;
@@ -163,26 +154,18 @@ exports.handler = async function(event){
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng);
 
-  // Build KIE payload based on run-kling21.js
+  // Build KIE payload for Kling v2.1 Pro image → video
   const payload = {
     model: "kling/v2-1-pro",
-    callBackUrl: callbackUrl,
     input: {
       prompt,
-      duration: String(duration === 10 ? 10 : 5),
+      duration: duration === 10 ? "10" : "5",
       image_url: firstFrameUrl,
+      ...(lastFrameUrl ? { tail_image_url: lastFrameUrl } : {}),
       negative_prompt: "blur, distort, and low quality"
     },
-    metadata: {
-      telegram_id: telegramId,
-      run_id: runId,
-      provider: duration === 10 ? "klingv2.1pro10s-tg" : "klingv2.1pro5s-tg"
-    }
+    callBackUrl: callbackUrl
   };
-
-  if (lastFrameUrl) {
-    payload.input.tail_image_url = lastFrameUrl;
-  }
 
   try {
     const resp = await fetch(`${KIE_BASE}/api/v1/jobs/createTask`, {
@@ -239,3 +222,12 @@ exports.handler = async function(event){
     });
   }
 };
+
+function normalizeUrl(u){
+  try {
+    const url = new URL(String(u || ""));
+    return url.href;
+  } catch {
+    return "";
+  }
+}
