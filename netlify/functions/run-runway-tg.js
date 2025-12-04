@@ -28,7 +28,7 @@ function jsonResponse(statusCode, body) {
  * Insert a row into telegram_generations for this Telegram run.
  * We include telegram_id, model, leng, credits (cost), new_credits, prompt.
  */
-async function writeTelegramGeneration({ telegramId, cost, prompt, leng, newCredits }) {
+async function writeTelegramGeneration({ telegramId, cost, prompt }) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
     return;
@@ -46,9 +46,7 @@ async function writeTelegramGeneration({ telegramId, cost, prompt, leng, newCred
       body: JSON.stringify([{
         telegram_id: telegramId,
         model: "Runway Video",
-        leng: leng || null,
         credits: cost,
-        new_credits: newCredits,
         prompt
       }])
     });
