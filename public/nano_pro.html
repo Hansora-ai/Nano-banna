@@ -293,14 +293,10 @@ const resolutionSelect = document.getElementById("resolutionSelect");
         return;
       }
 
-      const files = (selectedFiles && selectedFiles.length)
+      const files = Array.isArray(selectedFiles)
         ? selectedFiles.slice()
         : Array.from(imageInput.files || []);
       const hasFile = files.length > 0;
-      if (!hasFile){
-        setStatus("You can optionally upload images, up to 6 total.", "text-rose-300");
-        return;
-      }
       if (files.length > 6){
         setStatus("You can upload up to 6 images.", "text-rose-300");
         return;
