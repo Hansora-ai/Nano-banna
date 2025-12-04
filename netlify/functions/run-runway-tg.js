@@ -106,7 +106,7 @@ exports.handler = async function (event) {
 
   const telegramId = (body.telegram_id || "").toString();
   const prompt = (body.prompt || "").toString();
-  const imageUrl = (body.imageUrl || "").toString();
+  const imageUrlRaw = (body.imageUrl || "").toString();
   const aspectRatio = (body.aspectRatio || "9:16").toString();
   const cost = Number(body.cost || 4);
   const creditsBefore = Number(body.credits_before || 0);
@@ -152,15 +152,33 @@ exports.handler = async function (event) {
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng);
 
-  // Build KIE payload for Runway: text-to-video or image+text-to-video.
+  // Mirror the working run-runway.js KIE payload style as closely as possible,
+  // so KIE sees exactly the same structure it already works with.
+  // Normalize imageUrl similarly.
+  const imageUrl = normalizeUrl(imageUrlRaw);
+
   const kiePayload = {
+    ...body,
     prompt,
     aspectRatio,
     callBackUrl: callbackUrl
   };
 
+  // Ensure defaults like in run-runway.js
+  if (kiePayload.duration === undefined) kiePayload.duration = 5;
+  if (kiePayload.quality === undefined)  kiePayload.quality  = "1080p";
+
+  // Image handling: send imageUrl only when set; otherwise strip image/file fields.
   if (imageUrl) {
     kiePayload.imageUrl = imageUrl;
+    delete kiePayload.fileUrl;
+    delete kiePayload.image_url;
+    delete kiePayload.frameImage;
+  } else {
+    delete kiePayload.imageUrl;
+    delete kiePayload.fileUrl;
+    delete kiePayload.image_url;
+    delete kiePayload.frameImage;
   }
 
   try {
@@ -184,13 +202,14 @@ exports.handler = async function (event) {
     if (!resp.ok) {
       return jsonResponse(resp.status, {
         submitted: false,
-        error: data && (data.error || data.message) || "KIE Runway request failed",
+        error: (data && (data.error || data.message)) || "KIE Runway request failed",
         data
       });
     }
 
     const taskId = extractTaskId(data);
 
+    // Log into telegram_generations (non-blocking for KIE success)
     await writeTelegramGeneration({ telegramId, cost, prompt, leng, newCredits });
 
     return jsonResponse(200, {
@@ -207,3 +226,13 @@ exports.handler = async function (event) {
     });
   }
 };
+
+// Small helper copied from run-runway.js style
+function normalizeUrl(u) {
+  try {
+    const url = new URL(String(u || ""));
+    return url.href;
+  } catch {
+    return "";
+  }
+}
