@@ -73,16 +73,17 @@
         <div class="grid md:grid-cols-[1.1fr,0.9fr] gap-4 md:gap-6 items-start">
           <div class="space-y-4">
             <div class="space-y-2">
-              <label class="block text-xs font-medium text-zinc-300 mb-1">Image (optional, 1 max)</label>
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Images (optional, up to 4)</label>
               <input
                 id="imageInput"
                 type="file"
                 accept="image/*"
+                multiple
                 class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
               />
               <div id="thumbs" class="mt-2 flex gap-2 flex-wrap"></div>
               <p class="text-[11px] text-zinc-500">
-                Optional. Upload 1 image (max 10MB). If you add an image, GPT-Image will use it as a reference.
+                Optional. Upload 1–4 images (max 10MB each). If you add images, GPT-Image will use them as references.
               </p>
             </div>
 
@@ -135,8 +136,8 @@
               <h2 class="text-xs font-semibold text-zinc-200 mb-1">Instructions</h2>
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
                 <li>Type a prompt (required) describing the desired edit or style.</li>
-                <li>Optionally upload 1 image (up to 10MB) for image-to-image editing.</li>
-                <li>Choose the aspect ratio (Auto, Square, Portrait, Landscape).</li>
+                <li>Optionally upload 1–4 images (up to 10MB each) for image-to-image editing.</li>
+                <li>Choose the aspect ratio (1:1, 2:3 or 3:2).</li>
                 <li>Click Run. If you have enough credits, the edited images will be sent to your bot's chat.</li>
               </ol>
             </div>
@@ -200,6 +201,9 @@ function renderImageThumbs(){
     del.onclick = () => {
       selectedFiles.splice(index, 1);
       renderImageThumbs();
+      if (selectedFiles.length === 0 && imageInput){
+        imageInput.value = "";
+      }
     };
     wrap.appendChild(img);
     wrap.appendChild(del);
@@ -281,8 +285,8 @@ const sizeSelect = document.getElementById("sizeSelect");
         ? selectedFiles.slice()
         : Array.from(imageInput.files || []);
       const hasFile = files.length > 0;
-      if (files.length > 1){
-        setStatus("Only 1 image is allowed.", "text-rose-300");
+      if (files.length > 4){
+        setStatus("You can upload up to 4 images.", "text-rose-300");
         return;
       }
 
@@ -314,6 +318,7 @@ const sizeSelect = document.getElementById("sizeSelect");
       runBtn.textContent = "Working…";
 
       let imageUrl = "";
+      let imageUrls = [];
       try {
         let index = 0;
         for (const file of files){
@@ -342,7 +347,8 @@ const sizeSelect = document.getElementById("sizeSelect");
             await fetch(signJson.publicUrl, { method: "HEAD", cache: "no-store" });
           } catch {}
 
-          imageUrl = signJson.publicUrl;
+          if (!imageUrl) imageUrl = signJson.publicUrl;
+          imageUrls.push(signJson.publicUrl);
         }
 
         setStatus("Submitting GPT-Image job…", "text-zinc-400");
@@ -357,6 +363,7 @@ const sizeSelect = document.getElementById("sizeSelect");
             cost,
             prompt,
             image_url: imageUrl,
+            image_urls: imageUrls,
             aspect_ratio: sizeValue,
             mode,
             leng
