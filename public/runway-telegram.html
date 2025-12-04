@@ -97,7 +97,19 @@
                 Required. If you upload an image, describe how it should move. If no image, describe the whole video.
               </p>
             </div>
-            <input type="hidden" id="ratioSelect" value="9:16" />
+            <div class="space-y-2">
+              <label for="ratioSelect" class="block text-xs font-medium text-zinc-300 mb-1">Video aspect ratio</label>
+              <select
+                id="ratioSelect"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="3:4" selected>3:4 (default)</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+              </select>
+            </div>
 
             <div class="space-y-2">
               <button
