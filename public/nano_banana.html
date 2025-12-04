@@ -168,6 +168,23 @@
     let selectedFiles = [];
 let previewUrls = [];
 
+function syncInputFiles() {
+  if (!imageInput) return;
+  if (!selectedFiles || selectedFiles.length === 0) {
+    imageInput.value = "";
+    return;
+  }
+  try {
+    const dt = new DataTransfer();
+    for (const f of selectedFiles) {
+      dt.items.add(f);
+    }
+    imageInput.files = dt.files;
+  } catch (e) {
+    // If DataTransfer isn't supported, clearing when empty still works via clearImageSelection.
+  }
+}
+
 function revokePreviewUrls(){
   try {
     for (const u of previewUrls){
@@ -203,6 +220,7 @@ function renderImageThumbs(){
     del.onclick = () => {
       selectedFiles.splice(index, 1);
       renderImageThumbs();
+      syncInputFiles();
     };
     wrap.appendChild(img);
     wrap.appendChild(del);
@@ -214,6 +232,7 @@ if (imageInput && thumbsEl){
   imageInput.addEventListener("change", () => {
     selectedFiles = Array.from(imageInput.files || []);
     renderImageThumbs();
+    syncInputFiles();
   });
 }
 
