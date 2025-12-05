@@ -171,7 +171,7 @@ exports.handler = async function(event){
       prompt,
       aspect_ratio: aspectRatio,
       duration: (duration === 10 ? "10" : "5"),
-      sound: false
+      sound: true
     },
     callBackUrl: callbackUrl
   };
