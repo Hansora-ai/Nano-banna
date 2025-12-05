@@ -34,6 +34,15 @@
       cursor:not-allowed;
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = "https://qmaealblegvcwodlmeht.supabase.co";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
+    if (window.supabase && typeof window.supabase.createClient === "function") {
+      window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  </script>
+
 </head>
 <body class="min-h-screen flex flex-col bg-base-bg">
   <header class="border-b border-base-line/60">
@@ -241,17 +250,46 @@ const sizeSelect = document.getElementById("sizeSelect");
     function parseQueryParams(){
       const url = new URL(window.location.href);
       telegramId = url.searchParams.get("telegram_id") || "";
-      const cStr = url.searchParams.get("credits") || "0";
-      const parsed = Number(cStr);
-      credits = Number.isFinite(parsed) ? parsed : 0;
-      repaintCredits();
 
       mode = url.searchParams.get("mode") || url.searchParams.get("modul") || "";
       leng = url.searchParams.get("leng") || url.searchParams.get("lang") || "";
 
       if (!telegramId){
         setStatus("Missing telegram_id in URL. Please open this page from the bot.", "text-rose-300");
-        runBtn.disabled = true;
+        if (runBtn) runBtn.disabled = true;
+        return;
+      }
+
+      // Start with 0 credits until Supabase value is loaded
+      credits = 0;
+      repaintCredits();
+      loadCreditsFromSupabase();
+    }
+
+    async function loadCreditsFromSupabase(){
+      if (!window.supabaseClient){
+        console.error("Supabase client not initialized");
+        return;
+      }
+      try {
+        const { data, error } = await window.supabaseClient
+          .from("telegram_users")
+          .select("credits")
+          .eq("telegram_id", telegramId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error loading credits from Supabase", error);
+          return;
+        }
+
+        if (data && typeof data.credits !== "undefined") {
+          const parsed = Number(data.credits);
+          credits = Number.isFinite(parsed) ? parsed : 0;
+          repaintCredits();
+        }
+      } catch (e) {
+        console.error("Unexpected error loading credits from Supabase", e);
       }
     }
 
