@@ -112,24 +112,14 @@
                 id="sizeSelect"
                 class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
-                <option value="auto" selected>Auto</option>
-                <option value="square">Square (1:1)</option>
-                <option value="portrait_3_4">Portrait 3:4</option>
-                <option value="portrait_9_16">Portrait 9:16</option>
-                <option value="landscape_4_3">Landscape 4:3</option>
-                <option value="landscape_16_9">Landscape 16:9</option>
-              </select>
-            </div>
-
-            <div class="space-y-2">
-              <label for="resolutionSelect" class="block text-xs font-medium text-zinc-300 mb-1">Quality</label>
-              <select
-                id="resolutionSelect"
-                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="1K" selected>1K</option>
-                <option value="2K">2K</option>
-                <option value="4K">4K</option>
+                <option value="1:1" selected>1:1</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="2:3">2:3</option>
+                <option value="3:2">3:2</option>
+                <option value="21:9">21:9</option>
               </select>
             </div>
 
@@ -257,7 +247,6 @@ if (imageInput && thumbsEl){
 }
 
 const sizeSelect = document.getElementById("sizeSelect");
-const resolutionSelect = document.getElementById("resolutionSelect");
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
@@ -363,8 +352,7 @@ const resolutionSelect = document.getElementById("resolutionSelect");
         setStatus("Please enter a prompt (required for Seedream 4.5).", "text-rose-300");
         return;
       }
-      const sizeValue = sizeSelect ? sizeSelect.value : "auto";
-      const resolutionValue = resolutionSelect ? resolutionSelect.value : "1K";
+      const sizeValue = sizeSelect ? sizeSelect.value : "1:1";
 
       for (const file of files){
         if (file.size > 30 * 1024 * 1024){
@@ -427,7 +415,6 @@ const resolutionSelect = document.getElementById("resolutionSelect");
             prompt,
             urls: imageUrls,
             size: sizeValue,
-            resolution: resolutionValue,
             mode,
             leng
           })
