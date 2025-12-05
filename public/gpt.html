@@ -36,12 +36,10 @@
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    // TODO: replace PLACE_YOUR_SUPABASE_ANON_KEY_HERE with your real anon public key from Supabase (Settings → API → anon public)
     const SUPABASE_URL = "https://qmaealblegvcwodlmeht.supabase.co";
-    const SUPABASE_ANON_KEY = "PLACE_YOUR_SUPABASE_ANON_KEY_HERE";
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
     if (window.supabase && typeof window.supabase.createClient === "function") {
-      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      window.supabaseClient = supabase;
+      window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
   </script>
 
