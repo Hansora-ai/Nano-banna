@@ -6,6 +6,14 @@
   <title>HANSORA • Kling v2.1 Pro (Image → Video) • Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+      const SUPABASE_URL = "https://qmaealblegvcwodlmeht.supabase.co";
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
+      if (window.supabase && typeof window.supabase.createClient === "function") {
+        window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    </script>
   <style>
     :root{
       --base-bg:#0b0d13;
@@ -285,20 +293,50 @@
     function parseQueryParams(){
       const url = new URL(window.location.href);
       telegramId = url.searchParams.get("telegram_id") || "";
-      const cStr = url.searchParams.get("credits") || "0";
-      const parsed = Number(cStr);
-      credits = Number.isFinite(parsed) ? parsed : 0;
-      repaintCredits();
 
       mode = url.searchParams.get("mode") || url.searchParams.get("modul") || "";
       leng = url.searchParams.get("leng") || url.searchParams.get("lang") || "";
 
       if (!telegramId){
         setStatus("Missing telegram_id in URL. Please open this page from the bot.", "text-rose-300");
-        runBtn.disabled = true;
+        if (runBtn) runBtn.disabled = true;
+        return;
+      }
+
+      // Start with 0 credits until Supabase value is loaded
+      credits = 0;
+      repaintCredits();
+      loadCreditsFromSupabase();
+    }
+
+    async function loadCreditsFromSupabase(){
+      if (!window.supabaseClient){
+        console.error("Supabase client not initialized");
+        return;
+      }
+      try {
+        const { data, error } = await window.supabaseClient
+          .from("telegram_users")
+          .select("credits")
+          .eq("telegram_id", telegramId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error loading credits from Supabase", error);
+          return;
+        }
+
+        if (data && typeof data.credits !== "undefined") {
+          const parsed = Number(data.credits);
+          credits = Number.isFinite(parsed) ? parsed : 0;
+          repaintCredits();
+        }
+      } catch (e) {
+        console.error("Unexpected error loading credits from Supabase", e);
       }
     }
 
+    
     async function signUpload(filename, mime){
       const resp = await fetch("/.netlify/functions/sign-upload", {
         method: "POST",
