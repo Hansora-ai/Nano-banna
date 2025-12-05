@@ -386,8 +386,24 @@
           throw new Error(err || "Error submitting job");
         }
 
-        // Only deduct credits after successful submission
-        credits -= COST_PER_RUN;
+        // Only deduct credits after successful submission (and persist in Supabase)
+        const newCredits = credits - COST_PER_RUN;
+        try {
+          if (window.supabaseClient) {
+            const { error: updateError } = await window.supabaseClient
+              .from("telegram_users")
+              .update({ credits: newCredits })
+              .eq("telegram_id", telegramId);
+            if (updateError) {
+              console.error("Error updating credits in Supabase", updateError);
+            }
+          } else {
+            console.error("Supabase client not available when updating credits");
+          }
+        } catch (e) {
+          console.error("Unexpected error updating credits in Supabase", e);
+        }
+        credits = newCredits;
         repaintCredits();
 
         setStatus("✅ Request submitted.", "text-emerald-300");
