@@ -122,7 +122,7 @@ exports.handler = async (event) => {
       job.data?.id ||
       null;
 
-    // Insert into telegram_generations EXACTLY like nano-pro
+    // Insert into telegram_generations EXACTLY like MJ Video
     if (TG_TABLE_URL && SERVICE_KEY) {
       try {
         await fetch(TG_TABLE_URL, {
@@ -133,17 +133,14 @@ exports.handler = async (event) => {
             "Content-Type": "application/json",
             "Prefer": "return=minimal"
           },
-          body: JSON.stringify({
-            telegram_id: telegramId,
-            run_id: runId,
-            model: "Seedream 4.5",
-            prompt,
-            cost,
-            credits_before: creditsBefore,
-            credits_after: newCredits,
-            status: "submitted",
-            created_at: new Date().toISOString()
-          })
+          body: JSON.stringify([
+            {
+              telegram_id: telegramId,
+              model: "Seedream 4.5",
+              credits: cost,
+              prompt
+            }
+          ])
         });
       } catch (e) {
         console.error("telegram_generations insert failed", e);
