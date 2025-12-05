@@ -328,10 +328,6 @@ const sizeSelect = document.getElementById("sizeSelect");
         return;
       }
 
-      // Deduct credits live in the mini app, like website
-      credits -= cost;
-      repaintCredits();
-
       runBtn.disabled = true;
       runBtn.textContent = "Working…";
 
@@ -374,8 +370,8 @@ const sizeSelect = document.getElementById("sizeSelect");
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             telegram_id: telegramId,
-            credits_before: credits + cost,
-            new_credits: credits,
+            credits_before: credits,
+            new_credits: credits - cost,
             cost,
             prompt,
             image_url: imageUrl,
@@ -388,12 +384,13 @@ const sizeSelect = document.getElementById("sizeSelect");
         const j = await resp.json().catch(() => ({}));
 
         if (!resp.ok || !j.submitted){
-          // Refund local credits on failure
-          credits += cost;
-          repaintCredits();
           const err = j && (j.error || j.message);
           throw new Error(err || "Error submitting job");
         }
+
+        // Only deduct credits after successful submission
+        credits -= cost;
+        repaintCredits();
 
         setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
