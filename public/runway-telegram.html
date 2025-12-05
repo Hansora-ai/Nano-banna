@@ -331,8 +331,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             telegram_id: telegramId,
-            credits_before: credits + COST_PER_RUN,
-            new_credits: credits,
+            credits_before: credits,
+            new_credits: credits - COST_PER_RUN,
             cost: COST_PER_RUN,
             prompt,
             imageUrl,
@@ -345,12 +345,13 @@
         const j = await resp.json().catch(() => ({}));
 
         if (!resp.ok || !j.submitted){
-          // Refund local credits on failure
-          credits += COST_PER_RUN;
-          repaintCredits();
           const err = j && (j.error || j.message);
           throw new Error(err || "Error submitting job");
         }
+
+        // Only deduct credits after successful submission
+        credits -= COST_PER_RUN;
+        repaintCredits();
 
         setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
