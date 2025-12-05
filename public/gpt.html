@@ -164,61 +164,61 @@
     const thumbsEl = document.getElementById("thumbs");
 
     let selectedFiles = [];
-    let previewUrls = [];
+let previewUrls = [];
 
-    function revokePreviewUrls(){
-      try {
-        for (const u of previewUrls){
-          URL.revokeObjectURL(u);
-        }
-      } catch {}
-      previewUrls = [];
+function revokePreviewUrls(){
+  try {
+    for (const u of previewUrls){
+      URL.revokeObjectURL(u);
     }
+  } catch {}
+  previewUrls = [];
+}
 
-    function clearImageSelection(){
-      revokePreviewUrls();
-      selectedFiles = [];
-      if (imageInput) imageInput.value = "";
-      if (thumbsEl) thumbsEl.innerHTML = "";
-    }
+function clearImageSelection(){
+  revokePreviewUrls();
+  selectedFiles = [];
+  if (imageInput) imageInput.value = "";
+  if (thumbsEl) thumbsEl.innerHTML = "";
+}
 
-    function renderImageThumbs(){
-      if (!thumbsEl) return;
-      thumbsEl.innerHTML = "";
-      revokePreviewUrls();
-      selectedFiles.forEach((file, index) => {
-        const url = URL.createObjectURL(file);
-        previewUrls.push(url);
-        const img = new Image();
-        img.src = url;
-        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-        const wrap = document.createElement("div");
-        wrap.className = "relative inline-block";
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 text-xs text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "×";
-        del.onclick = () => {
-          selectedFiles.splice(index, 1);
-          renderImageThumbs();
-          if (selectedFiles.length === 0 && imageInput){
-            imageInput.value = "";
-          }
-        };
-        wrap.appendChild(img);
-        wrap.appendChild(del);
-        thumbsEl.appendChild(wrap);
-      });
-    }
+function renderImageThumbs(){
+  if (!thumbsEl) return;
+  thumbsEl.innerHTML = "";
+  revokePreviewUrls();
+  selectedFiles.forEach((file, index) => {
+    const url = URL.createObjectURL(file);
+    previewUrls.push(url);
+    const img = new Image();
+    img.src = url;
+    img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+    const wrap = document.createElement("div");
+    wrap.className = "relative inline-block";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 text-xs text-white hover:bg-black/90 flex items-center justify-center";
+    del.innerHTML = "\u00d7";
+    del.onclick = () => {
+      selectedFiles.splice(index, 1);
+      renderImageThumbs();
+      if (selectedFiles.length === 0 && imageInput){
+        imageInput.value = "";
+      }
+    };
+    wrap.appendChild(img);
+    wrap.appendChild(del);
+    thumbsEl.appendChild(wrap);
+  });
+}
 
-    if (imageInput && thumbsEl){
-      imageInput.addEventListener("change", () => {
-        selectedFiles = Array.from(imageInput.files || []);
-        renderImageThumbs();
-      });
-    }
+if (imageInput && thumbsEl){
+  imageInput.addEventListener("change", () => {
+    selectedFiles = Array.from(imageInput.files || []);
+    renderImageThumbs();
+  });
+}
 
-    const sizeSelect = document.getElementById("sizeSelect");
+const sizeSelect = document.getElementById("sizeSelect");
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
@@ -305,9 +305,7 @@
       }
 
       const cost = getCurrentCost();
-      const creditsBefore = credits;
-
-      if (creditsBefore < cost){
+      if (credits < cost){
         setStatus("Not enough credits (need " + cost + ").", "text-rose-300");
         return;
       }
@@ -327,7 +325,7 @@
           const safeExt = type.includes("png") ? ".png"
             : (type.includes("jpeg") || type.includes("jpg")) ? ".jpg"
             : (type.includes("webp") ? ".webp" : ".jpg");
-          const base = origName.replace(/\.[^./\]+$/, "");
+          const base = origName.replace(/\.[^./\\]+$/, "");
           const filename = Date.now() + "-" + index + "-" + base + safeExt;
 
           const signJson = await signUpload(filename, type || "image/jpeg");
@@ -356,8 +354,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             telegram_id: telegramId,
-            credits_before: creditsBefore,
-            new_credits: creditsBefore - cost,
+            credits_before: credits,
+            new_credits: credits - cost,
             cost,
             prompt,
             image_url: imageUrl,
@@ -375,15 +373,15 @@
           throw new Error(err || "Error submitting job");
         }
 
+        // Only deduct credits after successful submission
+        credits -= cost;
+        repaintCredits();
+
         setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
           successText.innerHTML = "✦ Submitted successfully. You will receive the GPT-Image results in Telegram when they are ready.<br/>✦ Запрос успешно принят. Вы получите обработанные изображения GPT-Image в Telegram, когда они будут готовы.";
         }
-
-        // Deduct credits only after successful submission
-        credits = creditsBefore - cost;
-        repaintCredits();
       } catch (err) {
         console.error(err);
         setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
