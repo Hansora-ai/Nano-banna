@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="dark">
+<title>Hansora — Buy Credits</title>
+<style>
+  :root{
+    --bg:#0b0b0f; --card:#14141b; --muted:#b7b8c5; --text:#f2f3f8;
+    --accent:#8b5cf6; --accent-2:#a78bfa; --ring:rgba(139,92,246,.35);
+    --ok:#10b981;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:radial-gradient(1200px 600px at 15% 5%, rgba(139,92,246,.08), transparent), var(--bg); color:var(--text); font:500 16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
+  .wrap{max-width:980px;margin:24px auto;padding:20px}
+  .header{display:flex;align-items:center;gap:16px;margin:8px 0 18px}
+  .header img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(139,92,246,.35));}
+  h1{margin:0;font-size:28px;letter-spacing:.2px}
+  .sub{color:var(--muted);margin-top:2px;font-size:14px}
+  /* Keep logic, hide the pill from UI to let the intro text be full width */
+  .platform-pill{display:none !important;align-items:center;gap:8px;background:rgba(139,92,246,.12);border:1px solid var(--ring);color:var(--accent-2);padding:6px 10px;border-radius:999px;font-size:12px;margin-left:auto;white-space:nowrap}
+  .hidden{display:none}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(4,minmax(0,1fr))}
+  @media (max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media (max-width:560px){.grid{grid-template-columns:1fr}}
+  .card{
+    background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00));
+    border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:16px;
+    position:relative; overflow:hidden;
+  }
+  .card:focus-within{outline:2px solid var(--ring)}
+  .badge{position:absolute;top:12px;right:-22px;transform:rotate(30deg);
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#0a021b;
+    font-weight:800;font-size:12px;padding:6px 36px}
+  .coin{width:84px;height:84px;object-fit:contain;margin:4px auto 10px;display:block}
+  .title{font-size:18px;margin:4px 0 6px;text-align:center}
+  .price{font-size:14px;color:var(--muted);text-align:center;margin-bottom:6px}
+  .blurb{font-size:12px;color:var(--muted);text-align:center;margin:0 0 12px}
+  .buy{
+    width:100%;border:0;border-radius:12px;padding:12px 14px;font-weight:700;
+    background:linear-gradient(180deg,var(--accent),#6d28d9);
+    color:white;cursor:pointer;box-shadow:0 10px 26px rgba(139,92,246,.35);
+    transition:transform .06s ease, filter .2s ease;
+  }
+  .buy:hover{filter:brightness(1.06)}
+  .buy:active{transform:translateY(1px)}
+  .row{display:flex;gap:10px;align-items:center;justify-content:center;margin:10px 0 0}
+  .tiny{opacity:.75;font-size:12px;color:var(--muted)}
+  .note{margin:18px auto 8px;font-size:12px;color:var(--muted);max-width:820px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
+  .foot{margin-top:6px;font-size:11px;color:#9092a3}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <img src="hansora-credits.png" alt="Hansora Credits" />
+    <div>
+      <h1>Hansora Credits</h1>
+      <div class="sub">Payments happen on our secure provider checkout outside Telegram. We do this to protect your payment and personal information.</div>
+    </div>
+    <div id="platformPill" class="platform-pill hidden">Detecting…</div>
+  </div>
+
+  <div class="grid" id="cards"></div>
+
+  <p class="note">
+    <span class="dot"></span>Payments open in your device browser for security. If you see Telegram’s in-app browser first, choose “Open in Safari/Chrome”.
+  </p>
+  <p class="foot">
+    A $0.50 processing fee is applied by the payment providers. In certain countries, VAT may also be charged in accordance with local laws. This tax is set by government authorities and is not controlled by us.
+  </p>
+</div>
+
+
+<script>
+(function(){
+  const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
+
+  // Product catalog (Dodo Payments)
+  const PLANS = [
+    { id:"50",  credits:50,  price:"$5.50",  url:"https://checkout.dodopayments.com/buy/pdt_rhwFKrIujdfX9XtKvFixb?quantity=1" },
+    { id:"100", credits:100, price:"$10.50", url:"https://checkout.dodopayments.com/buy/pdt_fbuaTR8pLS3osPQefQlCl?quantity=1" },
+    { id:"250", credits:250, price:"$25.50", url:"https://checkout.dodopayments.com/buy/pdt_u2CHk1ygmwi2Lqw6M9jpr?quantity=1" },
+    { id:"500", credits:500, price:"$50.00", url:"https://checkout.dodopayments.com/buy/pdt_7V2nSlMm96Hh5OuLhJYuy?quantity=1", badge:"BEST VALUE" },
+  ];
+
+  // Platform detection
+  function detectPlatform(){
+    if (tg && tg.platform && (tg.platform === 'ios' || tg.platform === 'android')) return tg.platform;
+    const ua = navigator.userAgent || "";
+    if (/Android/i.test(ua)) return 'android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+    return 'unknown';
+  }
+  const platform = detectPlatform();
+
+  // Keep logic, but pill stays hidden via CSS
+  const pill = document.getElementById('platformPill');
+  if (platform !== 'unknown'){ pill.textContent = platform === 'ios' ? 'iOS • opens in Safari' : 'Android • opens in Chrome'; }
+
+  // Extract Telegram user id robustly
+  function getTgId(){
+    // 1) Native WebApp object
+    try {
+      const id1 = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && (tg.initDataUnsafe.user.id || tg.initDataUnsafe.user.user_id);
+      if (id1) return String(id1);
+    } catch(e){}
+    // 2) Parse initData string if present
+    try {
+      if (tg && typeof tg.initData === 'string' && tg.initData.length){
+        const sp = new URLSearchParams(tg.initData);
+        const userStr = sp.get('user');
+        if (userStr){
+          const u = JSON.parse(userStr);
+          if (u && (u.id || u.user_id)) return String(u.id || u.user_id);
+        }
+        const start = sp.get('start_param') || sp.get('tgWebAppStartParam');
+        // If you ever encode tgid in start_param like "tgid_12345", parse here.
+        if (start && /^tgid[_=-]/i.test(start)){
+          const m = start.match(/(\d{4,})/);
+          if (m) return String(m[1]);
+        }
+      }
+    } catch(e){}
+    // 3) URL query fallback (?tgid=...)
+    try {
+      const q = new URLSearchParams(location.search);
+      const qs = q.get('tgid') || q.get('user_id') || q.get('uid');
+      if (qs) return String(qs);
+    } catch(e){}
+    return "";
+  }
+  const TG_ID = getTgId();
+
+  function withParams(base, params){
+    // Ensure absolute URL
+    const u = new URL(base, window.location.href);
+    Object.entries(params).forEach(([k,v]) => {
+      if (v !== undefined && v !== null && v !== "") u.searchParams.set(k, v);
+    });
+    return u.toString();
+  }
+
+  // Render product cards
+  const grid = document.getElementById('cards');
+  grid.innerHTML = PLANS.map(p => `
+    <article class="card" tabindex="0">
+      ${p.badge ? `<div class="badge">${p.badge}</div>` : ``}
+      <img class="coin" src="https://qmaealblegvcwodlmeht.supabase.co/storage/v1/object/public/downloads/AA.webp" alt=""/>
+      <div class="title">${p.credits} Credits</div>
+      <div class="price">${p.price}</div>
+      <div class="blurb">Get ${p.credits} credits to use across all Hansora features.</div>
+      <button class="buy" data-plan="${p.id}">Buy</button>
+      <div class="row tiny"><span>${platform === 'ios' ? 'Will open in Safari' : (platform === 'android' ? 'Will open in Chrome' : 'Opens in your browser')}</span></div>
+    </article>`).join("");
+
+  // Click → open correct browser with TG ID attached
+  grid.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button.buy'); if (!btn) return;
+    const plan = PLANS.find(x => x.id === btn.dataset.plan); if (!plan) return;
+
+    const directUrl = withParams(plan.url, {
+      tgid: TG_ID,
+      plan: plan.id
+    });
+
+    let finalUrl = directUrl;
+    if (platform === 'android'){
+      // Force Chrome externally using Android intent
+      const noScheme = directUrl.replace(/^https?:\/\//i, '');
+      finalUrl = `intent://${noScheme}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(directUrl)};end`;
+    }
+
+    try {
+      if (tg && typeof tg.openLink === 'function') {
+        tg.openLink(finalUrl, { try_instant_view: false });
+      } else {
+        window.open(finalUrl, '_blank', 'noopener');
+      }
+    } catch(e){
+      try { window.location.href = finalUrl; } catch(e2){ window.location.href = directUrl; }
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
