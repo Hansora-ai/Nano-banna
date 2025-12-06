@@ -18,7 +18,6 @@
   .header img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(139,92,246,.35));}
   h1{margin:0;font-size:28px;letter-spacing:.2px}
   .sub{color:var(--muted);margin-top:2px;font-size:14px}
-  /* Keep logic, hide the pill from UI to let the intro text be full width */
   .platform-pill{display:none !important;align-items:center;gap:8px;background:rgba(139,92,246,.12);border:1px solid var(--ring);color:var(--accent-2);padding:6px 10px;border-radius:999px;font-size:12px;margin-left:auto;white-space:nowrap}
   .hidden{display:none}
   .grid{display:grid;gap:16px;grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -79,7 +78,6 @@
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
 
-  // Product catalog (Dodo Payments)
   const PLANS = [
     { id:"50",  credits:50,  price:"$5.50",  url:"https://test.checkout.dodopayments.com/buy/pdt_lejFi2zDhuYu8JHZXGe16?quantity=1" },
     { id:"100", credits:100, price:"$10.50", url:"https://checkout.dodopayments.com/buy/pdt_fbuaTR8pLS3osPQefQlCl?quantity=1" },
@@ -87,7 +85,6 @@
     { id:"500", credits:500, price:"$50.00", url:"https://checkout.dodopayments.com/buy/pdt_7V2nSlMm96Hh5OuLhJYuy?quantity=1", badge:"BEST VALUE" },
   ];
 
-  // Platform detection
   function detectPlatform(){
     if (tg && tg.platform && (tg.platform === 'ios' || tg.platform === 'android')) return tg.platform;
     const ua = navigator.userAgent || "";
@@ -97,18 +94,15 @@
   }
   const platform = detectPlatform();
 
-  // Keep logic, but pill stays hidden via CSS
   const pill = document.getElementById('platformPill');
   if (platform !== 'unknown'){ pill.textContent = platform === 'ios' ? 'iOS • opens in Safari' : 'Android • opens in Chrome'; }
 
-  // Extract Telegram user id robustly
   function getTgId(){
-    // 1) Native WebApp object
     try {
       const id1 = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && (tg.initDataUnsafe.user.id || tg.initDataUnsafe.user.user_id);
       if (id1) return String(id1);
     } catch(e){}
-    // 2) Parse initData string if present
+
     try {
       if (tg && typeof tg.initData === 'string' && tg.initData.length){
         const sp = new URLSearchParams(tg.initData);
@@ -118,17 +112,16 @@
           if (u && (u.id || u.user_id)) return String(u.id || u.user_id);
         }
         const start = sp.get('start_param') || sp.get('tgWebAppStartParam');
-        // If you ever encode tgid in start_param like "tgid_12345", parse here.
         if (start && /^tgid[_=-]/i.test(start)){
           const m = start.match(/(\d{4,})/);
           if (m) return String(m[1]);
         }
       }
     } catch(e){}
-    // 3) URL query fallback (?tgid=...)
+
     try {
       const q = new URLSearchParams(location.search);
-      const qs = q.get('tgid') || q.get('user_id') || q.get('uid');
+      const qs = q.get('metadata_tgid') || q.get('tgid') || q.get('user_id') || q.get('uid');
       if (qs) return String(qs);
     } catch(e){}
     return "";
@@ -136,7 +129,6 @@
   const TG_ID = getTgId();
 
   function withParams(base, params){
-    // Ensure absolute URL
     const u = new URL(base, window.location.href);
     Object.entries(params).forEach(([k,v]) => {
       if (v !== undefined && v !== null && v !== "") u.searchParams.set(k, v);
@@ -144,7 +136,6 @@
     return u.toString();
   }
 
-  // Render product cards
   const grid = document.getElementById('cards');
   grid.innerHTML = PLANS.map(p => `
     <article class="card" tabindex="0">
@@ -157,19 +148,17 @@
       <div class="row tiny"><span>${platform === 'ios' ? 'Will open in Safari' : (platform === 'android' ? 'Will open in Chrome' : 'Opens in your browser')}</span></div>
     </article>`).join("");
 
-  // Click → open correct browser with TG ID attached
   grid.addEventListener('click', (ev) => {
     const btn = ev.target.closest('button.buy'); if (!btn) return;
     const plan = PLANS.find(x => x.id === btn.dataset.plan); if (!plan) return;
 
     const directUrl = withParams(plan.url, {
-      tgid: TG_ID,
-      plan: plan.id
+      metadata_tgid: TG_ID,
+      metadata_credits: plan.credits
     });
 
     let finalUrl = directUrl;
     if (platform === 'android'){
-      // Force Chrome externally using Android intent
       const noScheme = directUrl.replace(/^https?:\/\//i, '');
       finalUrl = `intent://${noScheme}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(directUrl)};end`;
     }
