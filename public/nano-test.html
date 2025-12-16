@@ -406,7 +406,7 @@ const sizeSelect = document.getElementById("sizeSelect");
 
         setStatus("Submitting Nano Banana job…", "text-zinc-400");
 
-        const resp = await fetch("/.netlify/functions/run-nano-banana-tg", {
+        const resp = await fetch("/.netlify/functions/run-nano-test", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
