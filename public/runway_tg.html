@@ -323,8 +323,11 @@
         return;
       }
 
-      // Deduct credits live in the mini app, like website
-      credits -= COST_PER_RUN;
+      // Deduct credits exactly once per run:
+      // keep the original balance for backend bookkeeping, then apply the single deduction.
+      const creditsBefore = credits;
+      const newCredits = creditsBefore - COST_PER_RUN;
+      credits = newCredits;
       repaintCredits();
 
       runBtn.disabled = true;
@@ -368,8 +371,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             telegram_id: telegramId,
-            credits_before: credits,
-            new_credits: credits - COST_PER_RUN,
+            credits_before: creditsBefore,
+            new_credits: newCredits,
             cost: COST_PER_RUN,
             prompt,
             imageUrl,
@@ -386,8 +389,7 @@
           throw new Error(err || "Error submitting job");
         }
 
-        // Only deduct credits after successful submission (and persist in Supabase)
-        const newCredits = credits - COST_PER_RUN;
+        // Only persist the single deduction in Supabase (credits already updated locally)
         try {
           if (window.supabaseClient) {
             const { error: updateError } = await window.supabaseClient
