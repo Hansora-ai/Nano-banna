@@ -108,7 +108,7 @@ exports.handler = async function(event){
   const newCredits = Number(body.new_credits || 0);
 
   // Cost: 10⚡ for 5s, 18⚡ for 10s
-  const cost = duration === 10 ? 9 : 5;
+  const cost = duration === 10 ? 18 : 10;
 
   // mode / leng collection from body, query, referer
   const query = event.queryStringParameters || {};
