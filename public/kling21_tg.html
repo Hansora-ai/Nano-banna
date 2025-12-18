@@ -459,7 +459,7 @@
 
         setStatus("Submitting Kling v2.1 Pro job…", "text-zinc-400");
 
-        const resp = await fetch("/.netlify/functions/run-kling21-tg", {
+        const resp = await fetch("/.netlify/functions/run-kling21", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
