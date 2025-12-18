@@ -44,7 +44,7 @@ exports.handler = async (event) => {
     const leng           = body.leng || "";
     const creditsBefore  = body.credits_before || 0;
     const newCredits     = body.new_credits || 0;
-    const cost           = 1; // fixed
+    const cost           = 1,5; // fixed
 
     // Images (0–6)
     const rawUrls = Array.isArray(body.urls) ? body.urls : [];
