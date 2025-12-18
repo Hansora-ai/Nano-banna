@@ -11,7 +11,7 @@ const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const TG_TABLE_URL  = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generations` : "";
 
 // Make.com scenario callback – same as other Telegram flows
-const MAKE_HOOK = "https://hook.eu2.make.com/l25fsaf15od9oywtqtm45zb0i7r7ff2o";
+const MAKE_HOOK = "https://hansoraai.app.n8n.cloud/webhook-test/42acdd7a-21a6-4258-a925-3f0174c1f354";
 
 function jsonResponse(statusCode, body){
   return {
