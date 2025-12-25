@@ -45,7 +45,7 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
 
 
 // Make.com scenario callback – provided by user
-const MAKE_HOOK = "https://hansoraai.app.n8n.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
+const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
 
 /**
  * Basic JSON response helper
