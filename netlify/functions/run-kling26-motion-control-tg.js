@@ -1,6 +1,6 @@
 // netlify/functions/run-kling26-motion-control-tg.js
 // Submit a Kling Motion Control task via KIE for Telegram Mini App.
-// UI page label is "Kling 2.5 Motion Control", but the KIE model must be "kling-2.6/motion-control".
+// UI page label is "Kling 2.6 Motion Control", but the KIE model must be "kling-2.6/motion-control".
 // Credits are calculated client-side as 1 credit per second (ceil(video_duration_seconds)).
 
 const KIE_BASE = (process.env.KIE_BASE_URL || "https://api.kie.ai").replace(/\/+$/, "");
@@ -21,6 +21,15 @@ function jsonResponse(statusCode, body){
   };
 }
 
+
+function computeBillableSeconds(d){
+  const dur = Number(d || 0);
+  if (!isFinite(dur) || dur <= 0) return 0;
+  const rounded = Math.round(dur);
+  if (Math.abs(dur - rounded) < 0.20) return Math.max(1, rounded);
+  return Math.max(1, Math.ceil(dur - 0.05));
+}
+
 async function writeTelegramGeneration({ telegramId, cost, prompt }) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
@@ -38,7 +47,7 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
       },
       body: JSON.stringify([{
         telegram_id: telegramId,
-        model: "Kling 2.5 Motion Control",
+        model: "Kling 2.6 Motion Control",
         credits: cost,
         prompt
       }])
@@ -113,8 +122,17 @@ exports.handler = async function(event){
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Number(body.new_credits || 0);
 
-  // Cost is provided by client (1 credit per second). We validate it as a positive integer.
-  const cost = Math.max(1, Math.floor(Number(body.cost || body.credits || 0) || 0));
+  // Cost is derived from the provided video duration (1 credit per second).
+  const videoDurationSeconds = Number(
+    body.video_duration_seconds || body.video_duration || body.duration_seconds || body.duration || 0
+  );
+  if (!isFinite(videoDurationSeconds) || videoDurationSeconds <= 0) {
+    return jsonResponse(400, { ok:false, error:"missing_or_invalid_video_duration" });
+  }
+  if (videoDurationSeconds > 30.05) {
+    return jsonResponse(400, { ok:false, error:"video_too_long_max_30s" });
+  }
+  const cost = computeBillableSeconds(videoDurationSeconds);
 
   // mode / leng collection from body, query, referer
   const query = event.queryStringParameters || {};
