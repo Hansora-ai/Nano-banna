@@ -117,7 +117,10 @@
               <div class="flex items-center justify-between text-xs">
                 <div class="text-zinc-400">
                   Quality:
-                  <span class="text-zinc-200 font-semibold ml-1">1080p</span>
+                  <select id="qualitySelect" class="input-dark text-xs rounded-lg px-2 py-1 ml-1">
+                    <option value="1080p" selected>1080p</option>
+                    <option value="720p">720p</option>
+                  </select>
                 </div>
                 <div class="text-zinc-400">
                   Video duration:
@@ -127,7 +130,7 @@
               <div class="mt-2 text-xs text-zinc-400">
                 Cost:
                 <span id="costLabel" class="text-emerald-300 font-semibold ml-1">—</span>
-                <span class="text-zinc-500 ml-1">(1⚡ per second)</span>
+                <span class="text-zinc-500 ml-1">(<span id="rateLabel">1⚡</span> per second)</span>
               </div>
             </div>
 
@@ -158,7 +161,7 @@
                 <li>Upload a character image (required).</li>
                 <li>Upload a motion video (required).</li>
                 <li>Type your prompt.</li>
-                <li>Cost is calculated from your video duration (1⚡ per second).</li>
+                <li>Cost is calculated from your video duration (<span id="rateLabel">1⚡</span> per second).</li>
                 <li>Click Run. If you have enough credits, the result will be sent to your bot's chat.</li>
               </ol>
             </div>
@@ -189,12 +192,17 @@
 
     const videoDurationLabel = document.getElementById("videoDurationLabel");
     const costLabel = document.getElementById("costLabel");
+    const qualitySelect = document.getElementById("qualitySelect");
+    const rateLabel = document.getElementById("rateLabel");
 
     let lastImageObjURL = null;
     let lastVideoObjURL = null;
 
     let videoDurationSeconds = null;
     let computedCost = null;
+
+    let qualityMode = "1080p";
+    let ratePerSecond = 1;
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
@@ -214,7 +222,22 @@
       return Math.max(1, Math.ceil(dur - 0.05));
     }
 
+    function updateRateFromQuality(){
+      qualityMode = (qualitySelect && qualitySelect.value) ? qualitySelect.value : "1080p";
+      ratePerSecond = (qualityMode === "720p") ? 0.5 : 1;
+      if (rateLabel) rateLabel.textContent = ratePerSecond.toString().replace(/\.0$/, "") + "⚡";
+    }
+
+    function formatCost(c){
+      if (!isFinite(c)) return "—";
+      // show .5 only when needed
+      if (Math.abs(c - Math.round(c)) < 1e-9) return String(Math.round(c));
+      return c.toFixed(1).replace(/\.0$/, "");
+    }
+
     function updateCostUI(){
+      updateRateFromQuality();
+
       if (!videoDurationSeconds || !isFinite(videoDurationSeconds) || videoDurationSeconds <= 0) {
         videoDurationLabel.textContent = "—";
         costLabel.textContent = "—";
@@ -222,10 +245,19 @@
         updateRunButtonLabel();
         return;
       }
-      const sec = Math.max(1, Math.ceil(videoDurationSeconds));
-      computedCost = sec; // 1 credit per second
-      videoDurationLabel.textContent = sec + "s";
-      costLabel.textContent = computedCost + "⚡";
+
+      const billableSec = computeBillableSeconds(videoDurationSeconds);
+      if (!billableSec){
+        videoDurationLabel.textContent = "—";
+        costLabel.textContent = "—";
+        computedCost = null;
+        updateRunButtonLabel();
+        return;
+      }
+
+      computedCost = billableSec * ratePerSecond;
+      videoDurationLabel.textContent = billableSec + "s";
+      costLabel.textContent = formatCost(computedCost) + "⚡";
       updateRunButtonLabel();
     }
 
@@ -235,7 +267,7 @@
         runBtn.textContent = "Run";
         return;
       }
-      runBtn.textContent = "Run (cost: " + computedCost + "⚡)";
+      runBtn.textContent = "Run (cost: " + (typeof formatCost==="function" ? formatCost(computedCost) : computedCost) + "⚡)";
     }
 
     function clearImageSelection(){
@@ -327,6 +359,12 @@
         const f = imageInput.files && imageInput.files[0];
         if (!f) return;
 
+        if (f.size > 10 * 1024 * 1024){
+          clearImageSelection();
+          setStatus("Image file too large (max 10MB).", "text-rose-300");
+          return;
+        }
+
         const u = URL.createObjectURL(f);
         lastImageObjURL = u;
 
@@ -366,36 +404,64 @@
         const f = videoInput.files && videoInput.files[0];
         if (!f) return;
 
+        if (f.size > 100 * 1024 * 1024){
+          clearVideoSelection();
+          setStatus("Video file too large (max 100MB).", "text-rose-300");
+          return;
+        }
+
         const u = URL.createObjectURL(f);
         lastVideoObjURL = u;
 
+        // Reliable preview across in-app browsers: use a real <video> element (not canvas snapshot)
+        const wrap = document.createElement("div");
+        wrap.className = "relative inline-block w-full";
+
+        const v = document.createElement("video");
+        v.src = u;
+        v.muted = true;
+        v.playsInline = true;
+        v.preload = "metadata";
+        v.controls = true;
+        v.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+        del.innerHTML = "\u00d7";
+        del.onclick = clearVideoSelection;
+
+        wrap.appendChild(v);
+        wrap.appendChild(del);
+        videoThumbsEl.appendChild(wrap);
+
         setStatus("Reading video duration…", "text-zinc-400");
-        try {
-          const previewDataUrl = await loadVideoFirstFramePreview(u);
 
-          const img = new Image();
-          img.src = previewDataUrl;
-          img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-
-          const wrap = document.createElement("div");
-          wrap.className = "relative inline-block";
-
-          const del = document.createElement("button");
-          del.type = "button";
-          del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-          del.innerHTML = "\u00d7";
-          del.onclick = clearVideoSelection;
-
-          wrap.appendChild(img);
-          wrap.appendChild(del);
-          videoThumbsEl.appendChild(wrap);
-
-          setStatus("Ready.", "text-zinc-500");
-        } catch (e) {
-          console.error(e);
+        const fail = (msg) => {
           clearVideoSelection();
-          setStatus("Error reading video. Please try another file.", "text-rose-300");
-        }
+          setStatus(msg || "Error reading video. Please try another file.", "text-rose-300");
+        };
+
+        // Duration + first-frame seek
+        v.addEventListener("loadedmetadata", () => {
+          const d = Number(v.duration);
+          if (isFinite(d) && d > 0) {
+            videoDurationSeconds = d;
+            updateCostUI();
+          }
+          // Seek near start to ensure first frame is shown
+          try { v.currentTime = 0.01; } catch {}
+        }, { once: true });
+
+        v.addEventListener("loadeddata", () => {
+          // Pause on first frame
+          try { v.pause(); } catch {}
+          setStatus("Ready.", "text-zinc-500");
+        }, { once: true });
+
+        v.addEventListener("error", () => {
+          fail("Could not preview this video format on your device. Please export as MP4 (H.264) and try again.");
+        }, { once: true });
       });
     }
 
@@ -573,6 +639,7 @@
             prompt,
             imageUrl,
             videoUrl,
+            quality: qualityMode,
             mode,
             leng
           })
@@ -620,9 +687,16 @@
 
     document.addEventListener("DOMContentLoaded", () => {
       parseQueryParams();
+      updateCostUI();
       updateRunButtonLabel();
+
+      if (qualitySelect){
+        qualitySelect.addEventListener("change", () => {
+          updateCostUI();
+        });
+      }
+
       runBtn.addEventListener("click", () => { handleRun(); });
-    });
-  </script>
+    });  </script>
 </body>
 </html>
