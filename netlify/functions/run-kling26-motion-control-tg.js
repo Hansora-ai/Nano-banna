@@ -132,7 +132,15 @@ exports.handler = async function(event){
   if (videoDurationSeconds > 30.05) {
     return jsonResponse(400, { ok:false, error:"video_too_long_max_30s" });
   }
-  const cost = computeBillableSeconds(videoDurationSeconds);
+  const billableSeconds = computeBillableSeconds(videoDurationSeconds);
+
+  const quality = (body.quality || body.output_quality || body.output_mode || body.kling_mode || body.mode_quality || "").toString();
+  const effectiveQuality = (quality === "720p") ? "720p" : "1080p";
+  const ratePerSecond = (effectiveQuality === "720p") ? 0.5 : 1;
+  if (!Number.isFinite(billableSeconds) || billableSeconds < 1) {
+    return jsonResponse(400, { ok:false, error:"missing_or_invalid_video_duration" });
+  }
+  const cost = billableSeconds * ratePerSecond;
 
   // mode / leng collection from body, query, referer
   const query = event.queryStringParameters || {};
@@ -161,7 +169,7 @@ exports.handler = async function(event){
   const videoUrl = normalizeUrl(videoRaw);
   if (!imageUrl) return jsonResponse(400, { ok:false, error:"missing_image" });
   if (!videoUrl) return jsonResponse(400, { ok:false, error:"missing_video" });
-  if (!Number.isFinite(cost) || cost < 1) return jsonResponse(400, { ok:false, error:"bad_cost" });
+  if (!Number.isFinite(cost) || cost < 0.5) return jsonResponse(400, { ok:false, error:"bad_cost" });
 
   const runId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
 
@@ -173,7 +181,8 @@ exports.handler = async function(event){
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(mode) +
-    "&leng=" + encodeURIComponent(leng);
+    "&leng=" + encodeURIComponent(leng) +
+    "&quality=" + encodeURIComponent(effectiveQuality);
 
   // KIE payload (matches the playground example shape in the screenshot)
   const payload = {
@@ -183,7 +192,7 @@ exports.handler = async function(event){
       input_urls: [imageUrl],
       video_urls: [videoUrl],
       character_orientation: "video",
-      mode: "1080p"
+      mode: effectiveQuality
     },
     callBackUrl: callbackUrl
   };
