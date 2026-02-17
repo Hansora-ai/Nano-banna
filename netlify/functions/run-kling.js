@@ -97,6 +97,7 @@ exports.handler = async function(event){
   const telegramId = (body.telegram_id || "").toString();
   const prompt = (body.prompt || "").toString();
   const imageUrlRaw = (body.imageUrl || body.image_url || "").toString();
+  const tailImageUrlRaw = (body.tailImageUrl || body.tail_image_url || body.lastFrameUrl || body.last_frame_url || "").toString();
 
   // Duration: 5 or 10 (seconds). Default 5.
   const duration = (body && (body.duration === 10 || String(body.duration) === "10")) ? 10 : 5;
@@ -152,6 +153,11 @@ exports.handler = async function(event){
 
   // Normalize image URL
   const image_url = normalizeUrl(imageUrlRaw);
+  const tail_image_url = normalizeUrl(tailImageUrlRaw);
+
+  if (tail_image_url && !image_url) {
+    return jsonResponse(400, { ok:false, error: "missing_image_url_for_tail_image_url" });
+  }
 
   // Choose Kling model depending on presence of image
   const model = image_url
@@ -165,7 +171,8 @@ exports.handler = async function(event){
       prompt,
       aspect_ratio: aspectRatio,
       duration: duration === 10 ? "10" : "5",
-      ...(image_url ? { image_url } : {})
+      ...(image_url ? { image_url } : {}),
+      ...(tail_image_url ? { tail_image_url } : {})
     },
     callBackUrl: callbackUrl
   };
