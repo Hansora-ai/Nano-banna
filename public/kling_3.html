@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HANSORA • Kling 3.0 (Text / Image → Video) • Telegram</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = "https://qmaealblegvcwodlmeht.supabase.co";
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
+    if (window.supabase && typeof window.supabase.createClient === "function") {
+      window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  </script>
+  <style>
+    :root{
+      --base-bg:#0b0d13;
+      --base-line:#1a1f2b;
+      --brand:#6366f1;
+    }
+    body{
+    .shadow-soft{box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .input-dark{background:rgba(255,255,255,.05)!important;color:#e5e7eb!important;border:1px solid rgba(255,255,255,.12)!important}
+    .input-dark::placeholder{color:#9ca3af}
+    select.input-dark option{background:#0b0d13;color:#e5e7eb}
+      background:
+        radial-gradient(1200px 600px at 20% 0%, rgba(99,102,241,.15), transparent 60%),
+        radial-gradient(1200px 600px at 100% 100%, rgba(56,189,248,.12), transparent 60%),
+        var(--base-bg);
+      color:#e5e7eb;
+    }
+    .bg-base-bg{background:var(--base-bg)}
+    .border-base-line{border-color:var(--base-line)}
+    .btn{
+      background:linear-gradient(135deg,#4f46e5,#6366f1);
+      color:white;
+    }
+    .btn:disabled{
+      opacity:.5;
+      cursor:not-allowed;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-base-bg">
+  <header class="border-b border-base-line/60">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-2xl bg-indigo-500 flex items-center justify-center text-sm font-bold shadow-lg shadow-indigo-500/40">
+          H
+        </div>
+        <div class="flex flex-col leading-tight">
+          <span class="text-sm font-semibold text-white">Hansora AI</span>
+          <span class="text-xs text-zinc-400">Kling 3.0 Text / Image → Video</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
+          <span class="text-zinc-400">Credits:</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1">
+    <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <section class="rounded-2xl p-5 border border-white/10 shadow-soft bg-white/5 space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h1 class="text-lg md:text-xl font-semibold text-white">
+              Kling 3.0 (Text / Image → Video)
+            </h1>
+            <p class="text-xs md:text-sm text-zinc-400 mt-1">
+              Use only text, or upload 1 image + prompt, and get a short AI video.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-[1.1fr,0.9fr] gap-4 md:gap-6 items-start">
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <div class="flex flex-row gap-4">
+                <div class="flex-1 space-y-2">
+                  <label class="block text-xs font-medium text-zinc-300 mb-1">Start Frame (optional)</label>
+                  <input
+                    id="startFrameInput"
+                    type="file"
+                    accept="image/*"
+                    class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
+                  />
+                  <div id="startThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+                </div>
+
+                <div class="flex-1 space-y-2">
+                  <label class="block text-xs font-medium text-zinc-300 mb-1">End Frame (optional)</label>
+                  <input
+                    id="endFrameInput"
+                    type="file"
+                    accept="image/*"
+                    class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
+                  />
+                  <div id="endThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+                </div>
+              </div>
+
+              <p class="text-[11px] text-zinc-500">
+                Max size 10MB per image. You can send only text, or text + Start Frame (optional). If you upload End Frame, Start Frame is required.
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Prompt (required)</label>
+              <textarea
+                id="promptInput"
+                rows="4"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                placeholder="Describe the scene and motion. Example: cinematic shot of a city street at night, slow camera move, neon lights, dramatic mood..."></textarea>
+              <p class="text-[11px] text-zinc-500">
+                Required. If you upload an image, describe how it should move. If no image, describe the whole video.
+              </p>
+            </div>
+                        <div class="space-y-2">
+              <label for="ratioSelect" class="block text-xs font-medium text-zinc-300 mb-1">Video aspect ratio</label>
+              <select
+                id="ratioSelect"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="1:1" selected>1:1 (default)</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+              </select>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Mode</label>
+              <select
+                id="modeSelect"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="std" selected>std (default)</option>
+                <option value="pro">pro</option>
+              </select>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Sound</label>
+              <div class="flex items-center gap-2 px-3 py-2 rounded-xl input-dark">
+                <input id="soundToggle" type="checkbox" class="h-4 w-4 accent-indigo-500" />
+                <label for="soundToggle" class="text-xs text-zinc-200 select-none">Enable sound</label>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Multi-shots</label>
+              <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl input-dark">
+                <div class="flex items-center gap-2">
+                  <input id="multiShotsToggle" type="checkbox" class="h-4 w-4 accent-indigo-500" />
+                  <label for="multiShotsToggle" class="text-xs text-zinc-200 select-none">Enable multi-shots</label>
+                </div>
+                <div class="text-[11px] text-zinc-400">
+                  Total: <span id="totalSecondsLabel" class="font-semibold text-zinc-200">0</span>/15s
+                </div>
+              </div>
+              <p class="text-[11px] text-zinc-500">
+                Each shot duration: 3–15s. All shots combined must be ≤ 15s.
+              </p>
+            </div>
+
+            <div id="singleSettings" class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Video duration (single)</label>
+              <input
+                id="singleDurationInput"
+                type="number"
+                min="3"
+                max="15"
+                step="1"
+                value="5"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <p class="text-[11px] text-zinc-500">Single video duration must be 3–15 seconds.</p>
+            </div>
+
+            <div id="multiShotsBuilder" class="hidden space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-semibold text-zinc-200">Shots</div>
+                <button
+                  id="addShotBtn"
+                  type="button"
+                  class="px-3 py-2 rounded-xl bg-indigo-500/90 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-500/20"
+                >
+                  + Add shot
+                </button>
+              </div>
+
+              <div id="shotsContainer" class="space-y-3"></div>
+
+              <p class="text-[11px] text-zinc-500">
+                Multi-shots supports only a Start Frame (optional). End Frame is disabled in multi-shots.
+              </p>
+            </div>
+<div class="space-y-2">
+              <button
+                id="runBtn"
+                class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
+                Run (cost: 5⚡)
+              </button>
+              <p id="statusText" class="text-[11px] text-zinc-500">
+                Ready.
+              </p>
+            </div>
+            <div id="successBox" class="mt-3 hidden">
+              <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
+                <div class="flex items-start gap-2">
+                  <div class="text-2xl">✅</div>
+                  <div id="successText" class="flex-1"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="rounded-2xl border border-base-line bg-black/40 p-3 md:p-4">
+              <h2 class="text-xs font-semibold text-zinc-200 mb-1">Instructions</h2>
+              <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
+                <li>Option 1: type your prompt (text-to-video).</li>
+                <li>Option 2: upload 1 image and type your prompt (image-to-video).</li>
+                <li>Click Run button.</li>
+                <li>If you have enough credits, the result will be sent to your bot's chat.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const RATE = {
+      std: { nosound: 2.0, sound: 2.5 },
+      pro: { nosound: 2.5, sound: 3.5 }
+    };
+
+    let telegramId = "";
+    let credits = 0;
+    let mode = "";
+    let leng = "";
+
+    const creditsDisplay = document.getElementById("creditsDisplay");
+    const statusText = document.getElementById("statusText");
+    const successBox = document.getElementById("successBox");
+    const successText = document.getElementById("successText");
+    const runBtn = document.getElementById("runBtn");
+
+    const startFrameInput = document.getElementById("startFrameInput");
+    const endFrameInput = document.getElementById("endFrameInput");
+    const promptInput = document.getElementById("promptInput");
+
+    const startThumbsEl = document.getElementById("startThumbs");
+    const endThumbsEl = document.getElementById("endThumbs");
+
+    const ratioSelect = document.getElementById("ratioSelect");
+    const modeSelect = document.getElementById("modeSelect");
+    const soundToggle = document.getElementById("soundToggle");
+
+    const multiShotsToggle = document.getElementById("multiShotsToggle");
+    const totalSecondsLabel = document.getElementById("totalSecondsLabel");
+
+    const singleSettings = document.getElementById("singleSettings");
+    const singleDurationInput = document.getElementById("singleDurationInput");
+
+    const multiShotsBuilder = document.getElementById("multiShotsBuilder");
+    const addShotBtn = document.getElementById("addShotBtn");
+    const shotsContainer = document.getElementById("shotsContainer");
+
+    // Elements modal
+    let elementsModal = null;
+    let elementsModalSub = null;
+    let closeElementsModal = null;
+        let saveElementsBtn = null;
+    let elementsList = null;
+    let elementsError = null;
+
+    function ensureElementsModalRefs(){
+      if (!elementsModal) elementsModal = document.getElementById("elementsModal");
+      if (!elementsModalSub) elementsModalSub = document.getElementById("elementsModalSub");
+      if (!closeElementsModal) closeElementsModal = document.getElementById("closeElementsModal");
+            if (!saveElementsBtn) saveElementsBtn = document.getElementById("saveElementsBtn");
+      if (!elementsList) elementsList = document.getElementById("elementsList");
+      if (!elementsError) elementsError = document.getElementById("elementsError");
+
+      // Wire close-on-overlay and close button once, when available
+      if (elementsModal && !elementsModal.__wiredClose){
+        elementsModal.__wiredClose = true;
+        elementsModal.addEventListener("click", (e) => {
+          if (e.target === elementsModal) closeModal();
+        });
+      }
+      if (closeElementsModal && !closeElementsModal.__wiredCloseBtn){
+        closeElementsModal.__wiredCloseBtn = true;
+        closeElementsModal.addEventListener("click", closeModal);
+      }
+
+      if (saveElementsBtn && !saveElementsBtn.__wiredSaveBtn){
+        saveElementsBtn.__wiredSaveBtn = true;
+        saveElementsBtn.addEventListener("click", () => {
+          ensureElementsModalRefs();
+          if (activeElementsShotIndex < 0) return;
+          const el = getShotElement(activeElementsShotIndex);
+          if (!el){
+            closeModal();
+            renderShots();
+            updateTotals();
+            return;
+          }
+          const v = validateElement(el);
+          if (!v.ok){
+            showElementsError(v.msg);
+            return;
+          }
+          showElementsError("");
+          closeModal();
+          renderShots();
+          updateTotals();
+        });
+      }
+    }
+
+
+    let lastStartObjURL = null;
+    let lastEndObjURL = null;
+
+    // Multi-shots state
+    // Each shot: { prompt: string, duration: number, element: Element|null }
+    // Element: { name, description, type: "image"|"video", images: File[], video: File|null }
+    let shots = [];
+    let activeElementsShotIndex = -1;
+
+    function setStatus(msg, tone){
+      statusText.textContent = msg;
+      statusText.className = "text-[11px] " + (tone || "text-zinc-500");
+    }
+
+    function repaintCredits(){
+      const s = (Math.round(credits * 10) / 10).toFixed(1).replace(/\.0$/, "");
+      creditsDisplay.textContent = s + "⚡";
+    }
+
+    function parseQueryParams(){
+      const url = new URL(window.location.href);
+      telegramId = url.searchParams.get("telegram_id") || "";
+
+      mode = url.searchParams.get("mode") || url.searchParams.get("modul") || "";
+      leng = url.searchParams.get("leng") || url.searchParams.get("lang") || "";
+
+      if (!telegramId){
+        setStatus("Missing telegram_id in URL. Please open this page from the bot.", "text-rose-300");
+        if (runBtn) runBtn.disabled = true;
+        return;
+      }
+
+      credits = 0;
+      repaintCredits();
+      loadCreditsFromSupabase();
+    }
+
+    async function loadCreditsFromSupabase(){
+      if (!window.supabaseClient){
+        console.error("Supabase client not initialized");
+        return;
+      }
+      try {
+        const { data, error } = await window.supabaseClient
+          .from("telegram_users")
+          .select("credits")
+          .eq("telegram_id", telegramId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error loading credits from Supabase", error);
+          return;
+        }
+
+        if (data && typeof data.credits !== "undefined") {
+          const parsed = Number(data.credits);
+          credits = Number.isFinite(parsed) ? parsed : 0;
+          repaintCredits();
+          updateRunButtonLabel();
+        }
+      } catch (e) {
+        console.error("Unexpected error loading credits from Supabase", e);
+      }
+    }
+
+    function clearStartSelection(){
+      try {
+        if (lastStartObjURL) {
+          URL.revokeObjectURL(lastStartObjURL);
+          lastStartObjURL = null;
+        }
+      } catch {}
+      if (startFrameInput) startFrameInput.value = "";
+      if (startThumbsEl) startThumbsEl.innerHTML = "";
+    }
+
+    function clearEndSelection(){
+      try {
+        if (lastEndObjURL) {
+          URL.revokeObjectURL(lastEndObjURL);
+          lastEndObjURL = null;
+        }
+      } catch {}
+      if (endFrameInput) endFrameInput.value = "";
+      if (endThumbsEl) endThumbsEl.innerHTML = "";
+    }
+
+    if (startFrameInput && startThumbsEl){
+      startFrameInput.addEventListener("change", () => {
+        startThumbsEl.innerHTML = "";
+        try {
+          if (lastStartObjURL) {
+            URL.revokeObjectURL(lastStartObjURL);
+            lastStartObjURL = null;
+          }
+        } catch {}
+        const f = startFrameInput.files && startFrameInput.files[0];
+        if (!f) return;
+        const u = URL.createObjectURL(f);
+        lastStartObjURL = u;
+
+        const img = new Image();
+        img.src = u;
+        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+
+        const wrap = document.createElement("div");
+        wrap.className = "relative inline-block";
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+        del.innerHTML = "×";
+        del.onclick = clearStartSelection;
+
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        startThumbsEl.appendChild(wrap);
+      });
+    }
+
+    if (endFrameInput && endThumbsEl){
+      endFrameInput.addEventListener("change", () => {
+        endThumbsEl.innerHTML = "";
+        try {
+          if (lastEndObjURL) {
+            URL.revokeObjectURL(lastEndObjURL);
+            lastEndObjURL = null;
+          }
+        } catch {}
+        const f = endFrameInput.files && endFrameInput.files[0];
+        if (!f) return;
+        const u = URL.createObjectURL(f);
+        lastEndObjURL = u;
+
+        const img = new Image();
+        img.src = u;
+        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+
+        const wrap = document.createElement("div");
+        wrap.className = "relative inline-block";
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+        del.innerHTML = "×";
+        del.onclick = clearEndSelection;
+
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        endThumbsEl.appendChild(wrap);
+      });
+    }
+
+    function getRate(){
+      const m = (modeSelect && modeSelect.value) ? modeSelect.value : "std";
+      const hasSound = !!(soundToggle && soundToggle.checked);
+      const key = hasSound ? "sound" : "nosound";
+      return (RATE[m] && RATE[m][key]) ? RATE[m][key] : 2.0;
+    }
+
+    function clampInt(n, lo, hi){
+      const x = Math.round(Number(n));
+      if (!Number.isFinite(x)) return lo;
+      return Math.max(lo, Math.min(hi, x));
+    }
+
+    function getSingleSeconds(){
+      return clampInt(singleDurationInput ? singleDurationInput.value : 5, 3, 15);
+    }
+
+    function getTotalSeconds(){
+      if (!isMultiShotsEnabled()){
+        return getSingleSeconds();
+      }
+      return shots.reduce((sum, s) => sum + clampInt(s.duration, 3, 15), 0);
+    }
+
+    function getCost(){
+      const sec = getTotalSeconds();
+      const rate = getRate();
+      // Round to nearest 0.5? (your values create .0 or .5)
+      const raw = sec * rate;
+      return Math.round(raw * 2) / 2;
+    }
+
+    function formatCredits(x){
+      return (Math.round(x * 10) / 10).toFixed(1).replace(/\.0$/, "");
+    }
+
+    function refreshDurationCaps(){
+      if (!shotsContainer) return;
+      if (!isMultiShotsEnabled()) return;
+
+      const inputs = shotsContainer.querySelectorAll('input[data-shot-duration]');
+      inputs.forEach((inp) => {
+        const idx = Number(inp.getAttribute('data-shot-duration'));
+        if (!Number.isFinite(idx) || !shots[idx]) return;
+
+        const otherSum = shots.reduce((sum, s, j) => {
+          if (j === idx) return sum;
+          return sum + clampInt(s.duration, 3, 15);
+        }, 0);
+
+        const maxAllowed = Math.max(3, Math.min(15, 15 - otherSum));
+        inp.max = String(maxAllowed);
+
+        const cur = clampInt(shots[idx].duration, 3, 15);
+        if (cur > maxAllowed){
+          shots[idx].duration = maxAllowed;
+          inp.value = String(maxAllowed);
+        }
+      });
+    }
+
+    function updateTotals(){
+      const total = getTotalSeconds();
+      if (totalSecondsLabel) totalSecondsLabel.textContent = String(total);
+      updateRunButtonLabel();
+
+      if (isMultiShotsEnabled()){
+        refreshDurationCaps();
+        if (addShotBtn){
+          const remaining = 15 - total;
+          addShotBtn.disabled = remaining < 3;
+        }
+      } else {
+        if (addShotBtn) addShotBtn.disabled = false;
+      }
+    }
+
+    function updateRunButtonLabel(){
+      if (!runBtn) return;
+      const c = getCost();
+      runBtn.textContent = "Run (cost: " + formatCredits(c) + "⚡)";
+      // keep enabled state as-is; we disable only while working
+    }
+
+    function isMultiShotsEnabled(){
+      return !!(multiShotsToggle && multiShotsToggle.checked);
+    }
+
+    function setMultiShotsUI(enabled){
+      if (enabled){
+        if (singleSettings) singleSettings.classList.add("hidden");
+        if (multiShotsBuilder) multiShotsBuilder.classList.remove("hidden");
+
+        // End frame disabled in multi-shots
+        if (endFrameInput){
+          endFrameInput.disabled = true;
+          clearEndSelection();
+        }
+
+        if (shots.length === 0){
+          shots = [makeEmptyShot()];
+        }
+        renderShots();
+      } else {
+        if (singleSettings) singleSettings.classList.remove("hidden");
+        if (multiShotsBuilder) multiShotsBuilder.classList.add("hidden");
+
+        if (endFrameInput){
+          endFrameInput.disabled = false;
+        }
+      }
+      updateTotals();
+    }
+
+    function makeEmptyShot(){
+      return { prompt: "", duration: 3, element: null };
+    }
+
+    function renderShots(){
+      if (!shotsContainer) return;
+      shotsContainer.innerHTML = "";
+
+      shots.forEach((shot, idx) => {
+        const card = document.createElement("div");
+        card.className = "rounded-2xl border border-white/10 bg-white/5 p-3 space-y-2";
+
+        const top = document.createElement("div");
+        top.className = "flex items-center justify-between gap-2";
+
+        const title = document.createElement("div");
+        title.className = "text-xs font-semibold text-zinc-200";
+        title.textContent = "Shot " + (idx + 1);
+
+        const actions = document.createElement("div");
+        actions.className = "flex items-center gap-2";
+
+        const elemBtn = document.createElement("button");
+        elemBtn.type = "button";
+        elemBtn.className = "px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 text-xs font-semibold";
+        elemBtn.innerHTML = "🧩 Elements";
+        elemBtn.onclick = () => openElementsModal(idx);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-200 text-xs font-semibold";
+        removeBtn.textContent = "Remove";
+        removeBtn.disabled = shots.length === 1;
+        removeBtn.onclick = () => {
+          if (shots.length === 1) return;
+          shots.splice(idx, 1);
+          renderShots();
+          updateTotals();
+        };
+
+        actions.appendChild(elemBtn);
+        actions.appendChild(removeBtn);
+
+        top.appendChild(title);
+        top.appendChild(actions);
+
+        const promptLabel = document.createElement("label");
+        promptLabel.className = "block text-[11px] font-medium text-zinc-300";
+        promptLabel.textContent = "Prompt (required)";
+
+        const ta = document.createElement("textarea");
+        ta.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+        ta.rows = 3;
+        ta.placeholder = "Describe this shot. You can reference elements like @character.";
+        ta.value = shot.prompt || "";
+        ta.oninput = () => {
+          shots[idx].prompt = ta.value;
+        };
+
+        const row = document.createElement("div");
+        row.className = "flex items-center gap-2";
+
+        const durWrap = document.createElement("div");
+        durWrap.className = "flex-1";
+
+        const durLabel = document.createElement("div");
+        durLabel.className = "text-[11px] font-medium text-zinc-300 mb-1";
+        durLabel.textContent = "Duration (3–15s)";
+
+        const dur = document.createElement("input");
+        dur.type = "number";
+        dur.min = "3";
+        dur.step = "1";
+        dur.dataset.shotDuration = String(idx);
+
+        // Cap each shot duration so total multi-shots stays ≤ 15s
+        const otherSumInit = shots.reduce((sum, s, j) => {
+          if (j === idx) return sum;
+          return sum + clampInt(s.duration, 3, 15);
+        }, 0);
+        const maxAllowedInit = Math.max(3, Math.min(15, 15 - otherSumInit));
+        dur.max = String(maxAllowedInit);
+
+        const initVal = clampInt(shot.duration, 3, 15);
+        const cappedInit = Math.min(initVal, maxAllowedInit);
+        shots[idx].duration = cappedInit;
+        dur.value = String(cappedInit);
+        dur.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+        dur.oninput = () => {
+          const otherSum = shots.reduce((sum, s, j) => {
+            if (j === idx) return sum;
+            return sum + clampInt(s.duration, 3, 15);
+          }, 0);
+
+          const maxAllowed = Math.max(3, Math.min(15, 15 - otherSum));
+          dur.max = String(maxAllowed);
+
+          shots[idx].duration = clampInt(dur.value, 3, maxAllowed);
+          dur.value = String(shots[idx].duration);
+
+          updateTotals();
+        };
+
+        durWrap.appendChild(durLabel);
+        durWrap.appendChild(dur);
+
+        const elemCount = document.createElement("div");
+        elemCount.className = "w-40 text-[11px] text-zinc-400 text-right pr-1";
+        elemCount.innerHTML = "Elements: <span class='text-zinc-200 font-semibold'>" + (shot.element ? 1 : 0) + "</span>";
+
+        row.appendChild(durWrap);
+        row.appendChild(elemCount);
+
+        card.appendChild(top);
+        card.appendChild(promptLabel);
+        card.appendChild(ta);
+        card.appendChild(row);
+
+        shotsContainer.appendChild(card);
+      });
+
+      updateTotals();
+    }
+
+    if (addShotBtn){
+      addShotBtn.addEventListener("click", () => {
+        shots.push(makeEmptyShot());
+        renderShots();
+        updateTotals();
+      });
+    }
+
+    // Elements Modal UI
+    function openElementsModal(shotIndex){
+      ensureElementsModalRefs();
+      activeElementsShotIndex = shotIndex;
+      if (elementsModalSub) elementsModalSub.textContent = "Shot " + (shotIndex + 1) + " elements";
+      renderElementsList();
+      if (elementsModal) elementsModal.classList.remove("hidden");
+    }
+
+    function closeModal(){
+      ensureElementsModalRefs();
+      activeElementsShotIndex = -1;
+      if (elementsModal) elementsModal.classList.add("hidden");
+    }
+
+    if (closeElementsModal) closeElementsModal.addEventListener("click", closeModal);
+    if (elementsModal) {
+      elementsModal.addEventListener("click", (e) => {
+        if (e.target === elementsModal) closeModal();
+      });
+    }
+
+    function makeEmptyElement(){
+      return { name: "", description: "", type: "image", images: [], video: null };
+    }
+
+    // One element per shot (as requested)
+    function getShotElement(shotIndex){
+      if (shotIndex < 0 || !shots[shotIndex]) return null;
+      return shots[shotIndex].element || null;
+    }
+    function setShotElement(shotIndex, el){
+      if (shotIndex < 0 || !shots[shotIndex]) return;
+      shots[shotIndex].element = el || null;
+    }
+
+    // Keep track of object URLs so we can revoke them when re-rendering
+    let _elementPreviewUrls = [];
+    function revokeElementPreviewUrls(){
+      try {
+        _elementPreviewUrls.forEach(u => {
+          try { URL.revokeObjectURL(u); } catch {}
+        });
+      } catch {}
+      _elementPreviewUrls = [];
+    }
+
+    function showElementsError(msg){
+      ensureElementsModalRefs();
+      if (!elementsError) return;
+      if (!msg){
+        elementsError.textContent = "";
+        elementsError.classList.add("hidden");
+        return;
+      }
+      elementsError.textContent = msg;
+      elementsError.classList.remove("hidden");
+    }
+
+    function validateElement(el){
+      if (!el) return { ok:true };
+      const name = (el.name || "").trim();
+      if (!name) return { ok:false, msg:"Element name is required (used as @name)." };
+
+      if (el.type === "video"){
+        if (!el.video) return { ok:false, msg:"Video element requires exactly 1 video file." };
+        return { ok:true };
+      }
+
+      // image
+      const imgs = Array.isArray(el.images) ? el.images : [];
+      if (imgs.length < 2 || imgs.length > 4){
+        return { ok:false, msg:"Image element must have 2–4 images." };
+      }
+      return { ok:true };
+    }
+
+    function renderElementsList(){
+      ensureElementsModalRefs();
+      if (!elementsList) return;
+      revokeElementPreviewUrls();
+      showElementsError("");
+
+      elementsList.innerHTML = "";
+
+      if (activeElementsShotIndex < 0 || !shots[activeElementsShotIndex]) return;
+
+      // Ensure there's an element object to edit
+      let el = getShotElement(activeElementsShotIndex);
+      if (!el){
+        el = makeEmptyElement();
+        setShotElement(activeElementsShotIndex, el);
+      }
+
+      const box = document.createElement("div");
+      box.className = "rounded-2xl border border-white/10 bg-white/5 p-3 space-y-2";
+
+      const top = document.createElement("div");
+      top.className = "flex items-center justify-between gap-2";
+
+      const title = document.createElement("div");
+      title.className = "text-xs font-semibold text-zinc-200";
+      title.textContent = "Element (only 1 per shot)";
+
+      const clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.className = "px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-200 text-xs font-semibold";
+      clearBtn.textContent = "Clear";
+      clearBtn.onclick = () => {
+        setShotElement(activeElementsShotIndex, null);
+        renderElementsList();
+        renderShots();
+        updateTotals();
+      };
+
+      top.appendChild(title);
+      top.appendChild(clearBtn);
+
+      const grid = document.createElement("div");
+      grid.className = "grid grid-cols-1 md:grid-cols-2 gap-2";
+
+      const nameWrap = document.createElement("div");
+      const nameLabel = document.createElement("div");
+      nameLabel.className = "text-[11px] font-medium text-zinc-300 mb-1";
+      nameLabel.textContent = "Name (used as @name)";
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+      nameInput.placeholder = "e.g. girl";
+      nameInput.value = el.name || "";
+      nameInput.oninput = () => {
+        const e = getShotElement(activeElementsShotIndex) || el;
+        e.name = nameInput.value;
+        setShotElement(activeElementsShotIndex, e);
+      };
+
+      nameWrap.appendChild(nameLabel);
+      nameWrap.appendChild(nameInput);
+
+      const typeWrap = document.createElement("div");
+      const typeLabel = document.createElement("div");
+      typeLabel.className = "text-[11px] font-medium text-zinc-300 mb-1";
+      typeLabel.textContent = "Type";
+
+      const typeSelect = document.createElement("select");
+      typeSelect.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+      typeSelect.innerHTML = `
+        <option value="image">image (2–4)</option>
+        <option value="video">video (1)</option>
+      `;
+      typeSelect.value = el.type || "image";
+      typeSelect.onchange = () => {
+        const e = getShotElement(activeElementsShotIndex) || el;
+        e.type = typeSelect.value;
+        // reset files when switching
+        e.images = [];
+        e.video = null;
+        setShotElement(activeElementsShotIndex, e);
+        renderElementsList();
+      };
+
+      typeWrap.appendChild(typeLabel);
+      typeWrap.appendChild(typeSelect);
+
+      const descWrap = document.createElement("div");
+      descWrap.className = "md:col-span-2";
+      const descLabel = document.createElement("div");
+      descLabel.className = "text-[11px] font-medium text-zinc-300 mb-1";
+      descLabel.textContent = "Description (optional)";
+
+      const descInput = document.createElement("input");
+      descInput.type = "text";
+      descInput.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+      descInput.placeholder = "Short description to help the model understand this element";
+      descInput.value = el.description || "";
+      descInput.oninput = () => {
+        const e = getShotElement(activeElementsShotIndex) || el;
+        e.description = descInput.value;
+        setShotElement(activeElementsShotIndex, e);
+      };
+
+      descWrap.appendChild(descLabel);
+      descWrap.appendChild(descInput);
+
+      grid.appendChild(nameWrap);
+      grid.appendChild(typeWrap);
+      grid.appendChild(descWrap);
+
+      const fileWrap = document.createElement("div");
+      fileWrap.className = "space-y-2";
+
+      const fileLabel = document.createElement("div");
+      fileLabel.className = "text-[11px] font-medium text-zinc-300";
+      fileLabel.textContent = (el.type === "video") ? "Video file (exactly 1)" : "Image files (2–4)";
+
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      if (el.type === "video"){
+        fileInput.accept = "video/*";
+        fileInput.multiple = false;
+      } else {
+        fileInput.accept = "image/*";
+        fileInput.multiple = true;
+      }
+      fileInput.className = "input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400";
+
+      const preview = document.createElement("div");
+      preview.className = "mt-2 flex gap-2 flex-wrap";
+
+      function renderPreview(){
+        preview.innerHTML = "";
+        const e = getShotElement(activeElementsShotIndex) || el;
+
+        if (e.type === "video"){
+          if (!e.video){
+            const msg = document.createElement("div");
+            msg.className = "text-[11px] text-zinc-500";
+            msg.textContent = "No video selected";
+            preview.appendChild(msg);
+            return;
+          }
+
+          const u = URL.createObjectURL(e.video);
+          _elementPreviewUrls.push(u);
+
+          const wrap = document.createElement("div");
+          wrap.className = "relative w-full";
+
+          const vid = document.createElement("video");
+          vid.src = u;
+          vid.controls = true;
+          vid.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+          del.innerHTML = "×";
+          del.onclick = () => {
+            e.video = null;
+            setShotElement(activeElementsShotIndex, e);
+            renderElementsList();
+            renderShots();
+          };
+
+          wrap.appendChild(vid);
+          wrap.appendChild(del);
+          preview.appendChild(wrap);
+          return;
+        }
+
+        const imgs = Array.isArray(e.images) ? e.images : [];
+        if (!imgs.length){
+          const msg = document.createElement("div");
+          msg.className = "text-[11px] text-zinc-500";
+          msg.textContent = "No images selected";
+          preview.appendChild(msg);
+          return;
+        }
+
+        imgs.forEach((f, fi) => {
+          const u = URL.createObjectURL(f);
+          _elementPreviewUrls.push(u);
+
+          const wrap = document.createElement("div");
+          wrap.className = "relative inline-block";
+
+          const img = new Image();
+          img.src = u;
+          img.className = "block w-28 h-20 object-cover rounded-lg border border-white/10 bg-black/20";
+
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+          del.innerHTML = "×";
+          del.onclick = () => {
+            const arr = Array.isArray(e.images) ? [...e.images] : [];
+            arr.splice(fi, 1);
+            e.images = arr;
+            setShotElement(activeElementsShotIndex, e);
+            renderElementsList();
+            renderShots();
+          };
+
+          wrap.appendChild(img);
+          wrap.appendChild(del);
+          preview.appendChild(wrap);
+        });
+      }
+
+      fileInput.onchange = () => {
+        const files = Array.from(fileInput.files || []);
+        const e = getShotElement(activeElementsShotIndex) || el;
+
+        if (e.type === "video"){
+          e.video = files[0] || null;
+        } else {
+          e.images = files;
+        }
+
+        setShotElement(activeElementsShotIndex, e);
+
+        // Validate counts immediately and show red message
+        const v = validateElement(e);
+        showElementsError(v.ok ? "" : v.msg);
+
+        renderElementsList();
+        renderShots();
+      };
+
+      fileWrap.appendChild(fileLabel);
+      fileWrap.appendChild(fileInput);
+      fileWrap.appendChild(preview);
+
+      box.appendChild(top);
+      box.appendChild(grid);
+      box.appendChild(fileWrap);
+
+      elementsList.appendChild(box);
+
+      // Initial preview
+      renderPreview();
+
+      // Live validate
+      const v0 = validateElement(el);
+      showElementsError(v0.ok ? "" : v0.msg);
+    }
+
+    if (saveElementsBtn){
+      saveElementsBtn.addEventListener("click", () => {
+        ensureElementsModalRefs();
+        if (activeElementsShotIndex < 0) return;
+        const el = getShotElement(activeElementsShotIndex);
+        if (!el){
+          // nothing to save
+          closeModal();
+          renderShots();
+          updateTotals();
+          return;
+        }
+        const v = validateElement(el);
+        if (!v.ok){
+          showElementsError(v.msg);
+          return;
+        }
+        showElementsError("");
+        closeModal();
+        renderShots();
+        updateTotals();
+      });
+    }
+
+    if (multiShotsToggle){
+      multiShotsToggle.addEventListener("change", () => setMultiShotsUI(isMultiShotsEnabled()));
+    }
+
+    if (singleDurationInput){
+      singleDurationInput.addEventListener("input", () => {
+        singleDurationInput.value = String(getSingleSeconds());
+        updateTotals();
+      });
+    }
+
+    if (modeSelect) modeSelect.addEventListener("change", updateTotals);
+    if (soundToggle) soundToggle.addEventListener("change", updateTotals);
+
+    async function signUpload(filename, mime){
+      const resp = await fetch("/.netlify/functions/sign-upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-USER-ID": telegramId || "tg-anon"
+        },
+        body: JSON.stringify({ filename, mime })
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || !data || !data.uploadUrl || !data.publicUrl){
+        throw new Error((data && data.error) || "sign-upload failed");
+      }
+      return data;
+    }
+
+    function safeExtFromMime(mime, fallback){
+      const t = String(mime || "").toLowerCase();
+      if (t.includes("png")) return ".png";
+      if (t.includes("jpeg") || t.includes("jpg")) return ".jpg";
+      if (t.includes("webp")) return ".webp";
+      if (t.includes("mp4")) return ".mp4";
+      if (t.includes("quicktime") || t.includes("mov")) return ".mov";
+      if (t.includes("webm")) return ".webm";
+      return fallback || "";
+    }
+
+    async function uploadFile(file, prefix){
+      const type = (file.type || "application/octet-stream").toLowerCase();
+      const origName = file.name || "file";
+      const base = origName.replace(/\.[^./\\]+$/, "");
+      const ext = safeExtFromMime(type, "");
+      const filename = Date.now() + "-" + prefix + "-" + base + (ext || "");
+      const signJson = await signUpload(filename, type);
+
+      const putResp = await fetch(signJson.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": type },
+        body: file
+      });
+      if (!putResp.ok){
+        throw new Error("Upload failed");
+      }
+
+      try { await fetch(signJson.publicUrl, { method: "HEAD", cache: "no-store" }); } catch {}
+      return signJson.publicUrl;
+    }
+
+    function sanitizeElementName(name){
+      const s = String(name || "").trim();
+      if (!s) return "";
+      // allow letters, numbers, underscore; must start with letter or underscore
+      let t = s.replace(/[^a-zA-Z0-9_]/g, "_");
+      if (!/^[a-zA-Z_]/.test(t)) t = "_" + t;
+      return t.slice(0, 32);
+    }
+
+    function validateInputs(){
+      const prompt = (promptInput.value || "").trim();
+
+      const startFile = (startFrameInput && startFrameInput.files && startFrameInput.files[0]) ? startFrameInput.files[0] : null;
+      const endFile = (endFrameInput && endFrameInput.files && endFrameInput.files[0]) ? endFrameInput.files[0] : null;
+
+      if (!isMultiShotsEnabled()){
+        if (!prompt) return { ok:false, error:"Please enter a prompt." };
+        const sec = getSingleSeconds();
+        if (sec < 3 || sec > 15) return { ok:false, error:"Duration must be 3–15 seconds." };
+        if (endFile && !startFile) return { ok:false, error:"End Frame requires Start Frame." };
+      } else {
+        // multi shots
+        if (endFile) return { ok:false, error:"End Frame is not supported in multi-shots." };
+        if (!shots.length) return { ok:false, error:"Add at least 1 shot." };
+        let total = 0;
+        for (let i=0;i<shots.length;i++){
+          const p = String(shots[i].prompt || "").trim();
+          const d = clampInt(shots[i].duration, 3, 15);
+          if (!p) return { ok:false, error:"Shot " + (i+1) + " prompt is required." };
+          if (d < 3 || d > 15) return { ok:false, error:"Shot " + (i+1) + " duration must be 3–15s." };
+          total += d;
+        }
+        if (total > 15) return { ok:false, error:"All shots combined must be ≤ 15 seconds." };
+        // top prompt can be empty in multi-shot; still keep for UI but ignore
+      }
+
+      return { ok:true };
+    }
+
+    async function persistCredits(newCredits){
+      try {
+        if (window.supabaseClient) {
+          const { error: updateError } = await window.supabaseClient
+            .from("telegram_users")
+            .update({ credits: newCredits })
+            .eq("telegram_id", telegramId);
+          if (updateError) console.error("Error updating credits in Supabase", updateError);
+        }
+      } catch (e) {
+        console.error("Unexpected error updating credits in Supabase", e);
+      }
+    }
+
+    async function handleRun(){
+      if (successBox) successBox.classList.add("hidden");
+      if (runBtn.disabled) return;
+
+      if (!telegramId){
+        setStatus("Missing telegram_id, cannot continue.", "text-rose-300");
+        return;
+      }
+
+      const v = validateInputs();
+      if (!v.ok){
+        setStatus(v.error, "text-rose-300");
+        return;
+      }
+
+      const startFile = (startFrameInput && startFrameInput.files && startFrameInput.files[0]) ? startFrameInput.files[0] : null;
+      const endFile = (endFrameInput && endFrameInput.files && endFrameInput.files[0]) ? endFrameInput.files[0] : null;
+
+      if (startFile && startFile.size > 10 * 1024 * 1024){
+        setStatus("Start Frame too large (max 10MB).", "text-rose-300");
+        return;
+      }
+      if (endFile && endFile.size > 10 * 1024 * 1024){
+        setStatus("End Frame too large (max 10MB).", "text-rose-300");
+        return;
+      }
+
+      const cost = getCost();
+      if (credits < cost){
+        setStatus("Not enough credits (need " + formatCredits(cost) + ").", "text-rose-300");
+        return;
+      }
+
+      runBtn.disabled = true;
+      runBtn.textContent = "Working…";
+
+      let startImageUrl = "";
+      let endImageUrl = "";
+
+      try {
+        if (startFile){
+          setStatus("Uploading Start Frame…", "text-zinc-400");
+          startImageUrl = await uploadFile(startFile, "start");
+        }
+
+        if (!isMultiShotsEnabled() && endFile){
+          setStatus("Uploading End Frame…", "text-zinc-400");
+          endImageUrl = await uploadFile(endFile, "end");
+        }
+
+        // Upload elements
+        setStatus("Preparing elements…", "text-zinc-400");
+
+        const allElements = [];
+        const usedNames = new Set();
+
+        if (isMultiShotsEnabled()){
+          for (let si=0; si<shots.length; si++){
+            const el = shots[si].element || null;
+            if (!el) continue;
+
+            const type = (el.type === "video") ? "video" : "image";
+            let name = sanitizeElementName(el.name);
+            if (!name) name = "shot" + (si+1) + "_el";
+            // ensure unique
+            let unique = name;
+            let n = 2;
+            while (usedNames.has(unique)){
+              unique = name + "_" + n;
+              n++;
+            }
+            usedNames.add(unique);
+
+            const desc = String(el.description || "").trim();
+
+            if (type === "video"){
+              const vf = el.video || null;
+              if (!vf) {
+                throw new Error("Shot " + (si+1) + ": video element requires exactly 1 video file.");
+              }
+              if (vf.size > 50 * 1024 * 1024){
+                throw new Error("Shot " + (si+1) + ": element video too large (max 50MB).");
+              }
+              setStatus("Uploading element video…", "text-zinc-400");
+              const videoUrl = await uploadFile(vf, "elv-shot" + (si+1));
+
+              allElements.push({
+                name: unique,
+                ...(desc ? { description: desc } : {}),
+                element_input_video_urls: [videoUrl]
+              });
+            } else {
+              const imgs = Array.isArray(el.images) ? el.images : [];
+              if (imgs.length < 2 || imgs.length > 4){
+                throw new Error("Shot " + (si+1) + ": image element must have 2–4 images.");
+              }
+              for (let ii=0; ii<imgs.length; ii++){
+                const f = imgs[ii];
+                if (f && f.size > 10 * 1024 * 1024){
+                  throw new Error("Shot " + (si+1) + ": image " + (ii+1) + " too large (max 10MB).");
+                }
+              }
+              setStatus("Uploading element images…", "text-zinc-400");
+              const urls = [];
+              for (let ii=0; ii<imgs.length; ii++){
+                const u = await uploadFile(imgs[ii], "eli-shot" + (si+1) + "-" + (ii+1));
+                urls.push(u);
+              }
+
+              allElements.push({
+                name: unique,
+                ...(desc ? { description: desc } : {}),
+                element_input_urls: urls
+              });
+            }
+          }
+        } else {
+          // Elements UI is only available in multi-shots (by design)
+        }const ratio = (ratioSelect && ratioSelect.value) ? ratioSelect.value : "1:1";
+        const klingMode = (modeSelect && modeSelect.value) ? modeSelect.value : "std";
+        const sound = !!(soundToggle && soundToggle.checked);
+
+        const payload = {
+          telegram_id: telegramId,
+          credits_before: credits,
+          // backend will verify cost; we send what UI computed
+          cost,
+          prompt: (promptInput.value || "").trim(),
+          startImageUrl,
+          endImageUrl,
+          aspectRatio: ratio,
+          kling_mode: klingMode,
+          sound,
+          multi_shots: isMultiShotsEnabled(),
+          multi_prompt: isMultiShotsEnabled()
+            ? shots.map(s => ({ prompt: String(s.prompt||"").trim(), duration: clampInt(s.duration, 3, 15) }))
+            : [],
+          kling_elements: isMultiShotsEnabled() ? allElements : [],
+          mode,
+          leng
+        };
+
+        const resp = await fetch("/.netlify/functions/run-kling-3", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const j = await resp.json().catch(() => ({}));
+        if (!resp.ok || !j.submitted){
+          const err = j && (j.error || j.message);
+          throw new Error(err || "Error submitting job");
+        }
+
+        // Deduct credits only after successful submission
+        const newCredits = Number(j.new_credits);
+        if (!Number.isFinite(newCredits)){
+          throw new Error("Server returned invalid credits.");
+        }
+
+        await persistCredits(newCredits);
+        credits = newCredits;
+        repaintCredits();
+
+        setStatus("✅ Request submitted.", "text-emerald-300");
+        if (successBox && successText){
+          successBox.classList.remove("hidden");
+          successText.innerHTML =
+            "✦ Submitted successfully. You will receive the Kling 3.0 video in Telegram when it is ready.<br/>" +
+            "✦ Запрос успешно принят. Вы получите Kling 3.0 видео в Telegram, когда оно будет готово.";
+        }
+      } catch (err) {
+        console.error(err);
+        setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
+      } finally {
+        runBtn.disabled = false;
+        updateRunButtonLabel();
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      parseQueryParams();
+
+      // Default: single
+      if (multiShotsToggle) multiShotsToggle.checked = false;
+      setMultiShotsUI(false);
+
+      updateTotals();
+      if (runBtn) runBtn.addEventListener("click", () => { handleRun(); });
+    });
+  </script>
+
+
+  <!-- Elements Modal -->
+  <div id="elementsModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/70"></div>
+    <div class="relative max-w-3xl mx-auto mt-10 md:mt-16 px-4">
+      <div class="rounded-2xl border border-white/10 bg-[#0b0d13] shadow-soft">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <div class="flex flex-col leading-tight">
+            <span class="text-sm font-semibold text-white">Kling Elements</span>
+            <span id="elementsModalSub" class="text-[11px] text-zinc-400">Shot elements</span>
+          </div>
+          <button id="closeElementsModal" type="button" class="h-9 w-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white flex items-center justify-center">✕</button>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <div class="text-[11px] text-zinc-400">
+            Use elements for character/object consistency. Reference them in prompts as <span class="font-semibold text-white">@element_name</span>.
+          </div>
+
+          <div id="elementsList" class="space-y-3"></div>
+
+          <p id="elementsError" class="hidden text-[11px] text-rose-300"></p>
+
+          <div class="flex items-center justify-end gap-3 pt-2">
+<button
+              id="saveElementsBtn"
+              type="button"
+              class="px-3 py-2 rounded-xl bg-emerald-500/90 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-500/20"
+            >
+              Save
+            </button>
+          </div>
+
+          <p class="text-[11px] text-zinc-500">
+            Image element: 2–4 images (≤10MB each). Video element: 1 video (≤50MB).
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
