@@ -82,7 +82,7 @@
           <div class="space-y-4">
             <div class="space-y-2">
               <div class="flex flex-row gap-4">
-                <div class="flex-1 space-y-2">
+                <div id="startFrameWrap" class="flex-1 space-y-2">
                   <label class="block text-xs font-medium text-zinc-300 mb-1">Start Frame (optional)</label>
                   <input
                     id="startFrameInput"
@@ -91,9 +91,10 @@
                     class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
                   />
                   <div id="startThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+                  <p id="startSizeError" class="hidden text-[11px] text-rose-300 mt-1"></p>
                 </div>
 
-                <div class="flex-1 space-y-2">
+                <div id="endFrameWrap" class="flex-1 space-y-2">
                   <label class="block text-xs font-medium text-zinc-300 mb-1">End Frame (optional)</label>
                   <input
                     id="endFrameInput"
@@ -102,6 +103,7 @@
                     class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
                   />
                   <div id="endThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+                  <p id="endSizeError" class="hidden text-[11px] text-rose-300 mt-1"></p>
                 </div>
               </div>
 
@@ -164,7 +166,7 @@
                 </div>
               </div>
               <p class="text-[11px] text-zinc-500">
-                Each shot duration: 3–15s. All shots combined must be ≤ 15s.
+                Each shot duration: 3–12s. All shots combined must be ≤ 15s.
               </p>
             </div>
 
@@ -259,6 +261,11 @@
 
     const startThumbsEl = document.getElementById("startThumbs");
     const endThumbsEl = document.getElementById("endThumbs");
+    const startSizeError = document.getElementById("startSizeError");
+    const endSizeError = document.getElementById("endSizeError");
+
+    const startFrameWrap = document.getElementById("startFrameWrap");
+    const endFrameWrap = document.getElementById("endFrameWrap");
 
     const ratioSelect = document.getElementById("ratioSelect");
     const modeSelect = document.getElementById("modeSelect");
@@ -402,6 +409,7 @@
       } catch {}
       if (startFrameInput) startFrameInput.value = "";
       if (startThumbsEl) startThumbsEl.innerHTML = "";
+      if (startSizeError){ startSizeError.textContent=""; startSizeError.classList.add("hidden"); }
     }
 
     function clearEndSelection(){
@@ -413,6 +421,7 @@
       } catch {}
       if (endFrameInput) endFrameInput.value = "";
       if (endThumbsEl) endThumbsEl.innerHTML = "";
+      if (endSizeError){ endSizeError.textContent=""; endSizeError.classList.add("hidden"); }
     }
 
     if (startFrameInput && startThumbsEl){
@@ -426,6 +435,15 @@
         } catch {}
         const f = startFrameInput.files && startFrameInput.files[0];
         if (!f) return;
+        if (startSizeError){
+          if (f.size > 10 * 1024 * 1024){
+            startSizeError.textContent = "Start Frame exceeds 10MB (max 10MB).";
+            startSizeError.classList.remove("hidden");
+          } else {
+            startSizeError.textContent = "";
+            startSizeError.classList.add("hidden");
+          }
+        }
         const u = URL.createObjectURL(f);
         lastStartObjURL = u;
 
@@ -459,6 +477,15 @@
         } catch {}
         const f = endFrameInput.files && endFrameInput.files[0];
         if (!f) return;
+        if (endSizeError){
+          if (f.size > 10 * 1024 * 1024){
+            endSizeError.textContent = "End Frame exceeds 10MB (max 10MB).";
+            endSizeError.classList.remove("hidden");
+          } else {
+            endSizeError.textContent = "";
+            endSizeError.classList.add("hidden");
+          }
+        }
         const u = URL.createObjectURL(f);
         lastEndObjURL = u;
 
@@ -572,12 +599,14 @@
     function setMultiShotsUI(enabled){
       if (enabled){
         if (singleSettings) singleSettings.classList.add("hidden");
+        if (soundToggle){ soundToggle.checked = true; soundToggle.disabled = true; if (soundToggle.closest(".input-dark")) soundToggle.closest(".input-dark").classList.add("opacity-60"); }
         if (multiShotsBuilder) multiShotsBuilder.classList.remove("hidden");
 
         // End frame disabled in multi-shots
         if (endFrameInput){
           endFrameInput.disabled = true;
           clearEndSelection();
+          if (endFrameWrap){ endFrameWrap.classList.add("opacity-50"); }
         }
 
         if (shots.length === 0){
@@ -587,9 +616,11 @@
       } else {
         if (singleSettings) singleSettings.classList.remove("hidden");
         if (multiShotsBuilder) multiShotsBuilder.classList.add("hidden");
+        if (soundToggle){ soundToggle.disabled = false; if (soundToggle.closest(".input-dark")) soundToggle.closest(".input-dark").classList.remove("opacity-60"); }
 
         if (endFrameInput){
           endFrameInput.disabled = false;
+          if (endFrameWrap){ endFrameWrap.classList.remove("opacity-50"); }
         }
       }
       updateTotals();
@@ -662,43 +693,42 @@
 
         const durLabel = document.createElement("div");
         durLabel.className = "text-[11px] font-medium text-zinc-300 mb-1";
-        durLabel.textContent = "Duration (3–15s)";
+        durLabel.textContent = "Duration (3–12s)";
 
-        const dur = document.createElement("input");
-        dur.type = "number";
-        dur.min = "3";
-        dur.step = "1";
+        const dur = document.createElement("select");
         dur.dataset.shotDuration = String(idx);
-
-        // Cap each shot duration so total multi-shots stays ≤ 15s
-        const otherSumInit = shots.reduce((sum, s, j) => {
-          if (j === idx) return sum;
-          return sum + clampInt(s.duration, 3, 15);
-        }, 0);
-        const maxAllowedInit = Math.max(3, Math.min(15, 15 - otherSumInit));
-        dur.max = String(maxAllowedInit);
-
-        const initVal = clampInt(shot.duration, 3, 15);
-        const cappedInit = Math.min(initVal, maxAllowedInit);
-        shots[idx].duration = cappedInit;
-        dur.value = String(cappedInit);
         dur.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500";
-        dur.oninput = () => {
+        // Duration options are dynamic: each shot 3–12s, total across all shots ≤ 15s.
+        function buildDurationOptions(){
           const otherSum = shots.reduce((sum, s, j) => {
             if (j === idx) return sum;
-            return sum + clampInt(s.duration, 3, 15);
+            return sum + clampInt(s.duration, 3, 12);
           }, 0);
 
-          const maxAllowed = Math.max(3, Math.min(15, 15 - otherSum));
-          dur.max = String(maxAllowed);
+          const maxAllowed = Math.max(3, Math.min(12, 15 - otherSum));
+          const current = clampInt(shot.duration, 3, maxAllowed);
+          shots[idx].duration = current;
 
-          shots[idx].duration = clampInt(dur.value, 3, maxAllowed);
-          dur.value = String(shots[idx].duration);
+          // Rebuild options
+          dur.innerHTML = "";
+          for (let sec = 3; sec <= maxAllowed; sec++){
+            const opt = document.createElement("option");
+            opt.value = String(sec);
+            opt.textContent = sec + "s";
+            dur.appendChild(opt);
+          }
+          dur.value = String(current);
+        }
 
+        buildDurationOptions();
+
+        dur.onchange = () => {
+          shots[idx].duration = clampInt(dur.value, 3, 12);
+          // Re-render to refresh all other shot dropdown ranges
+          renderShots();
           updateTotals();
         };
-
-        durWrap.appendChild(durLabel);
+durWrap.appendChild(durLabel);
         durWrap.appendChild(dur);
 
         const elemCount = document.createElement("div");
@@ -789,17 +819,28 @@
     function validateElement(el){
       if (!el) return { ok:true };
       const name = (el.name || "").trim();
-      if (!name) return { ok:false, msg:"Element name is required (used as @name)." };
+      const desc = (el.description || "").trim();
 
+      if (!name) return { ok:false, msg:"Element name is required (used as @name)." };
+      if (!desc) return { ok:false, msg:"Element description is required." };
+
+      // Media is optional, but if provided it must follow the rules.
       if (el.type === "video"){
-        if (!el.video) return { ok:false, msg:"Video element requires exactly 1 video file." };
+        if (!el.video) return { ok:true };
+        if (el.video.size > 50 * 1024 * 1024) return { ok:false, msg:"Video exceeds 50MB (max 50MB)." };
         return { ok:true };
       }
 
       // image
       const imgs = Array.isArray(el.images) ? el.images : [];
+      if (imgs.length === 0) return { ok:true };
       if (imgs.length < 2 || imgs.length > 4){
-        return { ok:false, msg:"Image element must have 2–4 images." };
+        return { ok:false, msg:"Image element must have 2–4 images (or leave empty)." };
+      }
+      for (let i=0;i<imgs.length;i++){
+        if (imgs[i] && imgs[i].size > 10 * 1024 * 1024){
+          return { ok:false, msg:"One or more images exceed 10MB (max 10MB each)." };
+        }
       }
       return { ok:true };
     }
@@ -896,7 +937,7 @@
       descWrap.className = "md:col-span-2";
       const descLabel = document.createElement("div");
       descLabel.className = "text-[11px] font-medium text-zinc-300 mb-1";
-      descLabel.textContent = "Description (optional)";
+      descLabel.textContent = "Description (required)";
 
       const descInput = document.createElement("input");
       descInput.type = "text";
@@ -937,9 +978,39 @@
       const preview = document.createElement("div");
       preview.className = "mt-2 flex gap-2 flex-wrap";
 
+      const sizeMsg = document.createElement("p");
+      sizeMsg.className = "text-[11px] text-rose-300 hidden";
+
+      function setSizeMsg(msg){
+        if (!msg){
+          sizeMsg.textContent = "";
+          sizeMsg.classList.add("hidden");
+        } else {
+          sizeMsg.textContent = msg;
+          sizeMsg.classList.remove("hidden");
+        }
+      }
+
       function renderPreview(){
         preview.innerHTML = "";
         const e = getShotElement(activeElementsShotIndex) || el;
+
+        // Size hints (shown immediately)
+        if (e.type === "video"){
+          if (e.video && e.video.size > 50 * 1024 * 1024){
+            setSizeMsg("Video exceeds 50MB (max 50MB).");
+          } else {
+            setSizeMsg("");
+          }
+        } else {
+          const imgs0 = Array.isArray(e.images) ? e.images : [];
+          const tooBig = imgs0.some(f => f && f.size > 10 * 1024 * 1024);
+          if (tooBig){
+            setSizeMsg("One or more images exceed 10MB (max 10MB each).");
+          } else {
+            setSizeMsg("");
+          }
+        }
 
         if (e.type === "video"){
           if (!e.video){
@@ -1039,6 +1110,7 @@
 
       fileWrap.appendChild(fileLabel);
       fileWrap.appendChild(fileInput);
+      fileWrap.appendChild(sizeMsg);
       fileWrap.appendChild(preview);
 
       box.appendChild(top);
@@ -1091,7 +1163,7 @@
     }
 
     if (modeSelect) modeSelect.addEventListener("change", updateTotals);
-    if (soundToggle) soundToggle.addEventListener("change", updateTotals);
+    if (soundToggle) soundToggle.addEventListener("change", () => { if (isMultiShotsEnabled()){ soundToggle.checked = true; return; } updateTotals(); });
 
     async function signUpload(filename, mime){
       const resp = await fetch("/.netlify/functions/sign-upload", {
@@ -1209,7 +1281,20 @@
         return;
       }
 
-      const startFile = (startFrameInput && startFrameInput.files && startFrameInput.files[0]) ? startFrameInput.files[0] : null;
+      
+      // Validate Kling Elements (description is required if an element is provided)
+      if (isMultiShotsEnabled()){
+        for (let i = 0; i < shots.length; i++){
+          const el = shots[i] && shots[i].element ? shots[i].element : null;
+          if (!el) continue;
+          const ev = validateElement(el);
+          if (!ev.ok){
+            setStatus(`Shot ${i + 1} • ${ev.msg}`, "text-rose-300");
+            return;
+          }
+        }
+      }
+const startFile = (startFrameInput && startFrameInput.files && startFrameInput.files[0]) ? startFrameInput.files[0] : null;
       const endFile = (endFrameInput && endFrameInput.files && endFrameInput.files[0]) ? endFrameInput.files[0] : null;
 
       if (startFile && startFile.size > 10 * 1024 * 1024){
@@ -1272,7 +1357,8 @@
             if (type === "video"){
               const vf = el.video || null;
               if (!vf) {
-                throw new Error("Shot " + (si+1) + ": video element requires exactly 1 video file.");
+                // media optional: skip sending this element if no file selected
+                continue;
               }
               if (vf.size > 50 * 1024 * 1024){
                 throw new Error("Shot " + (si+1) + ": element video too large (max 50MB).");
@@ -1287,6 +1373,10 @@
               });
             } else {
               const imgs = Array.isArray(el.images) ? el.images : [];
+              if (imgs.length === 0){
+                // media optional: skip sending this element if no images selected
+                continue;
+              }
               if (imgs.length < 2 || imgs.length > 4){
                 throw new Error("Shot " + (si+1) + ": image element must have 2–4 images.");
               }
@@ -1400,7 +1490,7 @@
           <button id="closeElementsModal" type="button" class="h-9 w-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white flex items-center justify-center">✕</button>
         </div>
 
-        <div class="p-4 space-y-3">
+        <div class="p-4 space-y-3 max-h-[70vh] overflow-y-auto overscroll-contain">
           <div class="text-[11px] text-zinc-400">
             Use elements for character/object consistency. Reference them in prompts as <span class="font-semibold text-white">@element_name</span>.
           </div>
