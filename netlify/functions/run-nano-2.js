@@ -21,35 +21,21 @@ function jsonResponse(statusCode, body){
   };
 }
 
-// normalizeImageSize & normalizeResolution copied from run-nano-2.js (website)
 function normalizeImageSize(v) {
   if (!v) return "auto";
   const s = String(v).trim().toLowerCase();
 
-  // Pass through if already valid ratio or auto
   const direct = new Set([
-    "auto",
-    "1:1",
-    "2:3",
-    "3:2",
-    "3:4",
-    "4:3",
-    "4:5",
-    "5:4",
-    "9:16",
-    "16:9",
-    "21:9"
+    "auto","1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9"
   ]);
   if (direct.has(s)) return s;
 
-  // Map named tokens to ratio strings (KIE-accepted)
   if (s === "square") return "1:1";
   if (s === "portrait_3_4") return "3:4";
   if (s === "portrait_9_16") return "9:16";
   if (s === "landscape_4_3") return "4:3";
   if (s === "landscape_16_9") return "16:9";
 
-  // Coerce variants like "16_9", "16-9", "2-3" → "2:3"
   const coerced = s.replace(/(\d)[_\-:](\d)/g, "$1:$2");
   if (direct.has(coerced)) return coerced;
 
@@ -64,7 +50,6 @@ function normalizeResolution(v) {
   return "1K";
 }
 
-// Insert a row into telegram_generations (non-blocking)
 async function writeTelegramGeneration({ telegramId, cost, prompt }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
@@ -117,15 +102,12 @@ exports.handler = async function(event){
   const prompt = (body.prompt || "").toString();
 
   const rawUrls = Array.isArray(body.urls) ? body.urls : [];
-  const cleanUrls = rawUrls
-    .map(u => String(u || "").trim())
-    .filter(u => !!u);
+  const cleanUrls = rawUrls.map(u => String(u || "").trim()).filter(u => !!u);
 
   if (!telegramId) {
     return jsonResponse(400, { ok:false, submitted:false, error:"missing_telegram_id" });
   }
 
-  // For Nano Banana 2, images are optional. We allow prompt-only requests.
   if (!prompt) {
     return jsonResponse(400, { ok:false, submitted:false, error:"missing_prompt" });
   }
@@ -136,9 +118,8 @@ exports.handler = async function(event){
 
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Number(body.new_credits || 0);
-    const cost = Number(body.cost || 2) || 2; // Telegram flow uses fixed cost 2
+  const cost = Number(body.cost || 2) || 2;
 
-  // mode / leng similar to other tg functions
   const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
   let mode = (body.mode || body.modul || query.mode || query.modul || "").toString();
@@ -170,7 +151,6 @@ exports.handler = async function(event){
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng);
 
-  // Build KIE payload mirroring website's run-nano-2.js
   const image_input = cleanUrls.map(u => encodeURI(String(u)));
   const format = (body.format || "png").toLowerCase();
 
@@ -178,8 +158,10 @@ exports.handler = async function(event){
     prompt,
     aspect_ratio: image_size,
     resolution,
-    output_format: format
+    output_format: format,
+    google_search: true
   };
+
   if (image_input.length) {
     input.image_input = image_input;
   }
@@ -188,12 +170,12 @@ exports.handler = async function(event){
     model: "nano-banana-2",
     input,
     webhook_url: callbackUrl,
-    webhookUrl:  callbackUrl,
+    webhookUrl: callbackUrl,
     callbackUrl: callbackUrl,
     callBackUrl: callbackUrl,
-    notify_url:  callbackUrl,
-    meta:      { telegram_id: telegramId, run_id: runId, cost },
-    metadata:  { telegram_id: telegramId, run_id: runId, cost }
+    notify_url: callbackUrl,
+    meta: { telegram_id: telegramId, run_id: runId, cost },
+    metadata: { telegram_id: telegramId, run_id: runId, cost }
   };
 
   try {
@@ -223,7 +205,6 @@ exports.handler = async function(event){
     const taskId =
       data.taskId || data.id || data.data?.taskId || data.data?.id || null;
 
-    // Non-blocking log to telegram_generations
     await writeTelegramGeneration({ telegramId, cost, prompt });
 
     return jsonResponse(201, {
