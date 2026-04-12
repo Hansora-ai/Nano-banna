@@ -1,7 +1,7 @@
 // netlify/functions/run-nano-banana-tg.js
-// Submit a Nano Banana image-to-image job for Telegram Mini App.
+// Submit a Nano Banana job for Telegram Mini App.
 // Free mini-app flow uses free_model_users.nano_banana_used on the page side;
-// here we only forward the job and keep the remaining-run values for callbacks.
+// here we forward either text-to-image or image-edit jobs and keep remaining-run values for callbacks.
 
 const CREATE_URL = process.env.KIE_CREATE_URL || "https://api.kie.ai/api/v1/jobs/createTask";
 const API_KEY = process.env.KIE_API_KEY || "";
@@ -57,7 +57,7 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
       },
       body: JSON.stringify([{
         telegram_id: telegramId,
-        model: "Nano Banana Image Edit",
+        model: "Nano Banana",
         credits: cost,
         prompt
       }])
@@ -94,7 +94,7 @@ exports.handler = async function(event) {
   }
 
   const telegramId = (body.telegram_id || "").toString();
-  const prompt = (body.prompt || "").toString();
+  const prompt = (body.prompt || "").toString().trim();
 
   const rawUrls = Array.isArray(body.urls) ? body.urls : [];
   const cleanUrls = rawUrls
@@ -104,8 +104,8 @@ exports.handler = async function(event) {
   if (!telegramId) {
     return jsonResponse(400, { ok: false, submitted: false, error: "missing_telegram_id" });
   }
-  if (!cleanUrls.length) {
-    return jsonResponse(400, { ok: false, submitted: false, error: "urls_required" });
+  if (!prompt) {
+    return jsonResponse(400, { ok: false, submitted: false, error: "prompt_required" });
   }
 
   const sizeRaw = body.size || body.image_size || body.imageSize || "auto";
@@ -146,16 +146,21 @@ exports.handler = async function(event) {
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng);
 
+  const isImageEdit = cleanUrls.length > 0;
   const image_urls = cleanUrls.map((u) => encodeURI(String(u)));
+  const input = {
+    prompt,
+    output_format: (body.format || "png").toLowerCase(),
+    image_size
+  };
+
+  if (isImageEdit) {
+    input.image_urls = image_urls;
+  }
 
   const payload = {
-    model: "google/nano-banana-edit",
-    input: {
-      prompt,
-      image_urls,
-      output_format: (body.format || "png").toLowerCase(),
-      image_size
-    },
+    model: isImageEdit ? "google/nano-banana-edit" : "google/nano-banana",
+    input,
     webhook_url: callbackUrl,
     webhookUrl: callbackUrl,
     callbackUrl: callbackUrl,
@@ -202,7 +207,8 @@ exports.handler = async function(event) {
       submitted: true,
       run_id: runId,
       taskId,
-      new_remaining: newRemaining
+      new_remaining: newRemaining,
+      mode_used: isImageEdit ? "image_to_image" : "text_to_image"
     });
   } catch (e) {
     return jsonResponse(500, {
