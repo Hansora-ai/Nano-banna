@@ -445,7 +445,7 @@
         setStatus("Submitting Nano Banana job…", "text-zinc-400");
 
         const newRemainingRuns = remainingRuns - COST_NB;
-        const resp = await fetch("/.netlify/functions/run-nano-test", {
+        const resp = await fetch("/.netlify/functions/run-nano-banana-free", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
