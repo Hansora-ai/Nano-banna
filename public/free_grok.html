@@ -45,6 +45,7 @@
       opacity: .5;
       cursor: not-allowed;
     }
+    .hidden-force { display: none !important; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col bg-base-bg">
@@ -108,16 +109,21 @@
                 Required. Use only a prompt for text-to-image, or add images plus a prompt for image editing.
               </p>
             </div>
-            <div class="space-y-2">
+
+            <div id="aspectRatioWrap" class="space-y-2">
               <label for="sizeSelect" class="block text-xs font-medium text-zinc-300 mb-1">Aspect ratio</label>
               <select
                 id="sizeSelect"
                 class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
+                <option value="1:1">Square 1:1</option>
                 <option value="3:2" selected>Landscape 3:2</option>
+                <option value="2:3">Portrait 2:3</option>
+                <option value="16:9">Landscape 16:9</option>
+                <option value="9:16">Portrait 9:16</option>
               </select>
-              <p class="text-[11px] text-zinc-500">
-                Uses the documented Grok text-to-image aspect ratio option. Image-to-image uses only the uploaded reference image(s).
+              <p id="aspectRatioHint" class="text-[11px] text-zinc-500">
+                Aspect ratio is used only for text-to-image. It hides automatically when images are uploaded.
               </p>
             </div>
 
@@ -146,7 +152,7 @@
               <h2 class="text-xs font-semibold text-zinc-200 mb-1">Instructions</h2>
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
                 <li>Type a prompt to generate a new image, or upload 1–4 images if you want image editing.</li>
-                <li>For text-to-image, the documented Grok aspect ratio is 3:2.</li>
+                <li>The aspect ratio chooser is shown only for text-to-image.</li>
                 <li>Click Run.</li>
                 <li>If your free account is active and you have runs left, the result will be sent to your bot's chat.</li>
               </ol>
@@ -174,6 +180,7 @@
     const promptInput = document.getElementById("promptInput");
     const thumbsEl = document.getElementById("thumbs");
     const sizeSelect = document.getElementById("sizeSelect");
+    const aspectRatioWrap = document.getElementById("aspectRatioWrap");
 
     let selectedFiles = [];
     let previewUrls = [];
@@ -202,6 +209,12 @@
       previewUrls = [];
     }
 
+    function updateAspectRatioVisibility() {
+      if (!aspectRatioWrap) return;
+      const hasImages = selectedFiles.length > 0 || Array.from(imageInput.files || []).length > 0;
+      aspectRatioWrap.classList.toggle("hidden-force", hasImages);
+    }
+
     function renderImageThumbs() {
       if (!thumbsEl) return;
       thumbsEl.innerHTML = "";
@@ -217,16 +230,18 @@
         const del = document.createElement("button");
         del.type = "button";
         del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 text-xs text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "\u00d7";
+        del.innerHTML = "\\u00d7";
         del.onclick = () => {
           selectedFiles.splice(index, 1);
           renderImageThumbs();
           syncInputFiles();
+          updateAspectRatioVisibility();
         };
         wrap.appendChild(img);
         wrap.appendChild(del);
         thumbsEl.appendChild(wrap);
       });
+      updateAspectRatioVisibility();
     }
 
     if (imageInput && thumbsEl) {
@@ -234,6 +249,7 @@
         selectedFiles = Array.from(imageInput.files || []);
         renderImageThumbs();
         syncInputFiles();
+        updateAspectRatioVisibility();
       });
     }
 
@@ -285,6 +301,7 @@
       remainingRuns = 0;
       repaintCredits();
       updateRunAvailability();
+      updateAspectRatioVisibility();
       loadFreeModelStatusFromSupabase();
     }
 
@@ -370,6 +387,7 @@
       const files = (selectedFiles && selectedFiles.length)
         ? selectedFiles.slice()
         : Array.from(imageInput.files || []);
+
       if (files.length > 4) {
         setStatus("You can upload up to 4 images.", "text-rose-300");
         return;
@@ -493,6 +511,7 @@
 
     document.addEventListener("DOMContentLoaded", () => {
       parseQueryParams();
+      updateAspectRatioVisibility();
       runBtn.addEventListener("click", () => { handleRun(); });
     });
   </script>
