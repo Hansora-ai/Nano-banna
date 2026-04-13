@@ -154,6 +154,49 @@
     let leng = "";
     let subscriptionActive = false;
 
+    const EXPLICIT_BLOCK_WORDS = new Set([
+      "naked",
+      "nude",
+      "nsfw",
+      "pussy",
+      "dick",
+      "penis",
+      "vagina",
+      "vaginal",
+      "cock",
+      "blowjob",
+      "bj",
+      "handjob",
+      "deepthroat",
+      "threesome",
+      "gangbang",
+      "creampie",
+      "cumshot",
+      "cum",
+      "clit",
+      "boob",
+      "boobs",
+      "tit",
+      "tits",
+      "milf",
+      "slut",
+      "whore",
+      "sex",
+      "sexual",
+      "xxx",
+      "fuck",
+      "fucking",
+      "fucked",
+      "masturbate",
+      "masturbating",
+      "masturbation",
+      "genital",
+      "genitals",
+      "topless",
+      "breast",
+      "breasts"
+    ]);
+
     const creditsDisplay = document.getElementById("creditsDisplay");
     const statusText = document.getElementById("statusText");
     const successBox = document.getElementById("successBox");
@@ -171,7 +214,37 @@
       creditsDisplay.textContent = String(remainingRuns);
     }
 
+    function promptHasBlockedSexualTerms(value) {
+      const text = String(value || "").toLowerCase();
+      if (!text.trim()) return false;
+
+      const normalized = text
+        .replace(/[^a-z\s]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!normalized) return false;
+
+      const words = normalized.split(" ");
+      for (const word of words) {
+        if (EXPLICIT_BLOCK_WORDS.has(word)) {
+          return true;
+        }
+      }
+
+      if (normalized.includes("jerk off")) return true;
+
+      return false;
+    }
+
     function updateRunAvailability() {
+      const promptBlocked = promptHasBlockedSexualTerms(promptInput ? promptInput.value : "");
+
+      if (promptBlocked) {
+        runBtn.disabled = true;
+        setStatus("Explicit sexual prompts are not allowed.", "text-rose-300");
+        return;
+      }
       if (!runBtn) return;
 
       if (!telegramId) {
@@ -282,6 +355,11 @@
         return;
       }
 
+      if (promptHasBlockedSexualTerms(prompt)) {
+        updateRunAvailability();
+        return;
+      }
+
       const aspectRatio = sizeSelect ? sizeSelect.value : "1:1";
 
       runBtn.disabled = true;
@@ -350,6 +428,17 @@
 
     document.addEventListener("DOMContentLoaded", () => {
       parseQueryParams();
+      if (promptInput) {
+        const refreshPromptState = () => {
+          updateRunAvailability();
+        };
+        promptInput.addEventListener("input", refreshPromptState);
+        promptInput.addEventListener("change", refreshPromptState);
+        promptInput.addEventListener("keyup", refreshPromptState);
+        promptInput.addEventListener("paste", () => {
+          requestAnimationFrame(refreshPromptState);
+        });
+      }
       runBtn.addEventListener("click", () => { handleRun(); });
     });
   </script>
