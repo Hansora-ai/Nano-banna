@@ -1,7 +1,6 @@
-// netlify/functions/run-grok-image-free-corrected.js
+// netlify/functions/run-grok-fixed.js
 // Submit a Grok image job for Telegram Mini App.
 // Uses free_model_users.nano_banana_used on the page side.
-// Sends documented Grok text-to-image or image-to-image payloads to KIE.
 
 const CREATE_URL = process.env.KIE_CREATE_URL || "https://api.kie.ai/api/v1/jobs/createTask";
 const API_KEY = process.env.KIE_API_KEY || "";
@@ -136,7 +135,8 @@ exports.handler = async function(event) {
         }
       : {
           prompt,
-          aspect_ratio: (body.aspect_ratio || "3:2").toString()
+          aspect_ratio: (body.aspect_ratio || "3:2").toString(),
+          pro: true
         },
     webhook_url: callbackUrl,
     webhookUrl: callbackUrl,
