@@ -201,7 +201,7 @@
             </div>
             <div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 md:p-4">
               <h2 class="text-xs font-semibold text-amber-200 mb-1">Important</h2>
-              <p class="text-[11px] text-amber-100/90 leading-5">Seedance 2 API does not allow first/last frames and multimodal references in the same request. This page shows both sections, but it will block that invalid combination before submit.</p>
+              <p class="text-[11px] text-amber-100/90 leading-5">You can use first frame, last frame, and reference files together. Last Frame still requires First Frame.</p>
             </div>
           </div>
         </div>
@@ -352,10 +352,6 @@
       }
       const audiosOk = await validateReferenceAudios();
       if (!audiosOk){
-        runBtn.disabled = true;
-        return;
-      }
-      if (hasFrameMode() && hasReferenceMode()){
         runBtn.disabled = true;
         return;
       }
