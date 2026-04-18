@@ -201,7 +201,7 @@
             </div>
             <div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 md:p-4">
               <h2 class="text-xs font-semibold text-amber-200 mb-1">Important</h2>
-              <p class="text-[11px] text-amber-100/90 leading-5">Seedance 2 API does not allow first/last frames and multimodal references in the same request. This page shows both sections, but it will block that invalid combination before submit.</p>
+              <p class="text-[11px] text-amber-100/90 leading-5">Seedance 2 blocks only the combination of first/last frames together with reference images. First/last frames can still be used with reference videos and/or reference audios.</p>
             </div>
           </div>
         </div>
@@ -355,7 +355,7 @@
         runBtn.disabled = true;
         return;
       }
-      if (hasFrameMode() && hasReferenceMode()){
+      if (hasFrameMode() && referenceImageFiles.length > 0){
         runBtn.disabled = true;
         return;
       }
@@ -676,7 +676,7 @@
       if (lastFrameFile && lastFrameFile.size > MAX_IMAGE_MB * 1024 * 1024) return { ok:false, error:'Last Frame exceeds 10MB.' };
       if (lastFrameFile && !firstFrameFile) return { ok:false, error:'Last Frame requires First Frame.' };
       if (!imagesOk || !videosOk || !audiosOk) return { ok:false, error:'Please fix the reference file errors.' };
-      if (hasFrameMode() && hasReferenceMode()) return { ok:false, error:'Seedance 2 API does not allow first/last frames together with reference images/videos/audios in the same request.' };
+      if (hasFrameMode() && referenceImageFiles.length > 0) return { ok:false, error:'Seedance 2 does not allow first/last frames together with reference images in the same request.' };
       return { ok:true };
     }
 
