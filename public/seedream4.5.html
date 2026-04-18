@@ -604,9 +604,10 @@
         showError(referenceVideosError, 'You can upload up to 3 reference videos.');
         return false;
       }
-      const tooBig = referenceVideoFiles.some(file => file.size > MAX_VIDEO_MB * 1024 * 1024);
+      const videoMbLimit = Number(window.MAX_VIDEO_MB || MAX_VIDEO_MB || 50);
+      const tooBig = referenceVideoFiles.some(file => file.size > videoMbLimit * 1024 * 1024);
       if (tooBig) {
-        showError(referenceVideosError, 'One or more reference videos exceed 50MB.');
+        showError(referenceVideosError, 'One or more reference videos exceed ' + videoMbLimit + 'MB.');
         return false;
       }
       try {
