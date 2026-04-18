@@ -676,7 +676,6 @@
       if (lastFrameFile && lastFrameFile.size > MAX_IMAGE_MB * 1024 * 1024) return { ok:false, error:'Last Frame exceeds 10MB.' };
       if (lastFrameFile && !firstFrameFile) return { ok:false, error:'Last Frame requires First Frame.' };
       if (!imagesOk || !videosOk || !audiosOk) return { ok:false, error:'Please fix the reference file errors.' };
-      if (hasFrameMode() && hasReferenceMode()) return { ok:false, error:'Seedance 2 API does not allow first/last frames together with reference images/videos/audios in the same request.' };
       return { ok:true };
     }
 
