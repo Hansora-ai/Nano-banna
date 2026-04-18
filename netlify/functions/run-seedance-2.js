@@ -135,6 +135,12 @@ exports.handler = async function(event) {
   if (referenceVideoUrls.length > 3) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_reference_videos' });
   if (referenceAudioUrls.length > 3) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_reference_audios' });
 
+  const hasFrames = !!firstFrameUrl || !!lastFrameUrl;
+  const hasReferences = referenceImageUrls.length > 0 || referenceVideoUrls.length > 0 || referenceAudioUrls.length > 0;
+  if (hasFrames && hasReferences) {
+    return jsonResponse(400, { ok: false, submitted: false, error: 'frames_and_multimodal_references_are_mutually_exclusive' });
+  }
+
   if (seedanceModel === 'lite' && resolution !== '720p') {
     return jsonResponse(400, { ok: false, submitted: false, error: 'seedance_2_lite_supports_only_720p' });
   }
