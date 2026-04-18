@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • Seedream 4.5 (Text / Image → Image) • Telegram</title>
+  <title>HANSORA • Seedance 2 • Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -21,38 +21,34 @@
       --brand:#6366f1;
     }
     body{
-    .shadow-soft{box-shadow:0 10px 30px rgba(0,0,0,.35)}
-    .input-dark{background:rgba(255,255,255,.05)!important;color:#e5e7eb!important;border:1px solid rgba(255,255,255,.12)!important}
-    .input-dark::placeholder{color:#9ca3af}
-    select.input-dark option{background:#0b0d13;color:#e5e7eb}
       background:
         radial-gradient(1200px 600px at 20% 0%, rgba(99,102,241,.15), transparent 60%),
         radial-gradient(1200px 600px at 100% 100%, rgba(56,189,248,.12), transparent 60%),
         var(--base-bg);
       color:#e5e7eb;
     }
+    .shadow-soft{box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .input-dark{background:rgba(255,255,255,.05)!important;color:#e5e7eb!important;border:1px solid rgba(255,255,255,.12)!important}
+    .input-dark::placeholder{color:#9ca3af}
+    select.input-dark option{background:#0b0d13;color:#e5e7eb}
     .bg-base-bg{background:var(--base-bg)}
     .border-base-line{border-color:var(--base-line)}
-    .btn{
-      background:linear-gradient(135deg,#4f46e5,#6366f1);
-      color:white;
-    }
-    .btn:disabled{
-      opacity:.5;
-      cursor:not-allowed;
-    }
+    .btn{background:linear-gradient(135deg,#4f46e5,#6366f1);color:white}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .seg-btn{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#d4d4d8}
+    .seg-btn.active{background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;border-color:transparent;box-shadow:0 8px 24px rgba(79,70,229,.35)}
+    .thumb{position:relative}
+    .thumb img,.thumb video,.thumb audio{display:block}
   </style>
 </head>
 <body class="min-h-screen flex flex-col bg-base-bg">
   <header class="border-b border-base-line/60">
     <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
       <div class="flex items-center gap-2">
-        <div class="h-8 w-8 rounded-2xl bg-indigo-500 flex items-center justify-center text-sm font-bold shadow-lg shadow-indigo-500/40">
-          H
-        </div>
+        <div class="h-8 w-8 rounded-2xl bg-indigo-500 flex items-center justify-center text-sm font-bold shadow-lg shadow-indigo-500/40">H</div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Seedream 4.5 Image → Image</span>
+          <span class="text-xs text-zinc-400">Seedance 2 Text / Image / Reference → Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
@@ -66,73 +62,130 @@
 
   <main class="flex-1">
     <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <section class="rounded-2xl p-5 border border-white/10 shadow-soft bg-white/5 space-y-4">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <h1 class="text-lg md:text-xl font-semibold text-white">
-              Seedream 4.5 (Text / Image → Image)
-            </h1>
-            <p class="text-xs md:text-sm text-zinc-400 mt-1">
-              Use Seedream 4.5 with text-only (prompt) or text + images to create high-quality styled images.
-            </p>
+      <section class="rounded-2xl p-5 border border-white/10 shadow-soft bg-white/5 space-y-5">
+        <div>
+          <h1 class="text-lg md:text-xl font-semibold text-white">Seedance 2</h1>
+          <p class="text-xs md:text-sm text-zinc-400 mt-1">Create Seedance 2 videos with first/last frame mode or multimodal references.</p>
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-medium text-zinc-300">Model</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="modelSeedanceBtn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold">Seedance 2</button>
+            <button id="modelLiteBtn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold active">Seedance 2 Lite</button>
           </div>
+          <p class="text-[11px] text-zinc-500">Default is Seedance 2 Lite.</p>
         </div>
 
         <div class="grid md:grid-cols-[1.1fr,0.9fr] gap-4 md:gap-6 items-start">
           <div class="space-y-4">
             <div class="space-y-2">
-              <label class="block text-xs font-medium text-zinc-300 mb-1">Images (optional, up to 6)</label>
-              <input
-                id="imageInput"
-                type="file"
-                accept="image/*"
-                multiple
-                class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400"
-              />
-              <div id="thumbs" class="mt-2 flex gap-2 flex-wrap"></div>
-              <p class="text-[11px] text-zinc-500">
-                Required. Upload 1–6 images (max 30MB each). All images will be edited in the same style.
-              </p>
-            </div>
-
-            <div class="space-y-2">
               <label class="block text-xs font-medium text-zinc-300 mb-1">Prompt (required)</label>
-              <textarea
-                id="promptInput"
-                rows="4"
-                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                placeholder="Describe the scene and motion. Example: cinematic shot of a city street at night, slow camera move, neon lights, dramatic mood..."></textarea>
-              <p class="text-[11px] text-zinc-500">
-                Required. Describe the style or changes you want Seedream 4.5 to apply (text-only also works).
-              </p>
-            </div>
-            <div class="space-y-2">
-              <label for="sizeSelect" class="block text-xs font-medium text-zinc-300 mb-1">Aspect ratio</label>
-              <select
-                id="sizeSelect"
-                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="1:1" selected>1:1</option>
-                <option value="4:3">4:3</option>
-                <option value="3:4">3:4</option>
-                <option value="16:9">16:9</option>
-                <option value="9:16">9:16</option>
-                <option value="2:3">2:3</option>
-                <option value="3:2">3:2</option>
-                <option value="21:9">21:9</option>
-              </select>
+              <textarea id="promptInput" rows="4" class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Describe the scene, motion, mood, and how to use the references..."></textarea>
+              <p class="text-[11px] text-zinc-500">Required for every generation.</p>
             </div>
 
             <div class="space-y-2">
-              <button
-                id="runBtn"
-                class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 1⚡)
-              </button>
-              <p id="statusText" class="text-[11px] text-zinc-500">
-                Ready.
-              </p>
+              <div class="flex flex-row gap-4">
+                <div class="flex-1 space-y-2">
+                  <label class="block text-xs font-medium text-zinc-300 mb-1">First Frame (optional)</label>
+                  <input id="firstFrameInput" type="file" accept="image/*" class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+                  <div id="firstFrameThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+                  <p id="firstFrameError" class="hidden text-[11px] text-rose-300 mt-1"></p>
+                </div>
+                <div class="flex-1 space-y-2">
+                  <label class="block text-xs font-medium text-zinc-300 mb-1">Last Frame (optional)</label>
+                  <input id="lastFrameInput" type="file" accept="image/*" class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+                  <div id="lastFrameThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+                  <p id="lastFrameError" class="hidden text-[11px] text-rose-300 mt-1"></p>
+                </div>
+              </div>
+              <p class="text-[11px] text-zinc-500">Max size 10MB per image. If you upload Last Frame, First Frame is required.</p>
             </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Reference Images (up to 9)</label>
+              <input id="referenceImagesInput" type="file" accept="image/*" multiple class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+              <div id="referenceImagesThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+              <p id="referenceImagesError" class="hidden text-[11px] text-rose-300 mt-1"></p>
+              <p class="text-[11px] text-zinc-500">Up to 9 images. Max 10MB each.</p>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Reference Videos (up to 3, combined max 15s)</label>
+              <input id="referenceVideosInput" type="file" accept="video/*" multiple class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+              <div id="referenceVideosThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+              <p id="referenceVideosError" class="hidden text-[11px] text-rose-300 mt-1"></p>
+              <p class="text-[11px] text-zinc-500">Up to 3 videos. Total reference video duration must not exceed 15 seconds.</p>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Reference Audio (up to 3, combined max 15s)</label>
+              <input id="referenceAudiosInput" type="file" accept="audio/*" multiple class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+              <div id="referenceAudiosThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+              <p id="referenceAudiosError" class="hidden text-[11px] text-rose-300 mt-1"></p>
+              <p class="text-[11px] text-zinc-500">Up to 3 audio files. Total reference audio duration must not exceed 15 seconds.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label for="ratioSelect" class="block text-xs font-medium text-zinc-300 mb-1">Aspect ratio</label>
+                <select id="ratioSelect" class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  <option value="16:9" selected>16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label for="durationSelect" class="block text-xs font-medium text-zinc-300 mb-1">Duration</label>
+                <select id="durationSelect" class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  <option value="4">4s</option>
+                  <option value="5" selected>5s</option>
+                  <option value="6">6s</option>
+                  <option value="7">7s</option>
+                  <option value="8">8s</option>
+                  <option value="9">9s</option>
+                  <option value="10">10s</option>
+                  <option value="11">11s</option>
+                  <option value="12">12s</option>
+                  <option value="13">13s</option>
+                  <option value="14">14s</option>
+                  <option value="15">15s</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label class="block text-xs font-medium text-zinc-300 mb-1">Sound</label>
+                <div class="flex items-center gap-2 px-3 py-2 rounded-xl input-dark opacity-70">
+                  <input id="soundToggle" type="checkbox" class="h-4 w-4 accent-indigo-500" checked disabled />
+                  <label for="soundToggle" class="text-xs text-zinc-200 select-none">Always on</label>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <label class="block text-xs font-medium text-zinc-300 mb-1">Web search</label>
+                <div class="flex items-center gap-2 px-3 py-2 rounded-xl input-dark">
+                  <input id="webSearchToggle" type="checkbox" class="h-4 w-4 accent-indigo-500" />
+                  <label for="webSearchToggle" class="text-xs text-zinc-200 select-none">Enable web search</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Resolution</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button id="res720Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold active">720p</button>
+                <button id="res1080Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold">1080p</button>
+              </div>
+              <p id="resolutionHelp" class="text-[11px] text-zinc-500">Seedance 2 Lite supports only 720p.</p>
+            </div>
+
+            <div class="space-y-2">
+              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 15⚡)</button>
+              <p id="statusText" class="text-[11px] text-zinc-500">Ready.</p>
+            </div>
+
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
@@ -147,11 +200,17 @@
             <div class="rounded-2xl border border-base-line bg-black/40 p-3 md:p-4">
               <h2 class="text-xs font-semibold text-zinc-200 mb-1">Instructions</h2>
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
-                <li>Type a prompt (required) describing the desired edit or style.</li>
-                <li>Optionally upload 1–6 images (up to 30MB each) for image-to-image editing.</li>
-                <li>Choose the aspect ratio (Auto, Square, Portrait, Landscape).</li>
-                <li>Click Run. If you have enough credits, the edited images will be sent to your bot's chat.</li>
+                <li>Choose Seedance 2 or Seedance 2 Lite.</li>
+                <li>Add a prompt.</li>
+                <li>Use either first/last frame mode or reference mode.</li>
+                <li>Reference mode supports up to 9 images, 3 videos, and 3 audios.</li>
+                <li>Reference video total and reference audio total must each stay within 15 seconds.</li>
+                <li>Click Run. The result will be sent to your bot chat if credits are enough.</li>
               </ol>
+            </div>
+            <div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 md:p-4">
+              <h2 class="text-xs font-semibold text-amber-200 mb-1">Important</h2>
+              <p class="text-[11px] text-amber-100/90 leading-5">Seedance 2 API does not allow first/last frames and multimodal references in the same request. This page shows both sections, but it will block that invalid combination before submit.</p>
             </div>
           </div>
         </div>
@@ -160,312 +219,706 @@
   </main>
 
   <script>
-    const COST_NB = 1.5;
+    const COST_RATE = {
+      lite: { '720p': 3 },
+      pro: { '720p': 3.5, '1080p': 8 }
+    };
+
+    const MAX_IMAGE_MB = 10;
+    const MAX_VIDEO_MB = 50;
+    const MAX_VIDEO_COUNT = 3;
+    const MAX_AUDIO_COUNT = 3;
+    const MAX_IMAGE_COUNT = 9;
+    const MAX_MEDIA_SECONDS = 15;
+
     let telegramId = "";
     let credits = 0;
     let mode = "";
     let leng = "";
 
-    const creditsDisplay = document.getElementById("creditsDisplay");
-    const statusText = document.getElementById("statusText");
-    const successBox = document.getElementById("successBox");
-    const successText = document.getElementById("successText");
-    const runBtn = document.getElementById("runBtn");
-    const imageInput = document.getElementById("imageInput");
-    const promptInput = document.getElementById("promptInput");
-    const thumbsEl = document.getElementById("thumbs");
+    let selectedModel = 'pro';
+    let selectedResolution = '720p';
 
-    let selectedFiles = [];
+    let firstFrameFile = null;
+    let lastFrameFile = null;
+    let referenceImageFiles = [];
+    let referenceVideoFiles = [];
+    let referenceAudioFiles = [];
 
-function syncInputFiles() {
-  if (!imageInput) return;
-  if (!selectedFiles || selectedFiles.length === 0) {
-    imageInput.value = "";
-    return;
-  }
-  try {
-    const dt = new DataTransfer();
-    for (const f of selectedFiles) {
-      dt.items.add(f);
-    }
-    imageInput.files = dt.files;
-  } catch (e) {
-    // Fallback: if DataTransfer unsupported, just clear when empty (handled above)
-  }
-}
-let previewUrls = [];
+    let lastFirstObjUrl = null;
+    let lastLastObjUrl = null;
+    let refImageUrls = [];
+    let refVideoUrls = [];
+    let refAudioUrls = [];
 
-function revokePreviewUrls(){
-  try {
-    for (const u of previewUrls){
-      URL.revokeObjectURL(u);
-    }
-  } catch {}
-  previewUrls = [];
-}
+    const creditsDisplay = document.getElementById('creditsDisplay');
+    const statusText = document.getElementById('statusText');
+    const successBox = document.getElementById('successBox');
+    const successText = document.getElementById('successText');
+    const runBtn = document.getElementById('runBtn');
+    const promptInput = document.getElementById('promptInput');
+    const ratioSelect = document.getElementById('ratioSelect');
+    const durationSelect = document.getElementById('durationSelect');
+    const soundToggle = document.getElementById('soundToggle');
+    const webSearchToggle = document.getElementById('webSearchToggle');
 
-function clearImageSelection(){
-  revokePreviewUrls();
-  selectedFiles = [];
-  if (imageInput) imageInput.value = "";
-  if (thumbsEl) thumbsEl.innerHTML = "";
-}
+    const modelSeedanceBtn = document.getElementById('modelSeedanceBtn');
+    const modelLiteBtn = document.getElementById('modelLiteBtn');
+    const res720Btn = document.getElementById('res720Btn');
+    const res1080Btn = document.getElementById('res1080Btn');
+    const resolutionHelp = document.getElementById('resolutionHelp');
 
-function renderImageThumbs(){
-  if (!thumbsEl) return;
-  thumbsEl.innerHTML = "";
-  revokePreviewUrls();
-  selectedFiles.forEach((file, index) => {
-    const url = URL.createObjectURL(file);
-    previewUrls.push(url);
-    const img = new Image();
-    img.src = url;
-    img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-    const wrap = document.createElement("div");
-    wrap.className = "relative inline-block";
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 text-xs text-white hover:bg-black/90 flex items-center justify-center";
-    del.innerHTML = "\u00d7";
-    del.onclick = () => {
-      selectedFiles.splice(index, 1);
-      renderImageThumbs();
-      syncInputFiles();
-    };
-    wrap.appendChild(img);
-    wrap.appendChild(del);
-    thumbsEl.appendChild(wrap);
-  });
-}
+    const firstFrameInput = document.getElementById('firstFrameInput');
+    const lastFrameInput = document.getElementById('lastFrameInput');
+    const referenceImagesInput = document.getElementById('referenceImagesInput');
+    const referenceVideosInput = document.getElementById('referenceVideosInput');
+    const referenceAudiosInput = document.getElementById('referenceAudiosInput');
 
-if (imageInput && thumbsEl){
-  imageInput.addEventListener("change", () => {
-    selectedFiles = Array.from(imageInput.files || []);
-    renderImageThumbs();
-    syncInputFiles();
-  });
-}
+    const firstFrameThumbs = document.getElementById('firstFrameThumbs');
+    const lastFrameThumbs = document.getElementById('lastFrameThumbs');
+    const referenceImagesThumbs = document.getElementById('referenceImagesThumbs');
+    const referenceVideosThumbs = document.getElementById('referenceVideosThumbs');
+    const referenceAudiosThumbs = document.getElementById('referenceAudiosThumbs');
 
-const sizeSelect = document.getElementById("sizeSelect");
+    const firstFrameError = document.getElementById('firstFrameError');
+    const lastFrameError = document.getElementById('lastFrameError');
+    const referenceImagesError = document.getElementById('referenceImagesError');
+    const referenceVideosError = document.getElementById('referenceVideosError');
+    const referenceAudiosError = document.getElementById('referenceAudiosError');
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
-      statusText.className = "text-[11px] " + (tone || "text-zinc-500");
+      statusText.className = 'text-[11px] ' + (tone || 'text-zinc-500');
     }
 
-    function getCurrentCost(){
-      return COST_NB;
-    }
-
-    function updateRunButtonLabel(){
-      if (!runBtn) return;
-      runBtn.textContent = "Run (cost: " + COST_NB + "⚡)";
+    function formatCredits(x){
+      return (Math.round(Number(x) * 10) / 10).toFixed(1).replace(/\.0$/, '');
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
+      creditsDisplay.textContent = formatCredits(credits) + '⚡';
+    }
+
+    function updateSegmentButtons(){
+      modelSeedanceBtn.classList.toggle('active', selectedModel === 'pro');
+      modelLiteBtn.classList.toggle('active', selectedModel === 'lite');
+      res720Btn.classList.toggle('active', selectedResolution === '720p');
+      res1080Btn.classList.toggle('active', selectedResolution === '1080p');
+      const liteMode = selectedModel === 'lite';
+      res1080Btn.disabled = liteMode;
+      if (liteMode) {
+        res1080Btn.classList.add('opacity-50');
+        selectedResolution = '720p';
+        res720Btn.classList.add('active');
+        res1080Btn.classList.remove('active');
+        resolutionHelp.textContent = 'Seedance 2 Lite supports only 720p.';
+      } else {
+        res1080Btn.classList.remove('opacity-50');
+        resolutionHelp.textContent = 'Seedance 2 supports 720p and 1080p.';
+      }
+      updateRunButtonLabel();
+    }
+
+    function getCost(){
+      const duration = Number(durationSelect.value || 5);
+      const rate = COST_RATE[selectedModel][selectedResolution];
+      return duration * rate;
+    }
+
+    function updateRunButtonLabel(){
+      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '⚡)';
+    }
+
+    async function updateRunAvailability(){
+      if (!runBtn || runBtn.dataset.busy === '1') return;
+      const prompt = (promptInput.value || '').trim();
+      if (!telegramId){
+        runBtn.disabled = true;
+        return;
+      }
+      if (!prompt){
+        runBtn.disabled = true;
+        return;
+      }
+      if (lastFrameFile && !firstFrameFile){
+        runBtn.disabled = true;
+        return;
+      }
+      if (firstFrameFile && firstFrameFile.size > MAX_IMAGE_MB * 1024 * 1024){
+        runBtn.disabled = true;
+        return;
+      }
+      if (lastFrameFile && lastFrameFile.size > MAX_IMAGE_MB * 1024 * 1024){
+        runBtn.disabled = true;
+        return;
+      }
+      if (!validateReferenceImages()){
+        runBtn.disabled = true;
+        return;
+      }
+      const videosOk = await validateReferenceVideos();
+      if (!videosOk){
+        runBtn.disabled = true;
+        return;
+      }
+      const audiosOk = await validateReferenceAudios();
+      if (!audiosOk){
+        runBtn.disabled = true;
+        return;
+      }
+      runBtn.disabled = false;
     }
 
     function parseQueryParams(){
       const url = new URL(window.location.href);
-      telegramId = url.searchParams.get("telegram_id") || "";
-
-      mode = url.searchParams.get("mode") || url.searchParams.get("modul") || "";
-      leng = url.searchParams.get("leng") || url.searchParams.get("lang") || "";
-
-      if (!telegramId){
-        setStatus("Missing telegram_id in URL. Please open this page from the bot.", "text-rose-300");
-        if (runBtn) runBtn.disabled = true;
+      telegramId = url.searchParams.get('telegram_id') || '';
+      mode = url.searchParams.get('mode') || url.searchParams.get('modul') || '';
+      leng = url.searchParams.get('leng') || url.searchParams.get('lang') || '';
+      if (!telegramId) {
+        setStatus('Missing telegram_id in URL. Please open this page from the bot.', 'text-rose-300');
+        runBtn.disabled = true;
         return;
       }
-
-      // Start with 0 credits until Supabase value is loaded
       credits = 0;
       repaintCredits();
       loadCreditsFromSupabase();
     }
 
     async function loadCreditsFromSupabase(){
-      if (!window.supabaseClient){
-        console.error("Supabase client not initialized");
-        return;
-      }
+      if (!window.supabaseClient) return;
       try {
         const { data, error } = await window.supabaseClient
-          .from("telegram_users")
-          .select("credits")
-          .eq("telegram_id", telegramId)
+          .from('telegram_users')
+          .select('credits')
+          .eq('telegram_id', telegramId)
           .maybeSingle();
-
         if (error) {
-          console.error("Error loading credits from Supabase", error);
+          console.error('Error loading credits from Supabase', error);
           return;
         }
-
-        if (data && typeof data.credits !== "undefined") {
+        if (data && typeof data.credits !== 'undefined') {
           const parsed = Number(data.credits);
           credits = Number.isFinite(parsed) ? parsed : 0;
           repaintCredits();
+          updateRunButtonLabel();
         }
       } catch (e) {
-        console.error("Unexpected error loading credits from Supabase", e);
+        console.error('Unexpected error loading credits from Supabase', e);
       }
     }
 
+    function showError(el, msg){
+      if (!msg) {
+        el.textContent = '';
+        el.classList.add('hidden');
+        return;
+      }
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function clearObjectUrl(url){
+      if (!url) return;
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    }
+
+    function clearObjectUrlArray(arr){
+      arr.forEach(clearObjectUrl);
+      arr.length = 0;
+    }
+
+    function renderSingleImagePreview(file, container, currentUrlRefName, onDelete){
+      container.innerHTML = '';
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      if (currentUrlRefName === 'first') {
+        clearObjectUrl(lastFirstObjUrl);
+        lastFirstObjUrl = url;
+      } else {
+        clearObjectUrl(lastLastObjUrl);
+        lastLastObjUrl = url;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'thumb inline-block';
+      const img = new Image();
+      img.src = url;
+      img.className = 'block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
+      del.innerHTML = '×';
+      del.onclick = onDelete;
+      wrap.appendChild(img);
+      wrap.appendChild(del);
+      container.appendChild(wrap);
+    }
+
+    function renderImageList(files, container){
+      container.innerHTML = '';
+      clearObjectUrlArray(refImageUrls);
+      files.forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        refImageUrls.push(url);
+        const wrap = document.createElement('div');
+        wrap.className = 'thumb inline-block';
+        const img = new Image();
+        img.src = url;
+        img.className = 'block w-24 h-24 object-cover rounded-lg border border-white/10 bg-black/20';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
+        del.innerHTML = '×';
+        del.onclick = () => {
+          referenceImageFiles.splice(idx, 1);
+          renderImageList(referenceImageFiles, referenceImagesThumbs);
+          validateReferenceImages();
+          updateRunAvailability();
+        };
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        container.appendChild(wrap);
+      });
+    }
+
+    function renderVideoList(files, container){
+      container.innerHTML = '';
+      clearObjectUrlArray(refVideoUrls);
+      files.forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        refVideoUrls.push(url);
+        const wrap = document.createElement('div');
+        wrap.className = 'thumb inline-block';
+        const vid = document.createElement('video');
+        vid.src = url;
+        vid.controls = true;
+        vid.className = 'block w-40 max-h-28 object-cover rounded-lg border border-white/10 bg-black/20';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
+        del.innerHTML = '×';
+        del.onclick = () => {
+          referenceVideoFiles.splice(idx, 1);
+          renderVideoList(referenceVideoFiles, referenceVideosThumbs);
+          validateReferenceVideos();
+          updateRunAvailability();
+        };
+        wrap.appendChild(vid);
+        wrap.appendChild(del);
+        container.appendChild(wrap);
+      });
+    }
+
+    function renderAudioList(files, container){
+      container.innerHTML = '';
+      clearObjectUrlArray(refAudioUrls);
+      files.forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        refAudioUrls.push(url);
+        const wrap = document.createElement('div');
+        wrap.className = 'thumb w-full';
+        const audio = document.createElement('audio');
+        audio.src = url;
+        audio.controls = true;
+        audio.className = 'block w-full rounded-lg';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
+        del.innerHTML = '×';
+        del.onclick = () => {
+          referenceAudioFiles.splice(idx, 1);
+          renderAudioList(referenceAudioFiles, referenceAudiosThumbs);
+          validateReferenceAudios();
+          updateRunAvailability();
+        };
+        wrap.appendChild(audio);
+        wrap.appendChild(del);
+        container.appendChild(wrap);
+      });
+    }
+
+    function clearFirstFrame(){
+      firstFrameFile = null;
+      if (firstFrameInput) firstFrameInput.value = '';
+      clearObjectUrl(lastFirstObjUrl);
+      lastFirstObjUrl = null;
+      firstFrameThumbs.innerHTML = '';
+      showError(firstFrameError, '');
+      updateRunAvailability();
+    }
+
+    function clearLastFrame(){
+      lastFrameFile = null;
+      if (lastFrameInput) lastFrameInput.value = '';
+      clearObjectUrl(lastLastObjUrl);
+      lastLastObjUrl = null;
+      lastFrameThumbs.innerHTML = '';
+      showError(lastFrameError, '');
+      updateRunAvailability();
+    }
+
+    function validateFrameFiles(){
+      showError(firstFrameError, firstFrameFile && firstFrameFile.size > MAX_IMAGE_MB * 1024 * 1024 ? 'First Frame exceeds 10MB.' : '');
+      showError(lastFrameError, lastFrameFile && lastFrameFile.size > MAX_IMAGE_MB * 1024 * 1024 ? 'Last Frame exceeds 10MB.' : '');
+    }
+
+    function validateReferenceImages(){
+      if (referenceImageFiles.length > MAX_IMAGE_COUNT) {
+        showError(referenceImagesError, 'You can upload up to 9 reference images.');
+        return false;
+      }
+      const tooBig = referenceImageFiles.some(file => file.size > MAX_IMAGE_MB * 1024 * 1024);
+      showError(referenceImagesError, tooBig ? 'One or more reference images exceed 10MB.' : '');
+      return !tooBig && referenceImageFiles.length <= MAX_IMAGE_COUNT;
+    }
+
+    function getMediaDuration(file, type){
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const el = document.createElement(type);
+        let settled = false;
+        const cleanup = () => {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+          el.removeAttribute('src');
+          el.load?.();
+        };
+        el.preload = 'metadata';
+        el.onloadedmetadata = () => {
+          if (settled) return;
+          settled = true;
+          const duration = Number(el.duration || 0);
+          cleanup();
+          resolve(duration);
+        };
+        el.onerror = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error('Failed to read media duration.'));
+        };
+        el.src = url;
+      });
+    }
+
+    async function validateReferenceVideos(){
+      if (referenceVideoFiles.length > MAX_VIDEO_COUNT) {
+        showError(referenceVideosError, 'You can upload up to 3 reference videos.');
+        return false;
+      }
+      const tooBig = referenceVideoFiles.some(file => file.size > MAX_VIDEO_MB * 1024 * 1024);
+      if (tooBig) {
+        showError(referenceVideosError, 'One or more reference videos exceed 50MB.');
+        return false;
+      }
+      try {
+        const durations = await Promise.all(referenceVideoFiles.map(file => getMediaDuration(file, 'video')));
+        const total = durations.reduce((sum, value) => sum + value, 0);
+        if (total > MAX_MEDIA_SECONDS + 0.05) {
+          showError(referenceVideosError, 'Combined reference video duration exceeds 15 seconds.');
+          return false;
+        }
+        showError(referenceVideosError, referenceVideoFiles.length ? 'Combined video duration: ' + total.toFixed(2).replace(/\.00$/, '') + 's / 15s' : '');
+        return true;
+      } catch (e) {
+        showError(referenceVideosError, 'Could not read one or more reference videos.');
+        return false;
+      }
+    }
+
+    async function validateReferenceAudios(){
+      if (referenceAudioFiles.length > MAX_AUDIO_COUNT) {
+        showError(referenceAudiosError, 'You can upload up to 3 reference audio files.');
+        return false;
+      }
+      try {
+        const durations = await Promise.all(referenceAudioFiles.map(file => getMediaDuration(file, 'audio')));
+        const total = durations.reduce((sum, value) => sum + value, 0);
+        if (total > MAX_MEDIA_SECONDS + 0.05) {
+          showError(referenceAudiosError, 'Combined reference audio duration exceeds 15 seconds.');
+          return false;
+        }
+        showError(referenceAudiosError, referenceAudioFiles.length ? 'Combined audio duration: ' + total.toFixed(2).replace(/\.00$/, '') + 's / 15s' : '');
+        return true;
+      } catch (e) {
+        showError(referenceAudiosError, 'Could not read one or more reference audio files.');
+        return false;
+      }
+    }
+
+    function hasReferenceMode(){
+      return referenceImageFiles.length > 0 || referenceVideoFiles.length > 0 || referenceAudioFiles.length > 0;
+    }
+
+    function hasFrameMode(){
+      return !!firstFrameFile || !!lastFrameFile;
+    }
+
+    async function validateInputs(){
+      const prompt = (promptInput.value || '').trim();
+      validateFrameFiles();
+      const imagesOk = validateReferenceImages();
+      const videosOk = await validateReferenceVideos();
+      const audiosOk = await validateReferenceAudios();
+
+      if (!prompt) return { ok:false, error:'Please enter a prompt.' };
+      if (firstFrameFile && firstFrameFile.size > MAX_IMAGE_MB * 1024 * 1024) return { ok:false, error:'First Frame exceeds 10MB.' };
+      if (lastFrameFile && lastFrameFile.size > MAX_IMAGE_MB * 1024 * 1024) return { ok:false, error:'Last Frame exceeds 10MB.' };
+      if (lastFrameFile && !firstFrameFile) return { ok:false, error:'Last Frame requires First Frame.' };
+      if (!imagesOk || !videosOk || !audiosOk) return { ok:false, error:'Please fix the reference file errors.' };
+      if (hasFrameMode() && hasReferenceMode()) return { ok:false, error:'Seedance 2 API does not allow first/last frames together with reference images/videos/audios in the same request.' };
+      return { ok:true };
+    }
+
     async function signUpload(filename, mime){
-      const resp = await fetch("/.netlify/functions/sign-upload", {
-        method: "POST",
+      const resp = await fetch('/.netlify/functions/sign-upload', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-USER-ID": telegramId || "tg-anon"
+          'Content-Type': 'application/json',
+          'X-USER-ID': telegramId || 'tg-anon'
         },
         body: JSON.stringify({ filename, mime })
       });
       const data = await resp.json().catch(() => null);
       if (!resp.ok || !data || !data.uploadUrl || !data.publicUrl){
-        throw new Error((data && data.error) || "sign-upload failed");
+        throw new Error((data && data.error) || 'sign-upload failed');
       }
       return data;
     }
 
-    async function handleRun(){
-      if (successBox) successBox.classList.add("hidden");
+    function safeExtFromMime(mime, fallback){
+      const t = String(mime || '').toLowerCase();
+      if (t.includes('png')) return '.png';
+      if (t.includes('jpeg') || t.includes('jpg')) return '.jpg';
+      if (t.includes('webp')) return '.webp';
+      if (t.includes('gif')) return '.gif';
+      if (t.includes('mp4')) return '.mp4';
+      if (t.includes('quicktime') || t.includes('mov')) return '.mov';
+      if (t.includes('webm')) return '.webm';
+      if (t.includes('mpeg')) return '.mp3';
+      if (t.includes('wav')) return '.wav';
+      if (t.includes('ogg')) return '.ogg';
+      return fallback || '';
+    }
 
-      if (runBtn.disabled) return;
-
-      if (!telegramId){
-        setStatus("Missing telegram_id, cannot continue.", "text-rose-300");
-        return;
+    async function uploadFile(file, prefix){
+      const type = (file.type || 'application/octet-stream').toLowerCase();
+      const origName = file.name || 'file';
+      const base = origName.replace(/\.[^./\\]+$/, '');
+      const ext = safeExtFromMime(type, '');
+      const filename = Date.now() + '-' + prefix + '-' + base + (ext || '');
+      const signJson = await signUpload(filename, type);
+      const putResp = await fetch(signJson.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': type },
+        body: file
+      });
+      if (!putResp.ok){
+        throw new Error('Upload failed');
       }
+      try { await fetch(signJson.publicUrl, { method: 'HEAD', cache: 'no-store' }); } catch (_) {}
+      return signJson.publicUrl;
+    }
 
-      const files = Array.isArray(selectedFiles)
-        ? selectedFiles.slice()
-        : Array.from(imageInput.files || []);
-      const hasFile = files.length > 0;
-      if (files.length > 6){
-        setStatus("You can upload up to 6 images.", "text-rose-300");
-        return;
-      }
-
-      const prompt = (promptInput.value || "").trim();
-      if (!prompt){
-        setStatus("Please enter a prompt (required for Seedream 4.5).", "text-rose-300");
-        return;
-      }
-      const sizeValue = sizeSelect ? sizeSelect.value : "1:1";
-
-      for (const file of files){
-        if (file.size > 30 * 1024 * 1024){
-          setStatus("Each image must be at most 30MB.", "text-rose-300");
-          return;
+    async function persistCredits(newCredits){
+      try {
+        if (window.supabaseClient) {
+          const { error } = await window.supabaseClient
+            .from('telegram_users')
+            .update({ credits: newCredits })
+            .eq('telegram_id', telegramId);
+          if (error) console.error('Error updating credits in Supabase', error);
         }
+      } catch (e) {
+        console.error('Unexpected error updating credits in Supabase', e);
+      }
+    }
+
+    async function uploadMany(files, prefix){
+      const urls = [];
+      for (let i = 0; i < files.length; i++) {
+        urls.push(await uploadFile(files[i], prefix + '-' + (i + 1)));
+      }
+      return urls;
+    }
+
+    async function handleRun(){
+      if (successBox) successBox.classList.add('hidden');
+      if (runBtn.disabled) return;
+      if (!telegramId) {
+        setStatus('Missing telegram_id, cannot continue.', 'text-rose-300');
+        return;
       }
 
-      const cost = getCurrentCost();
-      if (credits < cost){
-        setStatus("Not enough credits (need " + cost + ").", "text-rose-300");
+      const validation = await validateInputs();
+      if (!validation.ok) {
+        setStatus(validation.error, 'text-rose-300');
+        return;
+      }
+
+      const cost = getCost();
+      if (credits < cost) {
+        setStatus('Not enough credits (need ' + formatCredits(cost) + ').', 'text-rose-300');
         return;
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working…";
+      runBtn.dataset.busy = '1';
+      runBtn.textContent = 'Working…';
 
-      const imageUrls = [];
       try {
-        let index = 0;
-        for (const file of files){
-          index += 1;
-          setStatus("Uploading image " + index + " of " + files.length + "…", "text-zinc-400");
-          const origName = file.name || "image.jpg";
-          const type = (file.type || "image/jpeg").toLowerCase();
-          const safeExt = type.includes("png") ? ".png"
-            : (type.includes("jpeg") || type.includes("jpg")) ? ".jpg"
-            : (type.includes("webp") ? ".webp" : ".jpg");
-          const base = origName.replace(/\.[^./\\]+$/, "");
-          const filename = Date.now() + "-" + index + "-" + base + safeExt;
+        let firstFrameUrl = '';
+        let lastFrameUrl = '';
+        let referenceImageUrls = [];
+        let referenceVideoUrls = [];
+        let referenceAudioUrls = [];
 
-          const signJson = await signUpload(filename, type || "image/jpeg");
-
-          const putResp = await fetch(signJson.uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": type || "image/jpeg" },
-            body: file
-          });
-          if (!putResp.ok){
-            throw new Error("Upload failed");
-          }
-
-          try {
-            await fetch(signJson.publicUrl, { method: "HEAD", cache: "no-store" });
-          } catch {}
-
-          imageUrls.push(signJson.publicUrl);
+        if (firstFrameFile) {
+          setStatus('Uploading First Frame…', 'text-zinc-400');
+          firstFrameUrl = await uploadFile(firstFrameFile, 'first-frame');
+        }
+        if (lastFrameFile) {
+          setStatus('Uploading Last Frame…', 'text-zinc-400');
+          lastFrameUrl = await uploadFile(lastFrameFile, 'last-frame');
+        }
+        if (referenceImageFiles.length) {
+          setStatus('Uploading reference images…', 'text-zinc-400');
+          referenceImageUrls = await uploadMany(referenceImageFiles, 'ref-image');
+        }
+        if (referenceVideoFiles.length) {
+          setStatus('Uploading reference videos…', 'text-zinc-400');
+          referenceVideoUrls = await uploadMany(referenceVideoFiles, 'ref-video');
+        }
+        if (referenceAudioFiles.length) {
+          setStatus('Uploading reference audios…', 'text-zinc-400');
+          referenceAudioUrls = await uploadMany(referenceAudioFiles, 'ref-audio');
         }
 
-        setStatus("Submitting Seedream 4.5 job…", "text-zinc-400");
+        const payload = {
+          telegram_id: telegramId,
+          credits_before: credits,
+          cost,
+          prompt: (promptInput.value || '').trim(),
+          first_frame_url: firstFrameUrl,
+          last_frame_url: lastFrameUrl,
+          reference_image_urls: referenceImageUrls,
+          reference_video_urls: referenceVideoUrls,
+          reference_audio_urls: referenceAudioUrls,
+          generate_audio: !!soundToggle.checked,
+          web_search: !!webSearchToggle.checked,
+          resolution: selectedResolution,
+          aspect_ratio: ratioSelect.value,
+          duration: Number(durationSelect.value),
+          seedance_model: selectedModel,
+          mode,
+          leng
+        };
 
-        const resp = await fetch("/.netlify/functions/run-seedream-45-tg", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            telegram_id: telegramId,
-            credits_before: credits,
-            new_credits: credits - cost,
-            cost,
-            prompt,
-            urls: imageUrls,
-            size: sizeValue,
-            mode,
-            leng
-          })
+        setStatus('Submitting Seedance 2 task…', 'text-zinc-400');
+        const resp = await fetch('/.netlify/functions/run-seedance-2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
-
-        const j = await resp.json().catch(() => ({}));
-
-        if (!resp.ok || !j.submitted){
-          const err = j && (j.error || j.message);
-          throw new Error(err || "Error submitting job");
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || !data || !data.ok) {
+          throw new Error((data && (data.error || data.details)) || 'Request failed');
         }
 
-        // Only deduct credits after successful submission (and persist in Supabase)
-        const newCredits = credits - cost;
-        try {
-          if (window.supabaseClient) {
-            const { error: updateError } = await window.supabaseClient
-              .from("telegram_users")
-              .update({ credits: newCredits })
-              .eq("telegram_id", telegramId);
-            if (updateError) {
-              console.error("Error updating credits in Supabase", updateError);
-            }
-          } else {
-            console.error("Supabase client not available when updating credits");
-          }
-        } catch (e) {
-          console.error("Unexpected error updating credits in Supabase", e);
+        const newCredits = Number(data.new_credits);
+        if (Number.isFinite(newCredits)) {
+          credits = newCredits;
+          repaintCredits();
+          await persistCredits(newCredits);
         }
-        credits = newCredits;
-        repaintCredits();
 
-        setStatus("✅ Request submitted.", "text-emerald-300");
-        if (successBox && successText){
-          successBox.classList.remove("hidden");
-          successText.innerHTML = "✦ Submitted successfully. You will receive the Seedream 4.5 images in Telegram when they are ready.<br/>✦ Запрос успешно принят. Вы получите обработанные изображения Seedream 4.5 в Telegram, когда они будут готовы.";
-        }
-      } catch (err) {
-        console.error(err);
-        setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
+        successText.innerHTML = 'Your Seedance 2 task was submitted successfully. The video will be sent to your Telegram bot chat when it is ready.';
+        successBox.classList.remove('hidden');
+        setStatus('Task submitted successfully.', 'text-emerald-300');
+      } catch (e) {
+        console.error(e);
+        setStatus(e && e.message ? e.message : 'Something went wrong.', 'text-rose-300');
       } finally {
-        runBtn.disabled = false;
+        delete runBtn.dataset.busy;
         updateRunButtonLabel();
+        await updateRunAvailability();
       }
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-      parseQueryParams();
-      updateRunButtonLabel();
-      runBtn.addEventListener("click", () => { handleRun(); });
+    modelSeedanceBtn.addEventListener('click', () => {
+      selectedModel = 'pro';
+      updateSegmentButtons();
+      updateRunAvailability();
     });
+    modelLiteBtn.addEventListener('click', () => {
+      selectedModel = 'lite';
+      selectedResolution = '720p';
+      updateSegmentButtons();
+      updateRunAvailability();
+    });
+    res720Btn.addEventListener('click', () => {
+      selectedResolution = '720p';
+      updateSegmentButtons();
+      updateRunAvailability();
+    });
+    res1080Btn.addEventListener('click', () => {
+      if (selectedModel === 'lite') return;
+      selectedResolution = '1080p';
+      updateSegmentButtons();
+      updateRunAvailability();
+    });
+    durationSelect.addEventListener('change', async () => {
+      updateRunButtonLabel();
+      await updateRunAvailability();
+    });
+    runBtn.addEventListener('click', handleRun);
+
+    firstFrameInput.addEventListener('change', () => {
+      firstFrameFile = firstFrameInput.files && firstFrameInput.files[0] ? firstFrameInput.files[0] : null;
+      renderSingleImagePreview(firstFrameFile, firstFrameThumbs, 'first', clearFirstFrame);
+      validateFrameFiles();
+      updateRunAvailability();
+    });
+    lastFrameInput.addEventListener('change', () => {
+      lastFrameFile = lastFrameInput.files && lastFrameInput.files[0] ? lastFrameInput.files[0] : null;
+      renderSingleImagePreview(lastFrameFile, lastFrameThumbs, 'last', clearLastFrame);
+      validateFrameFiles();
+      updateRunAvailability();
+    });
+    referenceImagesInput.addEventListener('change', () => {
+      referenceImageFiles = Array.from(referenceImagesInput.files || []).slice(0, MAX_IMAGE_COUNT);
+      renderImageList(referenceImageFiles, referenceImagesThumbs);
+      validateReferenceImages();
+      if ((referenceImagesInput.files || []).length > MAX_IMAGE_COUNT) {
+        showError(referenceImagesError, 'You can upload up to 9 reference images.');
+      }
+      updateRunAvailability();
+    });
+    referenceVideosInput.addEventListener('change', async () => {
+      referenceVideoFiles = Array.from(referenceVideosInput.files || []).slice(0, MAX_VIDEO_COUNT);
+      renderVideoList(referenceVideoFiles, referenceVideosThumbs);
+      if ((referenceVideosInput.files || []).length > MAX_VIDEO_COUNT) {
+        showError(referenceVideosError, 'You can upload up to 3 reference videos.');
+        return;
+      }
+      await validateReferenceVideos();
+      await updateRunAvailability();
+    });
+    referenceAudiosInput.addEventListener('change', async () => {
+      referenceAudioFiles = Array.from(referenceAudiosInput.files || []).slice(0, MAX_AUDIO_COUNT);
+      renderAudioList(referenceAudioFiles, referenceAudiosThumbs);
+      if ((referenceAudiosInput.files || []).length > MAX_AUDIO_COUNT) {
+        showError(referenceAudiosError, 'You can upload up to 3 reference audio files.');
+        return;
+      }
+      await validateReferenceAudios();
+      await updateRunAvailability();
+    });
+
+    promptInput.addEventListener('input', updateRunAvailability);
+
+    parseQueryParams();
+    updateSegmentButtons();
+    updateRunButtonLabel();
+    updateRunAvailability();
   </script>
 </body>
 </html>
