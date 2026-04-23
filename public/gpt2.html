@@ -9,7 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const SUPABASE_URL = "https://qmaealblegvcwodlmeht.supabase.co";
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmVhc2UiLCJyZWYiOiJxbWFlYWxibGVndmN3b2RsbWVodCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzU4NjI5MzczLCJleHAiOjIwNzQyMDUzNzN9.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
     if (window.supabase && typeof window.supabase.createClient === "function") {
       window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
@@ -21,16 +21,16 @@
       --brand:#6366f1;
     }
     body{
+    .shadow-soft{box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .input-dark{background:rgba(255,255,255,.05)!important;color:#e5e7eb!important;border:1px solid rgba(255,255,255,.12)!important}
+    .input-dark::placeholder{color:#9ca3af}
+    select.input-dark option{background:#0b0d13;color:#e5e7eb}
       background:
         radial-gradient(1200px 600px at 20% 0%, rgba(99,102,241,.15), transparent 60%),
         radial-gradient(1200px 600px at 100% 100%, rgba(56,189,248,.12), transparent 60%),
         var(--base-bg);
       color:#e5e7eb;
     }
-    .shadow-soft{box-shadow:0 10px 30px rgba(0,0,0,.35)}
-    .input-dark{background:rgba(255,255,255,.05)!important;color:#e5e7eb!important;border:1px solid rgba(255,255,255,.12)!important}
-    .input-dark::placeholder{color:#9ca3af}
-    select.input-dark option{background:#0b0d13;color:#e5e7eb}
     .bg-base-bg{background:var(--base-bg)}
     .border-base-line{border-color:var(--base-line)}
     .btn{
@@ -52,7 +52,7 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">GPT Image 2 Text → Image / Image → Image</span>
+          <span class="text-xs text-zinc-400">GPT Image 2 Image → Image</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
@@ -91,7 +91,7 @@
               />
               <div id="thumbs" class="mt-2 flex gap-2 flex-wrap"></div>
               <p class="text-[11px] text-zinc-500">
-                Optional. Upload 1–6 images (max 30MB each) for image-to-image editing, or leave empty for text-to-image.
+                Required. Upload 1–6 images (max 30MB each). All images will be edited in the same style.
               </p>
             </div>
 
@@ -101,12 +101,11 @@
                 id="promptInput"
                 rows="4"
                 class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                placeholder="Describe the image you want. Example: cinematic shot of a city street at night, neon lights, dramatic mood..."></textarea>
+                placeholder="Describe the scene and motion. Example: cinematic shot of a city street at night, slow camera move, neon lights, dramatic mood..."></textarea>
               <p class="text-[11px] text-zinc-500">
-                Required. Describe the image or edit you want GPT Image 2 to create.
+                Required. Describe the style or changes you want GPT Image 2 to apply (text-only also works).
               </p>
             </div>
-
             <div class="space-y-2">
               <label for="sizeSelect" class="block text-xs font-medium text-zinc-300 mb-1">Aspect ratio</label>
               <select
@@ -123,6 +122,18 @@
             </div>
 
             <div class="space-y-2">
+              <label for="resolutionSelect" class="block text-xs font-medium text-zinc-300 mb-1">Quality</label>
+              <select
+                id="resolutionSelect"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="1K" selected>1K</option>
+                <option value="2K">2K</option>
+                <option value="4K">4K</option>
+              </select>
+            </div>
+
+            <div class="space-y-2">
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
@@ -132,7 +143,6 @@
                 Ready.
               </p>
             </div>
-
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
@@ -149,8 +159,8 @@
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
                 <li>Type a prompt (required) describing the desired image or edit.</li>
                 <li>Optionally upload 1–6 images (up to 30MB each) for image-to-image editing.</li>
-                <li>Choose the aspect ratio.</li>
-                <li>Click Run. If you have enough credits, the result will be sent to your bot's chat.</li>
+                <li>Choose the aspect ratio (Auto, Square, Portrait, Landscape).</li>
+                <li>Click Run. If you have enough credits, the edited images will be sent to your bot's chat.</li>
               </ol>
             </div>
           </div>
@@ -160,7 +170,7 @@
   </main>
 
   <script>
-    const COST_GPT_IMAGE_2 = 1;
+    const COST_NB = 1;
     let telegramId = "";
     let credits = 0;
     let mode = "";
@@ -174,69 +184,80 @@
     const imageInput = document.getElementById("imageInput");
     const promptInput = document.getElementById("promptInput");
     const thumbsEl = document.getElementById("thumbs");
-    const sizeSelect = document.getElementById("sizeSelect");
 
     let selectedFiles = [];
-    let previewUrls = [];
 
-    function syncInputFiles() {
-      if (!imageInput) return;
-      if (!selectedFiles || selectedFiles.length === 0) {
-        imageInput.value = "";
-        return;
-      }
-      try {
-        const dt = new DataTransfer();
-        for (const f of selectedFiles) {
-          dt.items.add(f);
-        }
-        imageInput.files = dt.files;
-      } catch (e) {}
+function syncInputFiles() {
+  if (!imageInput) return;
+  if (!selectedFiles || selectedFiles.length === 0) {
+    imageInput.value = "";
+    return;
+  }
+  try {
+    const dt = new DataTransfer();
+    for (const f of selectedFiles) {
+      dt.items.add(f);
     }
+    imageInput.files = dt.files;
+  } catch (e) {
+    // Fallback: if DataTransfer unsupported, just clear when empty (handled above)
+  }
+}
+let previewUrls = [];
 
-    function revokePreviewUrls(){
-      try {
-        for (const u of previewUrls){
-          URL.revokeObjectURL(u);
-        }
-      } catch {}
-      previewUrls = [];
+function revokePreviewUrls(){
+  try {
+    for (const u of previewUrls){
+      URL.revokeObjectURL(u);
     }
+  } catch {}
+  previewUrls = [];
+}
 
-    function renderImageThumbs(){
-      if (!thumbsEl) return;
-      thumbsEl.innerHTML = "";
-      revokePreviewUrls();
-      selectedFiles.forEach((file, index) => {
-        const url = URL.createObjectURL(file);
-        previewUrls.push(url);
-        const img = new Image();
-        img.src = url;
-        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-        const wrap = document.createElement("div");
-        wrap.className = "relative inline-block";
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 text-xs text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "\u00d7";
-        del.onclick = () => {
-          selectedFiles.splice(index, 1);
-          renderImageThumbs();
-          syncInputFiles();
-        };
-        wrap.appendChild(img);
-        wrap.appendChild(del);
-        thumbsEl.appendChild(wrap);
-      });
-    }
+function clearImageSelection(){
+  revokePreviewUrls();
+  selectedFiles = [];
+  if (imageInput) imageInput.value = "";
+  if (thumbsEl) thumbsEl.innerHTML = "";
+}
 
-    if (imageInput && thumbsEl){
-      imageInput.addEventListener("change", () => {
-        selectedFiles = Array.from(imageInput.files || []);
-        renderImageThumbs();
-        syncInputFiles();
-      });
-    }
+function renderImageThumbs(){
+  if (!thumbsEl) return;
+  thumbsEl.innerHTML = "";
+  revokePreviewUrls();
+  selectedFiles.forEach((file, index) => {
+    const url = URL.createObjectURL(file);
+    previewUrls.push(url);
+    const img = new Image();
+    img.src = url;
+    img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+    const wrap = document.createElement("div");
+    wrap.className = "relative inline-block";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 text-xs text-white hover:bg-black/90 flex items-center justify-center";
+    del.innerHTML = "\u00d7";
+    del.onclick = () => {
+      selectedFiles.splice(index, 1);
+      renderImageThumbs();
+      syncInputFiles();
+    };
+    wrap.appendChild(img);
+    wrap.appendChild(del);
+    thumbsEl.appendChild(wrap);
+  });
+}
+
+if (imageInput && thumbsEl){
+  imageInput.addEventListener("change", () => {
+    selectedFiles = Array.from(imageInput.files || []);
+    renderImageThumbs();
+    syncInputFiles();
+  });
+}
+
+const sizeSelect = document.getElementById("sizeSelect");
+const resolutionSelect = document.getElementById("resolutionSelect");
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
@@ -244,12 +265,12 @@
     }
 
     function getCurrentCost(){
-      return COST_GPT_IMAGE_2;
+      return COST_NB;
     }
 
     function updateRunButtonLabel(){
       if (!runBtn) return;
-      runBtn.textContent = "Run (cost: " + COST_GPT_IMAGE_2 + "⚡)";
+      runBtn.textContent = "Run (cost: " + COST_NB + "⚡)";
     }
 
     function repaintCredits(){
@@ -258,10 +279,10 @@
 
     function parseQueryParams(){
       const url = new URL(window.location.href);
-      telegramId = (url.searchParams.get("telegram_id") || "").trim();
+      telegramId = url.searchParams.get("telegram_id") || "";
 
-      mode = (url.searchParams.get("mode") || url.searchParams.get("modul") || "").trim();
-      leng = (url.searchParams.get("leng") || url.searchParams.get("lang") || "").trim();
+      mode = url.searchParams.get("mode") || url.searchParams.get("modul") || "";
+      leng = url.searchParams.get("leng") || url.searchParams.get("lang") || "";
 
       if (!telegramId){
         setStatus("Missing telegram_id in URL. Please open this page from the bot.", "text-rose-300");
@@ -269,6 +290,7 @@
         return;
       }
 
+      // Start with 0 credits until Supabase value is loaded
       credits = 0;
       repaintCredits();
       loadCreditsFromSupabase();
@@ -277,42 +299,17 @@
     async function loadCreditsFromSupabase(){
       if (!window.supabaseClient){
         console.error("Supabase client not initialized");
-        setStatus("Could not load credits.", "text-rose-300");
         return;
       }
-
       try {
-        let data = null;
-        let error = null;
-
-        const exactResp = await window.supabaseClient
+        const { data, error } = await window.supabaseClient
           .from("telegram_users")
-          .select("credits, telegram_id")
+          .select("credits")
           .eq("telegram_id", telegramId)
-          .limit(1)
           .maybeSingle();
-
-        data = exactResp.data;
-        error = exactResp.error;
-
-        if ((!data || typeof data.credits === "undefined") && /^\d+$/.test(telegramId)) {
-          const numericTelegramId = Number(telegramId);
-          const numericResp = await window.supabaseClient
-            .from("telegram_users")
-            .select("credits, telegram_id")
-            .eq("telegram_id", numericTelegramId)
-            .limit(1)
-            .maybeSingle();
-
-          if (numericResp && numericResp.data && typeof numericResp.data.credits !== "undefined") {
-            data = numericResp.data;
-            error = numericResp.error;
-          }
-        }
 
         if (error) {
           console.error("Error loading credits from Supabase", error);
-          setStatus("Could not load credits.", "text-rose-300");
           return;
         }
 
@@ -320,14 +317,9 @@
           const parsed = Number(data.credits);
           credits = Number.isFinite(parsed) ? parsed : 0;
           repaintCredits();
-          return;
         }
-
-        console.error("Credits row not found for telegram_id", telegramId);
-        setStatus("Could not load credits.", "text-rose-300");
       } catch (e) {
         console.error("Unexpected error loading credits from Supabase", e);
-        setStatus("Could not load credits.", "text-rose-300");
       }
     }
 
@@ -360,7 +352,7 @@
       const files = Array.isArray(selectedFiles)
         ? selectedFiles.slice()
         : Array.from(imageInput.files || []);
-
+      const hasFile = files.length > 0;
       if (files.length > 6){
         setStatus("You can upload up to 6 images.", "text-rose-300");
         return;
@@ -368,11 +360,11 @@
 
       const prompt = (promptInput.value || "").trim();
       if (!prompt){
-        setStatus("Please enter a prompt.", "text-rose-300");
+        setStatus("Please enter a prompt (required for GPT Image 2).", "text-rose-300");
         return;
       }
-
       const sizeValue = sizeSelect ? sizeSelect.value : "auto";
+      const resolutionValue = resolutionSelect ? resolutionSelect.value : "1K";
 
       for (const file of files){
         if (file.size > 30 * 1024 * 1024){
@@ -435,6 +427,7 @@
             prompt,
             urls: imageUrls,
             size: sizeValue,
+            resolution: resolutionValue,
             mode,
             leng
           })
@@ -447,6 +440,7 @@
           throw new Error(err || "Error submitting job");
         }
 
+        // Only deduct credits after successful submission (and persist in Supabase)
         const newCredits = credits - cost;
         try {
           if (window.supabaseClient) {
@@ -469,7 +463,7 @@
         setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "✦ Submitted successfully. You will receive the GPT Image 2 result in Telegram when it is ready.<br/>✦ Запрос успешно принят. Вы получите результат GPT Image 2 в Telegram, когда он будет готов.";
+          successText.innerHTML = "✦ Submitted successfully. You will receive the GPT Image 2 images in Telegram when they are ready.<br/>✦ Запрос успешно принят. Вы получите изображения GPT Image 2 в Telegram, когда они будут готовы.";
         }
       } catch (err) {
         console.error(err);
