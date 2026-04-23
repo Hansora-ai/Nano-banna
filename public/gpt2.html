@@ -258,10 +258,10 @@
 
     function parseQueryParams(){
       const url = new URL(window.location.href);
-      telegramId = url.searchParams.get("telegram_id") || "";
+      telegramId = (url.searchParams.get("telegram_id") || "").trim();
 
-      mode = url.searchParams.get("mode") || url.searchParams.get("modul") || "";
-      leng = url.searchParams.get("leng") || url.searchParams.get("lang") || "";
+      mode = (url.searchParams.get("mode") || url.searchParams.get("modul") || "").trim();
+      leng = (url.searchParams.get("leng") || url.searchParams.get("lang") || "").trim();
 
       if (!telegramId){
         setStatus("Missing telegram_id in URL. Please open this page from the bot.", "text-rose-300");
@@ -277,17 +277,42 @@
     async function loadCreditsFromSupabase(){
       if (!window.supabaseClient){
         console.error("Supabase client not initialized");
+        setStatus("Could not load credits.", "text-rose-300");
         return;
       }
+
       try {
-        const { data, error } = await window.supabaseClient
+        let data = null;
+        let error = null;
+
+        const exactResp = await window.supabaseClient
           .from("telegram_users")
-          .select("credits")
+          .select("credits, telegram_id")
           .eq("telegram_id", telegramId)
+          .limit(1)
           .maybeSingle();
+
+        data = exactResp.data;
+        error = exactResp.error;
+
+        if ((!data || typeof data.credits === "undefined") && /^\d+$/.test(telegramId)) {
+          const numericTelegramId = Number(telegramId);
+          const numericResp = await window.supabaseClient
+            .from("telegram_users")
+            .select("credits, telegram_id")
+            .eq("telegram_id", numericTelegramId)
+            .limit(1)
+            .maybeSingle();
+
+          if (numericResp && numericResp.data && typeof numericResp.data.credits !== "undefined") {
+            data = numericResp.data;
+            error = numericResp.error;
+          }
+        }
 
         if (error) {
           console.error("Error loading credits from Supabase", error);
+          setStatus("Could not load credits.", "text-rose-300");
           return;
         }
 
@@ -295,9 +320,14 @@
           const parsed = Number(data.credits);
           credits = Number.isFinite(parsed) ? parsed : 0;
           repaintCredits();
+          return;
         }
+
+        console.error("Credits row not found for telegram_id", telegramId);
+        setStatus("Could not load credits.", "text-rose-300");
       } catch (e) {
         console.error("Unexpected error loading credits from Supabase", e);
+        setStatus("Could not load credits.", "text-rose-300");
       }
     }
 
