@@ -52,6 +52,12 @@ function normalizeAspectRatio(v) {
   return "auto";
 }
 
+function normalizeResolution(v) {
+  const s = String(v || "1K").trim().toUpperCase();
+  if (s === "1K" || s === "2K" || s === "4K") return s;
+  return "1K";
+}
+
 // Insert a row into telegram_generations (non-blocking)
 async function writeTelegramGeneration({ telegramId, cost, prompt }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
@@ -118,10 +124,21 @@ exports.handler = async function(event){
   }
 
   const aspect_ratio = normalizeAspectRatio(body.size || body.aspect_ratio || body.image_size || body.imageSize || "auto");
+  const resolution = normalizeResolution(body.resolution || body.output_resolution || body.image_resolution || "1K");
+
+  if (resolution === "4K" && (aspect_ratio === "auto" || aspect_ratio === "1:1")) {
+    return jsonResponse(400, {
+      ok:false,
+      submitted:false,
+      error:"invalid_resolution_aspect_ratio",
+      message:"4K requires a non-square aspect ratio. Use 3:4, 9:16, 4:3, or 16:9."
+    });
+  }
 
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Number(body.new_credits || 0);
-  const cost = Number(body.cost || 1) || 1;
+  const requestedCost = Number(body.cost || 1) || 1;
+  const cost = resolution === "4K" ? 1.5 : requestedCost;
 
   const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
@@ -160,6 +177,7 @@ exports.handler = async function(event){
   const input = {
     prompt,
     aspect_ratio,
+    resolution,
     nsfw_checker: hasImages
   };
 
