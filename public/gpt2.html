@@ -122,6 +122,21 @@
             </div>
 
             <div class="space-y-2">
+              <label for="resolutionSelect" class="block text-xs font-medium text-zinc-300 mb-1">Resolution</label>
+              <select
+                id="resolutionSelect"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="1K" selected>1K (cost: 1⚡)</option>
+                <option value="2K">2K (cost: 1⚡)</option>
+                <option value="4K">4K (cost: 1.5⚡)</option>
+              </select>
+              <p class="text-[11px] text-zinc-500">
+                4K is not available with Auto or Square (1:1) aspect ratio.
+              </p>
+            </div>
+
+            <div class="space-y-2">
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
@@ -147,7 +162,7 @@
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
                 <li>Type a prompt (required) describing the desired image or edit.</li>
                 <li>Optionally upload 1–6 images (up to 30MB each) for image-to-image editing.</li>
-                <li>Choose the aspect ratio (Auto, Square, Portrait, Landscape).</li>
+                <li>Choose the aspect ratio and resolution (1K, 2K, or 4K).</li>
                 <li>Click Run. If you have enough credits, the edited images will be sent to your bot's chat.</li>
               </ol>
             </div>
@@ -172,6 +187,8 @@
     const imageInput = document.getElementById("imageInput");
     const promptInput = document.getElementById("promptInput");
     const thumbsEl = document.getElementById("thumbs");
+    const sizeSelect = document.getElementById("sizeSelect");
+    const resolutionSelect = document.getElementById("resolutionSelect");
 
     let selectedFiles = [];
 
@@ -244,20 +261,40 @@ if (imageInput && thumbsEl){
   });
 }
 
-const sizeSelect = document.getElementById("sizeSelect");
-
     function setStatus(msg, tone){
       statusText.textContent = msg;
       statusText.className = "text-[11px] " + (tone || "text-zinc-500");
     }
 
     function getCurrentCost(){
-      return COST_NB;
+      const resolutionValue = resolutionSelect ? String(resolutionSelect.value || "1K").toUpperCase() : "1K";
+      return resolutionValue === "4K" ? 1.5 : COST_NB;
+    }
+
+    function updateResolutionAspectRules(){
+      if (!resolutionSelect || !sizeSelect) return;
+
+      const resolutionValue = String(resolutionSelect.value || "1K").toUpperCase();
+      const autoOption = sizeSelect.querySelector('option[value="auto"]');
+      const squareOption = sizeSelect.querySelector('option[value="square"]');
+
+      if (resolutionValue === "4K") {
+        if (sizeSelect.value === "auto" || sizeSelect.value === "square") {
+          sizeSelect.value = "portrait_3_4";
+        }
+        if (autoOption) autoOption.disabled = true;
+        if (squareOption) squareOption.disabled = true;
+      } else {
+        if (autoOption) autoOption.disabled = false;
+        if (squareOption) squareOption.disabled = false;
+      }
     }
 
     function updateRunButtonLabel(){
       if (!runBtn) return;
-      runBtn.textContent = "Run (cost: " + COST_NB + "⚡)";
+      updateResolutionAspectRules();
+      const cost = getCurrentCost();
+      runBtn.textContent = "Run (cost: " + cost.toFixed(1).replace(/\.0$/, "") + "⚡)";
     }
 
     function repaintCredits(){
@@ -351,6 +388,11 @@ const sizeSelect = document.getElementById("sizeSelect");
         return;
       }
       const sizeValue = sizeSelect ? sizeSelect.value : "auto";
+      const resolutionValue = resolutionSelect ? String(resolutionSelect.value || "1K").toUpperCase() : "1K";
+      if (resolutionValue === "4K" && (sizeValue === "auto" || sizeValue === "square")){
+        setStatus("4K requires a non-square aspect ratio. Please choose 3:4, 9:16, 4:3, or 16:9.", "text-rose-300");
+        return;
+      }
 
       for (const file of files){
         if (file.size > 30 * 1024 * 1024){
@@ -413,6 +455,7 @@ const sizeSelect = document.getElementById("sizeSelect");
             prompt,
             urls: imageUrls,
             size: sizeValue,
+            resolution: resolutionValue,
             mode,
             leng
           })
@@ -462,6 +505,8 @@ const sizeSelect = document.getElementById("sizeSelect");
     document.addEventListener("DOMContentLoaded", () => {
       parseQueryParams();
       updateRunButtonLabel();
+      if (resolutionSelect) resolutionSelect.addEventListener("change", updateRunButtonLabel);
+      if (sizeSelect) sizeSelect.addEventListener("change", updateRunButtonLabel);
       runBtn.addEventListener("click", () => { handleRun(); });
     });
   </script>
