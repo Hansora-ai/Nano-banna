@@ -10,9 +10,11 @@ const TG_TABLE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generation
 
 const MAKE_HOOK = 'https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354';
 
+const DEMO_MODE = true;
+
 const RATE = {
   lite: { '720p': 3 },
-  pro: { '720p': 3.5, '1080p': 7 }
+  pro: { '720p': 3.5, '1080p': 8 }
 };
 
 function jsonResponse(statusCode, body) {
@@ -90,7 +92,7 @@ exports.handler = async function(event) {
     return jsonResponse(405, { ok: false, submitted: false, error: 'method_not_allowed' });
   }
 
-  if (!KIE_KEY) {
+  if (!DEMO_MODE && !KIE_KEY) {
     return jsonResponse(500, { ok: false, submitted: false, error: 'missing_kie_key' });
   }
 
@@ -156,6 +158,17 @@ exports.handler = async function(event) {
   const cost = Number.isFinite(costFromUI) && costFromUI > 0 ? costFromUI : expectedCost;
   const newCredits = Number.isFinite(creditsBefore) ? Math.max(0, creditsBefore - cost) : 0;
   const runId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+
+  if (DEMO_MODE) {
+    return jsonResponse(201, {
+      ok: true,
+      submitted: true,
+      demo: true,
+      run_id: runId,
+      taskId: 'demo-task-' + runId,
+      new_credits: Number.isFinite(creditsBefore) ? creditsBefore : 0
+    });
+  }
 
   const callbackUrl =
     MAKE_HOOK +
