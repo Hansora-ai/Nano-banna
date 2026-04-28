@@ -137,7 +137,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 2⚡)
+                Run (cost: 1.5⚡)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -170,7 +170,7 @@
   </main>
 
   <script>
-    const COST_NB = 2;
+    const COST_NB_BY_RESOLUTION = { "1K": 1.5, "2K": 1.5, "4K": 2 };
     let telegramId = "";
     let credits = 0;
     let mode = "";
@@ -258,6 +258,9 @@ if (imageInput && thumbsEl){
 
 const sizeSelect = document.getElementById("sizeSelect");
 const resolutionSelect = document.getElementById("resolutionSelect");
+if (resolutionSelect){
+  resolutionSelect.addEventListener("change", updateRunButtonLabel);
+}
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
@@ -265,12 +268,14 @@ const resolutionSelect = document.getElementById("resolutionSelect");
     }
 
     function getCurrentCost(){
-      return COST_NB;
+      const resolutionValue = resolutionSelect ? resolutionSelect.value : "1K";
+      return COST_NB_BY_RESOLUTION[resolutionValue] || 1.5;
     }
 
     function updateRunButtonLabel(){
       if (!runBtn) return;
-      runBtn.textContent = "Run (cost: " + COST_NB + "⚡)";
+      const cost = getCurrentCost();
+      runBtn.textContent = "Run (cost: " + cost + "⚡)";
     }
 
     function repaintCredits(){
