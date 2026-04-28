@@ -50,6 +50,10 @@ function normalizeResolution(v) {
   return "1K";
 }
 
+function getCostForResolution(resolution) {
+  return resolution === "4K" ? 2 : 1.5;
+}
+
 async function writeTelegramGeneration({ telegramId, cost, prompt }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
@@ -117,8 +121,9 @@ exports.handler = async function(event){
   const resolution = normalizeResolution(body.resolution);
 
   const creditsBefore = Number(body.credits_before || 0);
-  const newCredits = Number(body.new_credits || 0);
-  const cost = Number(body.cost || 2) || 2;
+  const cost = getCostForResolution(resolution);
+  const bodyNewCredits = Number(body.new_credits);
+  const newCredits = Number.isFinite(bodyNewCredits) ? bodyNewCredits : creditsBefore - cost;
 
   const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
