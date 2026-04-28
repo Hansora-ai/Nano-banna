@@ -136,7 +136,8 @@ exports.handler = async function(event){
 
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Number(body.new_credits || 0);
-  const cost = Number(body.cost || 2.5) || 2.5; // Telegram flow uses fixed cost 2.5
+  const resolutionCost = resolution === "4K" ? 2.5 : 2;
+  const cost = Number(body.cost || resolutionCost) || resolutionCost;
 
   // mode / leng similar to other tg functions
   const query = event.queryStringParameters || {};
