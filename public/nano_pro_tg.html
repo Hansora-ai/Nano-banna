@@ -137,7 +137,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 3⚡)
+                Run (cost: 2⚡)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -170,7 +170,11 @@
   </main>
 
   <script>
-    const COST_NB = 2.5;
+    const COST_NB_BY_RESOLUTION = {
+      "1K": 2,
+      "2K": 2,
+      "4K": 2.5
+    };
     let telegramId = "";
     let credits = 0;
     let mode = "";
@@ -264,17 +268,23 @@ const resolutionSelect = document.getElementById("resolutionSelect");
       statusText.className = "text-[11px] " + (tone || "text-zinc-500");
     }
 
+    function formatCreditAmount(value){
+      return Number(value).toFixed(1).replace(/\.0$/, "");
+    }
+
     function getCurrentCost(){
-      return COST_NB;
+      const resolutionValue = resolutionSelect ? resolutionSelect.value : "1K";
+      return COST_NB_BY_RESOLUTION[resolutionValue] || COST_NB_BY_RESOLUTION["1K"];
     }
 
     function updateRunButtonLabel(){
       if (!runBtn) return;
-      runBtn.textContent = "Run (cost: " + COST_NB + "⚡)";
+      const cost = getCurrentCost();
+      runBtn.textContent = "Run (cost: " + formatCreditAmount(cost) + "⚡)";
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
+      creditsDisplay.textContent = formatCreditAmount(credits) + "⚡";
     }
 
     function parseQueryParams(){
@@ -477,6 +487,9 @@ const resolutionSelect = document.getElementById("resolutionSelect");
     document.addEventListener("DOMContentLoaded", () => {
       parseQueryParams();
       updateRunButtonLabel();
+      if (resolutionSelect) {
+        resolutionSelect.addEventListener("change", updateRunButtonLabel);
+      }
       runBtn.addEventListener("click", () => { handleRun(); });
     });
   </script>
