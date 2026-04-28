@@ -62,7 +62,7 @@
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
-          <span class="text-zinc-400">Free runs left:</span>
+          <span class="text-zinc-400">Credits:</span>
           <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0</span>
         </div>
       </div>
@@ -131,7 +131,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run
+                Run (cost: 0.5⚡)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -154,7 +154,7 @@
                 <li>Type a prompt to generate a new image, or upload 1–4 images if you want image editing.</li>
                 <li>The aspect ratio chooser is shown only for text-to-image.</li>
                 <li>Click Run.</li>
-                <li>If your free account is active and you have runs left, the result will be sent to your bot's chat.</li>
+                <li>If you have enough credits, the result will be sent to your bot's chat.</li>
               </ol>
             </div>
           </div>
@@ -164,12 +164,11 @@
   </main>
 
   <script>
-    const COST_GROK = 1;
+    const COST_GROK = 0.5;
     let telegramId = "";
-    let remainingRuns = 0;
+    let credits = 0;
     let mode = "";
     let leng = "";
-    let subscriptionActive = false;
 
     const creditsDisplay = document.getElementById("creditsDisplay");
     const statusText = document.getElementById("statusText");
@@ -259,7 +258,12 @@
     }
 
     function repaintCredits() {
-      creditsDisplay.textContent = String(remainingRuns);
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
+    }
+
+    function updateRunButtonLabel() {
+      if (!runBtn) return;
+      runBtn.textContent = "Run (cost: " + COST_GROK + "⚡)";
     }
 
     function updateRunAvailability() {
@@ -270,15 +274,9 @@
         return;
       }
 
-      if (!subscriptionActive) {
+      if (credits < COST_GROK) {
         runBtn.disabled = true;
-        setStatus("You cannot generate", "text-rose-300");
-        return;
-      }
-
-      if (remainingRuns <= 0) {
-        runBtn.disabled = true;
-        setStatus("No free generations remaining.", "text-rose-300");
+        setStatus("Not enough credits (need " + COST_GROK + ").", "text-rose-300");
         return;
       }
 
@@ -298,14 +296,14 @@
         return;
       }
 
-      remainingRuns = 0;
+      credits = 0;
       repaintCredits();
       updateRunAvailability();
       updateAspectRatioVisibility();
-      loadFreeModelStatusFromSupabase();
+      loadCreditsFromSupabase();
     }
 
-    async function loadFreeModelStatusFromSupabase() {
+    async function loadCreditsFromSupabase() {
       if (!window.supabaseClient) {
         console.error("Supabase client not initialized");
         setStatus("Unable to connect right now.", "text-rose-300");
@@ -315,34 +313,29 @@
 
       try {
         const { data, error } = await window.supabaseClient
-          .from("free_model_users")
-          .select("subscription_status, nano_banana_used")
-          .eq("telegram_user_id", telegramId)
+          .from("telegram_users")
+          .select("credits")
+          .eq("telegram_id", telegramId)
           .maybeSingle();
 
         if (error) {
-          console.error("Error loading free model status from Supabase", error);
-          setStatus("Unable to load account status.", "text-rose-300");
+          console.error("Error loading credits from Supabase", error);
+          setStatus("Unable to load credits.", "text-rose-300");
           if (runBtn) runBtn.disabled = true;
           return;
         }
 
-        if (!data) {
-          subscriptionActive = false;
-          remainingRuns = 0;
-          repaintCredits();
-          updateRunAvailability();
-          return;
+        if (data && typeof data.credits !== "undefined") {
+          const parsed = Number(data.credits);
+          credits = Number.isFinite(parsed) ? parsed : 0;
+        } else {
+          credits = 0;
         }
-
-        subscriptionActive = String(data.subscription_status || "").toLowerCase() === "active";
-        const parsedRemaining = Number(data.nano_banana_used);
-        remainingRuns = Number.isFinite(parsedRemaining) ? Math.max(0, parsedRemaining) : 0;
         repaintCredits();
         updateRunAvailability();
       } catch (e) {
-        console.error("Unexpected error loading free model status from Supabase", e);
-        setStatus("Unable to load account status.", "text-rose-300");
+        console.error("Unexpected error loading credits from Supabase", e);
+        setStatus("Unable to load credits.", "text-rose-300");
         if (runBtn) runBtn.disabled = true;
       }
     }
@@ -372,14 +365,8 @@
         return;
       }
 
-      if (!subscriptionActive) {
-        setStatus("You cannot generate", "text-rose-300");
-        runBtn.disabled = true;
-        return;
-      }
-
-      if (remainingRuns < COST_GROK) {
-        setStatus("No free generations remaining.", "text-rose-300");
+      if (credits < COST_GROK) {
+        setStatus("Not enough credits (need " + COST_GROK + ").", "text-rose-300");
         runBtn.disabled = true;
         return;
       }
@@ -448,14 +435,14 @@
 
         setStatus(files.length > 0 ? "Submitting Grok edit job…" : "Submitting Grok generation job…", "text-zinc-400");
 
-        const newRemainingRuns = remainingRuns - COST_GROK;
+        const newCredits = credits - COST_GROK;
         const resp = await fetch("/.netlify/functions/run-grok", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             telegram_id: telegramId,
-            remaining_before: remainingRuns,
-            new_remaining: newRemainingRuns,
+            credits_before: credits,
+            new_credits: newCredits,
             cost: COST_GROK,
             prompt,
             urls: imageUrls,
@@ -475,21 +462,21 @@
         try {
           if (window.supabaseClient) {
             const { error: updateError } = await window.supabaseClient
-              .from("free_model_users")
-              .update({ nano_banana_used: newRemainingRuns })
-              .eq("telegram_user_id", telegramId);
+              .from("telegram_users")
+              .update({ credits: newCredits })
+              .eq("telegram_id", telegramId);
             if (updateError) {
               throw updateError;
             }
           } else {
-            throw new Error("Supabase client not available when updating free runs");
+            throw new Error("Supabase client not available when updating credits");
           }
         } catch (e) {
-          console.error("Unexpected error updating free runs in Supabase", e);
-          throw new Error("Job submitted but failed to update remaining runs.");
+          console.error("Unexpected error updating credits in Supabase", e);
+          throw new Error("Job submitted but failed to update credits.");
         }
 
-        remainingRuns = newRemainingRuns;
+        credits = newCredits;
         repaintCredits();
         updateRunAvailability();
 
@@ -504,13 +491,14 @@
         console.error(err);
         setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
       } finally {
-        runBtn.textContent = "Run";
+        updateRunButtonLabel();
         updateRunAvailability();
       }
     }
 
     document.addEventListener("DOMContentLoaded", () => {
       parseQueryParams();
+      updateRunButtonLabel();
       updateAspectRatioVisibility();
       runBtn.addEventListener("click", () => { handleRun(); });
     });
