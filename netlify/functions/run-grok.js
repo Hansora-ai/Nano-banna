@@ -1,6 +1,6 @@
 // netlify/functions/run-grok.js
 // Submit a Grok image job for Telegram Mini App.
-// Uses free_model_users.nano_banana_used on the page side.
+// Uses telegram_users.credits on the page side.
 // Sends documented Grok text-to-image or image-to-image payloads to KIE.
 
 const CREATE_URL = process.env.KIE_CREATE_URL || "https://api.kie.ai/api/v1/jobs/createTask";
@@ -91,9 +91,9 @@ exports.handler = async function(event) {
     return jsonResponse(400, { ok: false, submitted: false, error: "too_many_images" });
   }
 
-  const remainingBefore = Number(body.remaining_before || 0);
-  const newRemaining = Number(body.new_remaining || 0);
-  const cost = Number(body.cost || 1) || 1;
+  const creditsBefore = Number(body.credits_before || 0);
+  const newCredits = Number(body.new_credits || 0);
+  const cost = Number(body.cost || 0.5) || 0.5;
 
   const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
@@ -120,8 +120,8 @@ exports.handler = async function(event) {
     MAKE_HOOK +
     "?telegram_id=" + encodeURIComponent(telegramId) +
     "&run_id=" + encodeURIComponent(runId) +
-    "&new_remaining=" + encodeURIComponent(newRemaining) +
-    "&remaining_before=" + encodeURIComponent(remainingBefore) +
+    "&new_credits=" + encodeURIComponent(newCredits) +
+    "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng);
@@ -186,7 +186,7 @@ exports.handler = async function(event) {
       submitted: true,
       run_id: runId,
       taskId,
-      new_remaining: newRemaining,
+      new_credits: newCredits,
       mode_used: isImageEdit ? "image_to_image" : "text_to_image"
     });
   } catch (e) {
