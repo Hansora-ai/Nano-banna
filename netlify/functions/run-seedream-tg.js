@@ -14,6 +14,9 @@ const TG_TABLE_URL  = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generatio
 // SAME CALLBACK as Nano Banana Pro TG
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
 
+// n8n webhook that sends the temporary Telegram loading message.
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
+
 function jsonResponse(statusCode, body) {
   return {
     statusCode,
@@ -23,6 +26,54 @@ function jsonResponse(statusCode, body) {
     },
     body: JSON.stringify(body)
   };
+}
+
+function normalizeLeng(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "ru" ? "ru" : "en";
+}
+
+function getLoadingMessage(leng) {
+  return normalizeLeng(leng) === "ru"
+    ? "⏳ Ваша генерация принята.\n\nПожалуйста, подождите — это может занять 1–5 минут.\n\nПока ваш запрос обрабатывается, вы можете создавать другие материалы."
+    : "⏳ Your generation has been accepted.\n\nPlease wait — it may take 1–5 minutes.\n\nWhile this is being processed, you can generate other things as well.";
+}
+
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
+  if (!LOADING_HOOK) return null;
+
+  try {
+    const resp = await fetch(LOADING_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits,
+        message: getLoadingMessage(leng)
+      })
+    });
+
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error("loading message hook failed", resp.status, data);
+      return null;
+    }
+
+    return data.message_id || data.messageId || data.result?.message_id || null;
+  } catch (e) {
+    console.error("loading message hook error", e && e.message ? e.message : e);
+    return null;
+  }
 }
 
 exports.handler = async (event) => {
@@ -41,10 +92,10 @@ exports.handler = async (event) => {
     const telegramId     = body.telegram_id || "";
     const prompt         = body.prompt || "";
     const mode           = body.mode || "";
-    const leng           = body.leng || "";
+    let leng             = body.leng || "";
     const creditsBefore  = body.credits_before || 0;
     const newCredits     = body.new_credits || 0;
-    const cost           = 1,5; // fixed
+    const cost           = 1.5; // fixed
 
     // Images (0–6)
     const rawUrls = Array.isArray(body.urls) ? body.urls : [];
@@ -55,6 +106,18 @@ exports.handler = async (event) => {
 
     // Create run_id
     const runId = `sd45-${telegramId}-${Date.now()}`;
+
+    leng = normalizeLeng(leng);
+
+    const loadingMessageId = await sendLoadingMessage({
+      telegramId,
+      runId,
+      leng,
+      mode,
+      cost,
+      creditsBefore,
+      newCredits
+    });
 
     // Build KIE input object — EXACT from run-seedream-4-5.js
     const input = {
@@ -83,7 +146,7 @@ exports.handler = async (event) => {
       creditsBefore
     )}&cost=${encodeURIComponent(cost)}&mode=${encodeURIComponent(
       mode
-    )}&leng=${encodeURIComponent(leng)}`;
+    )}&leng=${encodeURIComponent(leng)}&loading_message_id=${encodeURIComponent(loadingMessageId || "")}`;
 
     // Build KIE payload (EXACT structure, but for Seedream)
     const payload = {
@@ -96,8 +159,8 @@ exports.handler = async (event) => {
       callBackUrl:  callbackUrl,
       notify_url:   callbackUrl,
 
-      meta:      { telegram_id: telegramId, run_id: runId },
-      metadata:  { telegram_id: telegramId, run_id: runId }
+      meta:      { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId },
+      metadata:  { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId }
     };
 
     // Create job in KIE
@@ -152,6 +215,7 @@ exports.handler = async (event) => {
       submitted: true,
       run_id: runId,
       taskId,
+      loading_message_id: loadingMessageId,
       new_credits: newCredits
     });
 
