@@ -9,12 +9,11 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TG_TABLE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generations` : '';
 
 const MAKE_HOOK = 'https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354';
-
-const DEMO_MODE = true;
+const LOADING_HOOK = 'https://n8n.srv1223021.hstgr.cloud/webhook/83b19830-f204-4e40-bef7-cfab15abf797';
 
 const RATE = {
   lite: { '720p': 3 },
-  pro: { '720p': 3.5, '1080p': 8 }
+  pro: { '720p': 3.5, '1080p': 7 }
 };
 
 function jsonResponse(statusCode, body) {
@@ -23,6 +22,55 @@ function jsonResponse(statusCode, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   };
+}
+
+
+function normalizeLeng(v) {
+  const s = String(v || '').trim().toLowerCase();
+  return s === 'ru' ? 'ru' : 'en';
+}
+
+function getLoadingMessage(leng) {
+  return normalizeLeng(leng) === 'ru'
+    ? '⏳ Ваша генерация принята.\n\nПожалуйста, подождите — это может занять 1–5 минут.\n\nПока ваш запрос обрабатывается, вы можете создавать другие материалы.'
+    : '⏳ Your generation has been accepted.\n\nPlease wait — it may take 1–5 minutes.\n\nWhile this is being processed, you can generate other things as well.';
+}
+
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
+  if (!LOADING_HOOK) return null;
+
+  try {
+    const resp = await fetch(LOADING_HOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits,
+        message: getLoadingMessage(leng)
+      })
+    });
+
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || '{}'); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error('loading message hook failed', resp.status, data);
+      return null;
+    }
+
+    return data.message_id || data.messageId || data.result?.message_id || null;
+  } catch (e) {
+    console.error('loading message hook error', e && e.message ? e.message : e);
+    return null;
+  }
 }
 
 function normalizeUrl(u) {
@@ -92,7 +140,7 @@ exports.handler = async function(event) {
     return jsonResponse(405, { ok: false, submitted: false, error: 'method_not_allowed' });
   }
 
-  if (!DEMO_MODE && !KIE_KEY) {
+  if (!KIE_KEY) {
     return jsonResponse(500, { ok: false, submitted: false, error: 'missing_kie_key' });
   }
 
@@ -130,6 +178,8 @@ exports.handler = async function(event) {
     try { leng = String(new URL(referer).searchParams.get('leng') || new URL(referer).searchParams.get('lang') || ''); } catch (_) {}
   }
 
+  leng = normalizeLeng(leng);
+
   if (!telegramId) return jsonResponse(400, { ok: false, submitted: false, error: 'missing_telegram_id' });
   if (!prompt) return jsonResponse(400, { ok: false, submitted: false, error: 'missing_prompt' });
   if (lastFrameUrl && !firstFrameUrl) return jsonResponse(400, { ok: false, submitted: false, error: 'last_frame_requires_first_frame' });
@@ -159,16 +209,15 @@ exports.handler = async function(event) {
   const newCredits = Number.isFinite(creditsBefore) ? Math.max(0, creditsBefore - cost) : 0;
   const runId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 
-  if (DEMO_MODE) {
-    return jsonResponse(201, {
-      ok: true,
-      submitted: true,
-      demo: true,
-      run_id: runId,
-      taskId: 'demo-task-' + runId,
-      new_credits: Number.isFinite(creditsBefore) ? creditsBefore : 0
-    });
-  }
+  const loadingMessageId = await sendLoadingMessage({
+    telegramId,
+    runId,
+    leng,
+    mode,
+    cost,
+    creditsBefore,
+    newCredits
+  });
 
   const callbackUrl =
     MAKE_HOOK +
@@ -178,7 +227,8 @@ exports.handler = async function(event) {
     '&credits_before=' + encodeURIComponent(creditsBefore) +
     '&cost=' + encodeURIComponent(cost) +
     '&mode=' + encodeURIComponent(mode) +
-    '&leng=' + encodeURIComponent(leng);
+    '&leng=' + encodeURIComponent(leng) +
+    '&loading_message_id=' + encodeURIComponent(loadingMessageId || '');
 
   const input = {
     prompt,
@@ -199,7 +249,9 @@ exports.handler = async function(event) {
   const payload = {
     model: seedanceModel === 'pro' ? 'bytedance/seedance-2' : 'bytedance/seedance-2-fast',
     callBackUrl: callbackUrl,
-    input
+    input,
+    meta: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId },
+    metadata: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId }
   };
 
   try {
@@ -242,6 +294,7 @@ exports.handler = async function(event) {
       submitted: true,
       run_id: runId,
       taskId,
+      loading_message_id: loadingMessageId,
       new_credits: newCredits
     });
   } catch (e) {
