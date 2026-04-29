@@ -14,7 +14,7 @@ const TG_TABLE_URL  = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generatio
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
 
 // n8n webhook that sends/animates the temporary Telegram loading message.
-const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/8289bae5-708f-41e2-8697-ba9eb4c4d9b9/webhook";
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
 
 function jsonResponse(statusCode, body){
   return {
