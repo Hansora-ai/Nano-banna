@@ -10,6 +10,10 @@ const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const TG_TABLE_URL  = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generations` : "";
 
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
+
+// n8n webhook that sends/animates the temporary Telegram loading message.
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
+
 const VERSION_TAG  = "midimage_tg_v1";
 
 function jsonResponse(statusCode, body){
@@ -18,6 +22,54 @@ function jsonResponse(statusCode, body){
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   };
+}
+
+function normalizeLeng(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "ru" ? "ru" : "en";
+}
+
+function getLoadingMessage(leng) {
+  return normalizeLeng(leng) === "ru"
+    ? "⏳ Ваша генерация принята.\n\nПожалуйста, подождите — это может занять 1–5 минут.\n\nПока ваш запрос обрабатывается, вы можете создавать другие материалы."
+    : "⏳ Your generation has been accepted.\n\nPlease wait — it may take 1–5 minutes.\n\nWhile this is being processed, you can generate other things as well.";
+}
+
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
+  if (!LOADING_HOOK) return null;
+
+  try {
+    const resp = await fetch(LOADING_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits,
+        message: getLoadingMessage(leng)
+      })
+    });
+
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error("loading message hook failed", resp.status, data);
+      return null;
+    }
+
+    return data.message_id || data.messageId || data.result?.message_id || null;
+  } catch (e) {
+    console.error("loading message hook error", e && e.message ? e.message : e);
+    return null;
+  }
 }
 
 function normalizeAspect(v) {
@@ -130,7 +182,19 @@ exports.handler = async (event) => {
     } catch (_) {}
   }
 
+  leng = normalizeLeng(leng);
+
   const run_id = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+  const loadingMessageId = await sendLoadingMessage({
+    telegramId,
+    runId: run_id,
+    leng,
+    mode,
+    cost,
+    creditsBefore,
+    newCredits
+  });
 
   const callbackUrl =
     MAKE_HOOK +
@@ -140,7 +204,8 @@ exports.handler = async (event) => {
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(mode) +
-    "&leng=" + encodeURIComponent(leng);
+    "&leng=" + encodeURIComponent(leng) +
+    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
 
   const taskType = image_url ? "mj_img2img" : "mj_txt2img";
 
@@ -156,7 +221,7 @@ exports.handler = async (event) => {
     waterMark: watermark,
     paramJson,
     callBackUrl: callbackUrl,
-    meta: { telegram_id: telegramId, run_id, provider: "MidJourney", version: VERSION_TAG }
+    meta: { telegram_id: telegramId, run_id, provider: "MidJourney", version: VERSION_TAG, loading_message_id: loadingMessageId }
   };
 
   // aliases for safety (same style as other KIE calls)
@@ -164,7 +229,7 @@ exports.handler = async (event) => {
   payload.webhook_url = callbackUrl;
   payload.webhookUrl  = callbackUrl;
   payload.notify_url  = callbackUrl;
-  payload.metadata    = { ...(payload.metadata||{}), telegram_id: telegramId, run_id, callbackUrl, version: VERSION_TAG };
+  payload.metadata    = { ...(payload.metadata||{}), telegram_id: telegramId, run_id, callbackUrl, version: VERSION_TAG, loading_message_id: loadingMessageId };
 
   try {
     const create = await fetch(KIE_URL, {
@@ -190,6 +255,7 @@ exports.handler = async (event) => {
       submitted: true,
       run_id,
       taskId,
+      loading_message_id: loadingMessageId,
       new_credits: newCredits,
       version: VERSION_TAG
     });
