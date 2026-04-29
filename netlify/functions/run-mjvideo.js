@@ -46,6 +46,56 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
 
 // Make.com scenario callback – provided by user
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/4f5c5e17-79f7-46d9-b9f7-b884fb09e030";
+
+function normalizeLeng(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "ru" ? "ru" : "en";
+}
+
+function getLoadingMessage(leng) {
+  return normalizeLeng(leng) === "ru"
+    ? "⏳ Ваша генерация принята.\n\nПожалуйста, подождите — это может занять 1–5 минут.\n\nПока ваш запрос обрабатывается, вы можете создавать другие материалы."
+    : "⏳ Your generation has been accepted.\n\nPlease wait — it may take 1–5 minutes.\n\nWhile this is being processed, you can generate other things as well.";
+}
+
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
+  if (!LOADING_HOOK) return null;
+
+  try {
+    const resp = await fetch(LOADING_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits,
+        message: getLoadingMessage(leng)
+      })
+    });
+
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error("loading message hook failed", resp.status, data);
+      return null;
+    }
+
+    return data.message_id || data.messageId || data.result?.message_id || null;
+  } catch (e) {
+    console.error("loading message hook error", e && e.message ? e.message : e);
+    return null;
+  }
+}
+
 
 /**
  * Basic JSON response helper
@@ -138,7 +188,19 @@ exports.handler = async function (event) {
     return jsonResponse(400, { error: "Missing imageUrl" });
   }
 
+  leng = normalizeLeng(leng);
+
   const runId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+  const loadingMessageId = await sendLoadingMessage({
+    telegramId,
+    runId,
+    leng,
+    mode,
+    cost,
+    creditsBefore,
+    newCredits
+  });
 
   const callbackUrl =
     MAKE_HOOK +
@@ -148,7 +210,8 @@ exports.handler = async function (event) {
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(mode) +
-    "&leng=" + encodeURIComponent(leng);
+    "&leng=" + encodeURIComponent(leng) +
+    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
 
   const kiePayload = {
     taskType: "mj_video",
@@ -161,7 +224,9 @@ exports.handler = async function (event) {
     stylization: 100,
     enableTranslation: false,
     videoBatchSize: 1,
-    callBackUrl: callbackUrl
+    callBackUrl: callbackUrl,
+    meta: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId },
+    metadata: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId }
   };
 
   try {
@@ -200,6 +265,7 @@ exports.handler = async function (event) {
       submitted: true,
       run_id: runId,
       taskId: taskId || null,
+      loading_message_id: loadingMessageId,
       new_credits: newCredits
     });
   } catch (err) {
