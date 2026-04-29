@@ -13,6 +13,9 @@ const TG_TABLE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generation
 // Make.com scenario callback – same as MJ video flow
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
 
+// n8n webhook that sends the temporary Telegram loading message.
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
+
 /**
  * Basic JSON response helper
  */
@@ -22,6 +25,48 @@ function jsonResponse(statusCode, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   };
+}
+
+
+function normalizeLeng(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "ru" ? "ru" : "en";
+}
+
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
+  if (!LOADING_HOOK) return null;
+
+  try {
+    const resp = await fetch(LOADING_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits
+      })
+    });
+
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error("loading message hook failed", resp.status, data);
+      return null;
+    }
+
+    return data.message_id || data.messageId || data.result?.message_id || null;
+  } catch (e) {
+    console.error("loading message hook error", e && e.message ? e.message : e);
+    return null;
+  }
 }
 
 /**
@@ -138,7 +183,19 @@ exports.handler = async function (event) {
     return jsonResponse(400, { error: "Missing prompt" });
   }
 
+  leng = normalizeLeng(leng);
+
   const runId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+  const loadingMessageId = await sendLoadingMessage({
+    telegramId,
+    runId,
+    leng,
+    mode,
+    cost,
+    creditsBefore,
+    newCredits
+  });
 
   const callbackUrl =
     MAKE_HOOK +
@@ -148,7 +205,8 @@ exports.handler = async function (event) {
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(mode) +
-    "&leng=" + encodeURIComponent(leng);
+    "&leng=" + encodeURIComponent(leng) +
+    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
 
   // Mirror the working run-runway.js KIE payload style as closely as possible,
   // so KIE sees exactly the same structure it already works with.
@@ -159,7 +217,8 @@ exports.handler = async function (event) {
     ...body,
     prompt,
     aspectRatio,
-    callBackUrl: callbackUrl
+    callBackUrl: callbackUrl,
+    loading_message_id: loadingMessageId
   };
 
   // Ensure defaults like in run-runway.js
@@ -215,6 +274,7 @@ exports.handler = async function (event) {
       submitted: true,
       run_id: runId,
       taskId: taskId || null,
+      loading_message_id: loadingMessageId,
       new_credits: newCredits
     });
   } catch (err) {
