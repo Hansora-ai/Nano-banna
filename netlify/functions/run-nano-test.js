@@ -56,11 +56,25 @@ function getLoadingMessage(leng) {
 }
 
 // Trigger n8n to send/animate a temporary loading message in Telegram.
-// It returns Telegram message_id when your n8n workflow sends it back.
+// Debug version: returns both message_id and detailed hook diagnostics.
 async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
-  if (!LOADING_HOOK) return null;
+  const debug = {
+    loading_hook_called: false,
+    loading_hook_url: LOADING_HOOK || "",
+    loading_hook_status: null,
+    loading_hook_ok: null,
+    loading_hook_response: null,
+    loading_hook_error: null
+  };
+
+  if (!LOADING_HOOK) {
+    debug.loading_hook_error = "missing_loading_hook_url";
+    return { messageId: null, debug };
+  }
 
   try {
+    debug.loading_hook_called = true;
+
     const resp = await fetch(LOADING_HOOK, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -78,19 +92,26 @@ async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, credits
       })
     });
 
+    debug.loading_hook_status = resp.status;
+    debug.loading_hook_ok = resp.ok;
+
     const text = await resp.text();
+    debug.loading_hook_response = text;
+
     let data = {};
     try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
 
     if (!resp.ok) {
       console.error("loading message hook failed", resp.status, data);
-      return null;
+      return { messageId: null, debug };
     }
 
-    return data.message_id || data.messageId || data.result?.message_id || null;
+    const messageId = data.message_id || data.messageId || data.result?.message_id || null;
+    return { messageId, debug };
   } catch (e) {
-    console.error("loading message hook error", e && e.message ? e.message : e);
-    return null;
+    debug.loading_hook_error = e && e.message ? e.message : String(e);
+    console.error("loading message hook error", debug.loading_hook_error);
+    return { messageId: null, debug };
   }
 }
 
@@ -189,7 +210,7 @@ exports.handler = async function(event){
 
   const runId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
 
-  const loadingMessageId = await sendLoadingMessage({
+  const loadingResult = await sendLoadingMessage({
     telegramId,
     runId,
     leng,
@@ -198,6 +219,8 @@ exports.handler = async function(event){
     creditsBefore,
     newCredits
   });
+  const loadingMessageId = loadingResult.messageId;
+  const loadingDebug = loadingResult.debug;
 
   const callbackUrl =
     MAKE_HOOK +
@@ -266,6 +289,7 @@ exports.handler = async function(event){
       run_id: runId,
       taskId,
       loading_message_id: loadingMessageId,
+      loading_debug: loadingDebug,
       new_credits: newCredits
     });
   } catch (e) {
