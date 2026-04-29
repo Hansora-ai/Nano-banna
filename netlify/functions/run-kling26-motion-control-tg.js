@@ -13,12 +13,66 @@ const TG_TABLE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generation
 // Make.com scenario callback – same as other Telegram video flows
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
 
+// n8n webhook that sends the temporary Telegram loading/process message.
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/83b19830-f204-4e40-bef7-cfab15abf797";
+
 function jsonResponse(statusCode, body){
   return {
     statusCode,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   };
+}
+
+function normalizeLeng(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "ru" ? "ru" : "en";
+}
+
+function getLoadingMessage(leng) {
+  return normalizeLeng(leng) === "ru"
+    ? "⏳ Ваша генерация принята.\n\nПожалуйста, подождите — это может занять 1–5 минут.\n\nПока ваш запрос обрабатывается, вы можете создавать другие материалы."
+    : "⏳ Your generation has been accepted.\n\nPlease wait — it may take 1–5 minutes.\n\nWhile this is being processed, you can generate other things as well.";
+}
+
+// Trigger n8n to send a temporary loading/process message in Telegram.
+// It returns Telegram message_id when the n8n workflow sends it back.
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits, quality }) {
+  if (!LOADING_HOOK) return null;
+
+  try {
+    const resp = await fetch(LOADING_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits,
+        quality,
+        message: getLoadingMessage(leng)
+      })
+    });
+
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error("loading message hook failed", resp.status, data);
+      return null;
+    }
+
+    return data.message_id || data.messageId || data.result?.message_id || null;
+  } catch (e) {
+    console.error("loading message hook error", e && e.message ? e.message : e);
+    return null;
+  }
 }
 
 
@@ -173,6 +227,19 @@ exports.handler = async function(event){
 
   const runId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
 
+  leng = normalizeLeng(leng);
+
+  const loadingMessageId = await sendLoadingMessage({
+    telegramId,
+    runId,
+    leng,
+    mode,
+    cost,
+    creditsBefore,
+    newCredits,
+    quality: effectiveQuality
+  });
+
   const callbackUrl =
     MAKE_HOOK +
     "?telegram_id=" + encodeURIComponent(telegramId) +
@@ -182,6 +249,7 @@ exports.handler = async function(event){
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng) +
+    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "") +
     "&quality=" + encodeURIComponent(effectiveQuality);
 
   // KIE payload (matches the playground example shape in the screenshot)
@@ -232,6 +300,7 @@ exports.handler = async function(event){
       submitted:true,
       run_id: runId,
       taskId,
+      loading_message_id: loadingMessageId,
       new_credits: newCredits
     });
   } catch (e) {
