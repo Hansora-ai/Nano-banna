@@ -242,14 +242,14 @@ exports.handler = async function(event){
       prompt,
       mode: "normal",
       duration: String(duration),
-      resolution: "480p",
+      resolution: "720p",
       aspect_ratio: aspectRatio
     } : {
       prompt,
       aspect_ratio: aspectRatio,
       mode: "normal",
       duration: String(duration),
-      resolution: "480p"
+      resolution: "720p"
     },
     callBackUrl: callbackUrl,
     meta: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId },
