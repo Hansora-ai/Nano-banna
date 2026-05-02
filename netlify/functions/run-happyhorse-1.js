@@ -112,11 +112,10 @@ function extractTaskId(data) {
   return scan(data) || '';
 }
 
-function calcExpectedCost(duration, resolution, isVideoEdit) {
-  if (isVideoEdit) return RATE[resolution];
+function calcExpectedCost(durationSeconds, resolution) {
   const rate = RATE[resolution];
   if (!rate) return NaN;
-  return duration * rate;
+  return durationSeconds * rate;
 }
 
 async function writeTelegramGeneration({ telegramId, cost, prompt, modelLabel }) {
@@ -169,6 +168,8 @@ exports.handler = async function(event) {
   const resolution = body.resolution === '1080p' ? '1080p' : '720p';
   const aspectRatio = String(body.aspect_ratio || body.aspectRatio || '16:9').trim();
   const duration = clampInt(body.duration, 3, 15);
+  const videoDurationRaw = Number(body.video_duration || body.videoDuration || 0);
+  const videoDuration = Number.isFinite(videoDurationRaw) && videoDurationRaw > 0 ? videoDurationRaw : 0;
   const creditsBefore = Number(body.credits_before || 0);
   const costFromUI = Number(body.cost || 0);
 
@@ -190,16 +191,19 @@ exports.handler = async function(event) {
   if (imageUrls.length > MAX_REFERENCE_IMAGES) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_images' });
 
   const isVideoEdit = !!videoUrl;
+  const effectiveDurationForCost = isVideoEdit ? videoDuration : duration;
   let model = 'happyhorse/text-to-video';
   let modelLabel = 'HappyHorse 1.0 Text to Video';
   const input = { prompt, resolution };
 
   if (isVideoEdit) {
+    if (!(Number.isFinite(videoDuration) && videoDuration > 0)) {
+      return jsonResponse(400, { ok: false, submitted: false, error: 'missing_video_duration' });
+    }
     model = 'happyhorse/video-edit';
     modelLabel = 'HappyHorse 1.0 Video Edit';
     input.video_url = videoUrl;
     if (imageUrls.length) input.reference_image = imageUrls;
-    input.audio_setting = 'auto';
   } else if (imageUrls.length === 1) {
     model = 'happyhorse/image-to-video';
     modelLabel = 'HappyHorse 1.0 Image to Video';
@@ -216,7 +220,7 @@ exports.handler = async function(event) {
     input.duration = duration;
   }
 
-  const expectedCost = calcExpectedCost(duration, resolution, isVideoEdit);
+  const expectedCost = calcExpectedCost(effectiveDurationForCost, resolution);
   if (!Number.isFinite(expectedCost)) {
     return jsonResponse(400, { ok: false, submitted: false, error: 'invalid_cost_config' });
   }
