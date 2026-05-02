@@ -101,7 +101,7 @@
                   <option value="1:1">1:1</option>
                 </select>
               </div>
-              <div class="space-y-2">
+              <div id="durationWrap" class="space-y-2">
                 <label for="durationSelect" class="block text-xs font-medium text-zinc-300 mb-1">Duration</label>
                 <select id="durationSelect" class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
                   <option value="3" selected>3s</option>
@@ -181,6 +181,8 @@
     let selectedResolution = '720p';
     let imageFiles = [];
     let videoFile = null;
+    let videoDurationSeconds = 0;
+    let isVideoDurationLoading = false;
     let imageObjUrls = [];
     let videoObjUrl = null;
 
@@ -192,6 +194,7 @@
     const promptInput = document.getElementById('promptInput');
     const ratioSelect = document.getElementById('ratioSelect');
     const durationSelect = document.getElementById('durationSelect');
+    const durationWrap = document.getElementById('durationWrap');
     const res720Btn = document.getElementById('res720Btn');
     const res1080Btn = document.getElementById('res1080Btn');
     const imagesInput = document.getElementById('imagesInput');
@@ -234,10 +237,20 @@
       el.classList.remove('hidden');
     }
 
+    function getEffectiveDurationSeconds(){
+      if (videoFile && Number.isFinite(videoDurationSeconds) && videoDurationSeconds > 0) {
+        return videoDurationSeconds;
+      }
+      return Number(durationSelect.value || 3);
+    }
+
     function getCost(){
-      if (videoFile) return COST_RATE[selectedResolution];
-      const duration = Number(durationSelect.value || 3);
-      return duration * COST_RATE[selectedResolution];
+      return getEffectiveDurationSeconds() * COST_RATE[selectedResolution];
+    }
+
+    function updateDurationVisibility(){
+      if (!durationWrap) return;
+      durationWrap.classList.toggle('hidden', !!videoFile);
     }
 
     function updateRunButtonLabel(){
@@ -308,8 +321,44 @@
         showError(videoError, 'Video exceeds 100MB.');
         return false;
       }
+      if (isVideoDurationLoading) {
+        showError(videoError, 'Reading video duration...');
+        return false;
+      }
+      if (!(Number.isFinite(videoDurationSeconds) && videoDurationSeconds > 0)) {
+        showError(videoError, 'Could not read video duration.');
+        return false;
+      }
       showError(videoError, '');
       return true;
+    }
+
+    function getMediaDuration(file, type){
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const el = document.createElement(type);
+        let settled = false;
+        const cleanup = () => {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+          el.removeAttribute('src');
+          if (typeof el.load === 'function') el.load();
+        };
+        el.preload = 'metadata';
+        el.onloadedmetadata = () => {
+          if (settled) return;
+          settled = true;
+          const duration = Number(el.duration || 0);
+          cleanup();
+          resolve(duration);
+        };
+        el.onerror = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new Error('Failed to read media duration.'));
+        };
+        el.src = url;
+      });
     }
 
     async function updateRunAvailability(){
@@ -352,11 +401,14 @@
 
     function clearVideo(){
       videoFile = null;
+      videoDurationSeconds = 0;
+      isVideoDurationLoading = false;
       if (videoInput) videoInput.value = '';
       clearObjectUrl(videoObjUrl);
       videoObjUrl = null;
       videoThumbs.innerHTML = '';
       showError(videoError, '');
+      updateDurationVisibility();
       updateRunButtonLabel();
       updateRunAvailability();
     }
@@ -507,6 +559,7 @@
           resolution: selectedResolution,
           aspect_ratio: ratioSelect.value,
           duration: Number(durationSelect.value),
+          video_duration: videoFile ? videoDurationSeconds : 0,
           mode,
           leng
         };
@@ -570,15 +623,34 @@
       updateRunAvailability();
     });
 
-    videoInput.addEventListener('change', () => {
+    videoInput.addEventListener('change', async () => {
       videoFile = videoInput.files && videoInput.files[0] ? videoInput.files[0] : null;
+      videoDurationSeconds = 0;
+      isVideoDurationLoading = false;
       renderVideo(videoFile);
+      updateDurationVisibility();
+
+      if (videoFile) {
+        isVideoDurationLoading = true;
+        validateVideo();
+        updateRunButtonLabel();
+        await updateRunAvailability();
+        try {
+          videoDurationSeconds = await getMediaDuration(videoFile, 'video');
+        } catch (_) {
+          videoDurationSeconds = 0;
+        } finally {
+          isVideoDurationLoading = false;
+        }
+      }
+
       validateVideo();
       updateRunButtonLabel();
-      updateRunAvailability();
+      await updateRunAvailability();
     });
 
     parseQueryParams();
+    updateDurationVisibility();
     updateSegmentButtons();
     updateRunButtonLabel();
     updateRunAvailability();
