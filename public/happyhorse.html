@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HANSORA • HappyHorse 1.0 • Telegram</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = "https://qmaealblegvcwodlmeht.supabase.co";
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtYWVhbGJsZWd2Y3dvZGxtZWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2MjkzNzMsImV4cCI6MjA3NDIwNTM3M30.bUV6W0zBtkd_6gtfPGBSpskybUmpLC-1znljoDpYy4c';
+    if (window.supabase && typeof window.supabase.createClient === "function") {
+      window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  </script>
+  <style>
+    :root{
+      --base-bg:#0b0d13;
+      --base-line:#1a1f2b;
+      --brand:#6366f1;
+    }
+    body{
+      background:
+        radial-gradient(1200px 600px at 20% 0%, rgba(99,102,241,.15), transparent 60%),
+        radial-gradient(1200px 600px at 100% 100%, rgba(56,189,248,.12), transparent 60%),
+        var(--base-bg);
+      color:#e5e7eb;
+    }
+    .shadow-soft{box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .input-dark{background:rgba(255,255,255,.05)!important;color:#e5e7eb!important;border:1px solid rgba(255,255,255,.12)!important}
+    .input-dark::placeholder{color:#9ca3af}
+    select.input-dark option{background:#0b0d13;color:#e5e7eb}
+    .bg-base-bg{background:var(--base-bg)}
+    .border-base-line{border-color:var(--base-line)}
+    .btn{background:linear-gradient(135deg,#4f46e5,#6366f1);color:white}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .seg-btn{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#d4d4d8}
+    .seg-btn.active{background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;border-color:transparent;box-shadow:0 8px 24px rgba(79,70,229,.35)}
+    .thumb{position:relative}
+    .thumb img,.thumb video{display:block}
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-base-bg">
+  <header class="border-b border-base-line/60">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-2xl bg-indigo-500 flex items-center justify-center text-sm font-bold shadow-lg shadow-indigo-500/40">H</div>
+        <div class="flex flex-col leading-tight">
+          <span class="text-sm font-semibold text-white">Hansora AI</span>
+          <span class="text-xs text-zinc-400">HappyHorse 1.0 Video</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
+          <span class="text-zinc-400">Credits:</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1">
+    <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <section class="rounded-2xl p-5 border border-white/10 shadow-soft bg-white/5 space-y-5">
+        <div>
+          <h1 class="text-lg md:text-xl font-semibold text-white">HappyHorse 1.0</h1>
+          <p class="text-xs md:text-sm text-zinc-400 mt-1">Create text-to-video, image-to-video, reference-to-video, or video edit generations.</p>
+        </div>
+
+        <div class="grid md:grid-cols-[1.1fr,0.9fr] gap-4 md:gap-6 items-start">
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Prompt (required)</label>
+              <textarea id="promptInput" rows="4" class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Describe the scene, motion, mood, camera movement, and how to use the uploaded image or video..."></textarea>
+              <p class="text-[11px] text-zinc-500">Required for every generation.</p>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Images (optional, up to 6)</label>
+              <input id="imagesInput" type="file" accept="image/*" multiple class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+              <div id="imagesThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+              <p id="imagesError" class="hidden text-[11px] text-rose-300 mt-1"></p>
+              <p class="text-[11px] text-zinc-500">One image creates image-to-video. Two or more images create reference-to-video. Images can also be used with video edit.</p>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Video for edit (optional)</label>
+              <input id="videoInput" type="file" accept="video/*" class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+              <div id="videoThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
+              <p id="videoError" class="hidden text-[11px] text-rose-300 mt-1"></p>
+              <p class="text-[11px] text-zinc-500">Upload one video only when you want video edit. Reference images can be used with the video.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label for="ratioSelect" class="block text-xs font-medium text-zinc-300 mb-1">Aspect ratio</label>
+                <select id="ratioSelect" class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  <option value="16:9" selected>16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label for="durationSelect" class="block text-xs font-medium text-zinc-300 mb-1">Duration</label>
+                <select id="durationSelect" class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                  <option value="3" selected>3s</option>
+                  <option value="4">4s</option>
+                  <option value="5">5s</option>
+                  <option value="6">6s</option>
+                  <option value="7">7s</option>
+                  <option value="8">8s</option>
+                  <option value="9">9s</option>
+                  <option value="10">10s</option>
+                  <option value="11">11s</option>
+                  <option value="12">12s</option>
+                  <option value="13">13s</option>
+                  <option value="14">14s</option>
+                  <option value="15">15s</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Resolution</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button id="res720Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold active">720p</button>
+                <button id="res1080Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold">1080p</button>
+              </div>
+              <p class="text-[11px] text-zinc-500">720p costs 2.5⚡ per second. 1080p costs 3.5⚡ per second.</p>
+            </div>
+
+            <div class="space-y-2">
+              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 7.5⚡)</button>
+              <p id="statusText" class="text-[11px] text-zinc-500">Ready.</p>
+            </div>
+
+            <div id="successBox" class="mt-3 hidden">
+              <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
+                <div class="flex items-start gap-2">
+                  <div class="text-2xl">✅</div>
+                  <div id="successText" class="flex-1"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="rounded-2xl border border-base-line bg-black/40 p-3 md:p-4">
+              <h2 class="text-xs font-semibold text-zinc-200 mb-1">Instructions</h2>
+              <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
+                <li>Add a prompt.</li>
+                <li>No file: text-to-video.</li>
+                <li>One image: image-to-video.</li>
+                <li>Two to six images: reference-to-video.</li>
+                <li>One video: video edit. You can also add reference images.</li>
+                <li>Choose duration and resolution, then click Run.</li>
+              </ol>
+            </div>
+            <div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 md:p-4">
+              <h2 class="text-xs font-semibold text-amber-200 mb-1">Important</h2>
+              <p class="text-[11px] text-amber-100/90 leading-5">There is no first/last frame field and no audio option here.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const COST_RATE = { '720p': 2.5, '1080p': 3.5 };
+    const MAX_IMAGE_MB = 10;
+    const MAX_IMAGE_COUNT = 6;
+    const MAX_VIDEO_MB = 100;
+
+    let telegramId = "";
+    let credits = 0;
+    let mode = "";
+    let leng = "";
+
+    let selectedResolution = '720p';
+    let imageFiles = [];
+    let videoFile = null;
+    let imageObjUrls = [];
+    let videoObjUrl = null;
+
+    const creditsDisplay = document.getElementById('creditsDisplay');
+    const statusText = document.getElementById('statusText');
+    const successBox = document.getElementById('successBox');
+    const successText = document.getElementById('successText');
+    const runBtn = document.getElementById('runBtn');
+    const promptInput = document.getElementById('promptInput');
+    const ratioSelect = document.getElementById('ratioSelect');
+    const durationSelect = document.getElementById('durationSelect');
+    const res720Btn = document.getElementById('res720Btn');
+    const res1080Btn = document.getElementById('res1080Btn');
+    const imagesInput = document.getElementById('imagesInput');
+    const videoInput = document.getElementById('videoInput');
+    const imagesThumbs = document.getElementById('imagesThumbs');
+    const videoThumbs = document.getElementById('videoThumbs');
+    const imagesError = document.getElementById('imagesError');
+    const videoError = document.getElementById('videoError');
+
+    function setStatus(msg, tone){
+      statusText.textContent = msg;
+      statusText.className = 'text-[11px] ' + (tone || 'text-zinc-500');
+    }
+
+    function formatCredits(x){
+      return (Math.round(Number(x) * 10) / 10).toFixed(1).replace(/\.0$/, '');
+    }
+
+    function repaintCredits(){
+      creditsDisplay.textContent = formatCredits(credits) + '⚡';
+    }
+
+    function clearObjectUrl(url){
+      if (!url) return;
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    }
+
+    function clearObjectUrlArray(arr){
+      arr.forEach(clearObjectUrl);
+      arr.length = 0;
+    }
+
+    function showError(el, msg){
+      if (!msg) {
+        el.textContent = '';
+        el.classList.add('hidden');
+        return;
+      }
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function getCost(){
+      if (videoFile) return COST_RATE[selectedResolution];
+      const duration = Number(durationSelect.value || 3);
+      return duration * COST_RATE[selectedResolution];
+    }
+
+    function updateRunButtonLabel(){
+      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '⚡)';
+    }
+
+    function updateSegmentButtons(){
+      res720Btn.classList.toggle('active', selectedResolution === '720p');
+      res1080Btn.classList.toggle('active', selectedResolution === '1080p');
+      updateRunButtonLabel();
+    }
+
+    function parseQueryParams(){
+      const url = new URL(window.location.href);
+      telegramId = url.searchParams.get('telegram_id') || '';
+      mode = url.searchParams.get('mode') || url.searchParams.get('modul') || '';
+      leng = url.searchParams.get('leng') || url.searchParams.get('lang') || '';
+      if (!telegramId) {
+        setStatus('Missing telegram_id in URL. Please open this page from the bot.', 'text-rose-300');
+        runBtn.disabled = true;
+        return;
+      }
+      credits = 0;
+      repaintCredits();
+      loadCreditsFromSupabase();
+    }
+
+    async function loadCreditsFromSupabase(){
+      if (!window.supabaseClient) return;
+      try {
+        const { data, error } = await window.supabaseClient
+          .from('telegram_users')
+          .select('credits')
+          .eq('telegram_id', telegramId)
+          .maybeSingle();
+        if (error) {
+          console.error('Error loading credits from Supabase', error);
+          return;
+        }
+        if (data && typeof data.credits !== 'undefined') {
+          const parsed = Number(data.credits);
+          credits = Number.isFinite(parsed) ? parsed : 0;
+          repaintCredits();
+          updateRunButtonLabel();
+          updateRunAvailability();
+        }
+      } catch (e) {
+        console.error('Unexpected error loading credits from Supabase', e);
+      }
+    }
+
+    function validateImages(){
+      if (imageFiles.length > MAX_IMAGE_COUNT) {
+        showError(imagesError, 'You can upload up to 6 images.');
+        return false;
+      }
+      const tooBig = imageFiles.some(file => file.size > MAX_IMAGE_MB * 1024 * 1024);
+      showError(imagesError, tooBig ? 'One or more images exceed 10MB.' : '');
+      return !tooBig && imageFiles.length <= MAX_IMAGE_COUNT;
+    }
+
+    function validateVideo(){
+      if (!videoFile) {
+        showError(videoError, '');
+        return true;
+      }
+      if (videoFile.size > MAX_VIDEO_MB * 1024 * 1024) {
+        showError(videoError, 'Video exceeds 100MB.');
+        return false;
+      }
+      showError(videoError, '');
+      return true;
+    }
+
+    async function updateRunAvailability(){
+      if (!runBtn || runBtn.dataset.busy === '1') return;
+      const prompt = (promptInput.value || '').trim();
+      if (!telegramId || !prompt || !validateImages() || !validateVideo()) {
+        runBtn.disabled = true;
+        return;
+      }
+      runBtn.disabled = false;
+    }
+
+    function renderImageList(files){
+      imagesThumbs.innerHTML = '';
+      clearObjectUrlArray(imageObjUrls);
+      files.forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        imageObjUrls.push(url);
+        const wrap = document.createElement('div');
+        wrap.className = 'thumb inline-block';
+        const img = new Image();
+        img.src = url;
+        img.className = 'block w-24 h-24 object-cover rounded-lg border border-white/10 bg-black/20';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
+        del.innerHTML = '×';
+        del.onclick = () => {
+          imageFiles.splice(idx, 1);
+          renderImageList(imageFiles);
+          validateImages();
+          updateRunButtonLabel();
+          updateRunAvailability();
+        };
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        imagesThumbs.appendChild(wrap);
+      });
+    }
+
+    function clearVideo(){
+      videoFile = null;
+      if (videoInput) videoInput.value = '';
+      clearObjectUrl(videoObjUrl);
+      videoObjUrl = null;
+      videoThumbs.innerHTML = '';
+      showError(videoError, '');
+      updateRunButtonLabel();
+      updateRunAvailability();
+    }
+
+    function renderVideo(file){
+      videoThumbs.innerHTML = '';
+      clearObjectUrl(videoObjUrl);
+      videoObjUrl = null;
+      if (!file) return;
+      videoObjUrl = URL.createObjectURL(file);
+      const wrap = document.createElement('div');
+      wrap.className = 'thumb inline-block';
+      const vid = document.createElement('video');
+      vid.src = videoObjUrl;
+      vid.controls = true;
+      vid.className = 'block w-56 max-h-36 object-cover rounded-lg border border-white/10 bg-black/20';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
+      del.innerHTML = '×';
+      del.onclick = clearVideo;
+      wrap.appendChild(vid);
+      wrap.appendChild(del);
+      videoThumbs.appendChild(wrap);
+    }
+
+    async function validateInputs(){
+      const prompt = (promptInput.value || '').trim();
+      if (!prompt) return { ok:false, error:'Please enter a prompt.' };
+      if (!validateImages()) return { ok:false, error:'Please fix the image file errors.' };
+      if (!validateVideo()) return { ok:false, error:'Please fix the video file error.' };
+      return { ok:true };
+    }
+
+    async function signUpload(filename, mime){
+      const resp = await fetch('/.netlify/functions/sign-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-USER-ID': telegramId || 'tg-anon'
+        },
+        body: JSON.stringify({ filename, mime })
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || !data || !data.uploadUrl || !data.publicUrl){
+        throw new Error((data && data.error) || 'sign-upload failed');
+      }
+      return data;
+    }
+
+    function safeExtFromMime(mime, fallback){
+      const t = String(mime || '').toLowerCase();
+      if (t.includes('png')) return '.png';
+      if (t.includes('jpeg') || t.includes('jpg')) return '.jpg';
+      if (t.includes('webp')) return '.webp';
+      if (t.includes('gif')) return '.gif';
+      if (t.includes('mp4')) return '.mp4';
+      if (t.includes('quicktime') || t.includes('mov')) return '.mov';
+      if (t.includes('webm')) return '.webm';
+      return fallback || '';
+    }
+
+    async function uploadFile(file, prefix){
+      const type = (file.type || 'application/octet-stream').toLowerCase();
+      const origName = file.name || 'file';
+      const base = origName.replace(/\.[^./\\]+$/, '');
+      const ext = safeExtFromMime(type, '');
+      const filename = Date.now() + '-' + prefix + '-' + base + (ext || '');
+      const signJson = await signUpload(filename, type);
+      const putResp = await fetch(signJson.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': type },
+        body: file
+      });
+      if (!putResp.ok){
+        throw new Error('Upload failed');
+      }
+      try { await fetch(signJson.publicUrl, { method: 'HEAD', cache: 'no-store' }); } catch (_) {}
+      return signJson.publicUrl;
+    }
+
+    async function uploadMany(files, prefix){
+      const urls = [];
+      for (let i = 0; i < files.length; i++) {
+        urls.push(await uploadFile(files[i], prefix + '-' + (i + 1)));
+      }
+      return urls;
+    }
+
+    async function persistCredits(newCredits){
+      try {
+        if (window.supabaseClient) {
+          const { error } = await window.supabaseClient
+            .from('telegram_users')
+            .update({ credits: newCredits })
+            .eq('telegram_id', telegramId);
+          if (error) console.error('Error updating credits in Supabase', error);
+        }
+      } catch (e) {
+        console.error('Unexpected error updating credits in Supabase', e);
+      }
+    }
+
+    async function handleRun(){
+      if (successBox) successBox.classList.add('hidden');
+      if (runBtn.disabled) return;
+      if (!telegramId) {
+        setStatus('Missing telegram_id, cannot continue.', 'text-rose-300');
+        return;
+      }
+
+      const validation = await validateInputs();
+      if (!validation.ok) {
+        setStatus(validation.error, 'text-rose-300');
+        return;
+      }
+
+      const cost = getCost();
+      if (credits < cost) {
+        setStatus('Not enough credits (need ' + formatCredits(cost) + ').', 'text-rose-300');
+        return;
+      }
+
+      runBtn.disabled = true;
+      runBtn.dataset.busy = '1';
+      runBtn.textContent = 'Working…';
+
+      try {
+        let imageUrls = [];
+        let videoUrl = '';
+
+        if (imageFiles.length) {
+          setStatus('Uploading images…', 'text-zinc-400');
+          imageUrls = await uploadMany(imageFiles, 'happyhorse-image');
+        }
+        if (videoFile) {
+          setStatus('Uploading video…', 'text-zinc-400');
+          videoUrl = await uploadFile(videoFile, 'happyhorse-video');
+        }
+
+        const payload = {
+          telegram_id: telegramId,
+          credits_before: credits,
+          cost,
+          prompt: (promptInput.value || '').trim(),
+          image_urls: imageUrls,
+          video_url: videoUrl,
+          resolution: selectedResolution,
+          aspect_ratio: ratioSelect.value,
+          duration: Number(durationSelect.value),
+          mode,
+          leng
+        };
+
+        setStatus('Submitting HappyHorse 1.0 task…', 'text-zinc-400');
+        const resp = await fetch('/.netlify/functions/run-happyhorse-1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok || !data || !data.ok) {
+          throw new Error((data && (data.error || data.details)) || 'Request failed');
+        }
+
+        const newCredits = Number(data.new_credits);
+        if (Number.isFinite(newCredits)) {
+          credits = newCredits;
+          repaintCredits();
+          await persistCredits(newCredits);
+        }
+
+        successText.innerHTML = 'Your HappyHorse 1.0 task was submitted successfully. The video will be sent to your Telegram bot chat when it is ready.';
+        successBox.classList.remove('hidden');
+        setStatus('Task submitted successfully.', 'text-emerald-300');
+      } catch (e) {
+        console.error(e);
+        setStatus(e && e.message ? e.message : 'Something went wrong.', 'text-rose-300');
+      } finally {
+        delete runBtn.dataset.busy;
+        updateRunButtonLabel();
+        await updateRunAvailability();
+      }
+    }
+
+    res720Btn.addEventListener('click', () => {
+      selectedResolution = '720p';
+      updateSegmentButtons();
+      updateRunAvailability();
+    });
+    res1080Btn.addEventListener('click', () => {
+      selectedResolution = '1080p';
+      updateSegmentButtons();
+      updateRunAvailability();
+    });
+    durationSelect.addEventListener('change', async () => {
+      updateRunButtonLabel();
+      await updateRunAvailability();
+    });
+    runBtn.addEventListener('click', handleRun);
+    promptInput.addEventListener('input', updateRunAvailability);
+
+    imagesInput.addEventListener('change', () => {
+      imageFiles = Array.from(imagesInput.files || []).slice(0, MAX_IMAGE_COUNT);
+      renderImageList(imageFiles);
+      validateImages();
+      if ((imagesInput.files || []).length > MAX_IMAGE_COUNT) {
+        showError(imagesError, 'You can upload up to 6 images.');
+      }
+      updateRunButtonLabel();
+      updateRunAvailability();
+    });
+
+    videoInput.addEventListener('change', () => {
+      videoFile = videoInput.files && videoInput.files[0] ? videoInput.files[0] : null;
+      renderVideo(videoFile);
+      validateVideo();
+      updateRunButtonLabel();
+      updateRunAvailability();
+    });
+
+    parseQueryParams();
+    updateSegmentButtons();
+    updateRunButtonLabel();
+    updateRunAvailability();
+  </script>
+</body>
+</html>
