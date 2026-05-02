@@ -13,7 +13,6 @@ const LOADING_HOOK = 'https://n8n.srv1223021.hstgr.cloud/webhook/83b19830-f204-4
 
 const RATE = { '720p': 2.5, '1080p': 3.5 };
 const MAX_REFERENCE_IMAGES = 6;
-const MAX_VIDEO_SECONDS = 15;
 
 function jsonResponse(statusCode, body) {
   return {
@@ -200,9 +199,6 @@ exports.handler = async function(event) {
   if (isVideoEdit) {
     if (!(Number.isFinite(videoDuration) && videoDuration > 0)) {
       return jsonResponse(400, { ok: false, submitted: false, error: 'missing_video_duration' });
-    }
-    if (videoDuration > MAX_VIDEO_SECONDS + 0.05) {
-      return jsonResponse(400, { ok: false, submitted: false, error: 'video_too_long', max_seconds: MAX_VIDEO_SECONDS });
     }
     model = 'happyhorse/video-edit';
     modelLabel = 'HappyHorse 1.0 Video Edit';
