@@ -89,7 +89,7 @@
               <input id="videoInput" type="file" accept="video/*" class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
               <div id="videoThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
               <p id="videoError" class="hidden text-[11px] text-rose-300 mt-1"></p>
-              <p class="text-[11px] text-zinc-500">Upload one video only when you want video edit. Reference images can be used with the video. If a video is uploaded, duration is taken from that video automatically.</p>
+              <p class="text-[11px] text-zinc-500">Upload one video only when you want video edit. Reference images can be used with the video.</p>
             </div>
 
             <div class="grid md:grid-cols-2 gap-4">
@@ -172,7 +172,6 @@
     const MAX_IMAGE_MB = 10;
     const MAX_IMAGE_COUNT = 6;
     const MAX_VIDEO_MB = 100;
-    const MAX_VIDEO_SECONDS = 15;
 
     let telegramId = "";
     let credits = 0;
@@ -238,10 +237,20 @@
       el.classList.remove('hidden');
     }
 
+    function getEffectiveDurationSeconds(){
+      if (videoFile && Number.isFinite(videoDurationSeconds) && videoDurationSeconds > 0) {
+        return videoDurationSeconds;
+      }
+      return Number(durationSelect.value || 3);
+    }
+
     function getCost(){
-      if (videoFile) return COST_RATE[selectedResolution];
-      const duration = Number(durationSelect.value || 3);
-      return duration * COST_RATE[selectedResolution];
+      return getEffectiveDurationSeconds() * COST_RATE[selectedResolution];
+    }
+
+    function updateDurationVisibility(){
+      if (!durationWrap) return;
+      durationWrap.classList.toggle('hidden', !!videoFile);
     }
 
     function updateRunButtonLabel(){
@@ -318,10 +327,6 @@
       }
       if (!(Number.isFinite(videoDurationSeconds) && videoDurationSeconds > 0)) {
         showError(videoError, 'Could not read video duration.');
-        return false;
-      }
-      if (videoDurationSeconds > MAX_VIDEO_SECONDS + 0.05) {
-        showError(videoError, 'Video must be 15 seconds or shorter.');
         return false;
       }
       showError(videoError, '');
