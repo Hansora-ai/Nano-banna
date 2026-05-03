@@ -114,13 +114,16 @@ function calcExpectedCost(duration, resolution) {
   return duration * rate;
 }
 
-function pickWanMode({ requestedMode, firstFrameUrl, lastFrameUrl, inputVideoUrl, referenceImageUrls, referenceVideoUrls }) {
-  if (requestedMode === 'video_edit') return 'video_edit';
-  if (firstFrameUrl || lastFrameUrl || (inputVideoUrl && referenceImageUrls.length === 0 && referenceVideoUrls.length === 0)) {
-    return 'image_to_video';
-  }
-  if (referenceImageUrls.length > 0 || referenceVideoUrls.length > 0) {
+function pickWanMode({ requestedMode, routeHint, firstFrameUrl, lastFrameUrl, inputVideoUrl, referenceImageUrls, referenceVideoUrls }) {
+  if (requestedMode === 'video_edit' || routeHint === 'video_edit') return 'video_edit';
+  if (routeHint === 'reference_to_video' && !lastFrameUrl) return 'reference_to_video';
+  if (routeHint === 'image_to_video') return 'image_to_video';
+  if (routeHint === 'text_to_video') return 'text_to_video';
+  if ((referenceImageUrls.length > 0 || referenceVideoUrls.length > 0) && !lastFrameUrl) {
     return 'reference_to_video';
+  }
+  if (firstFrameUrl || lastFrameUrl || inputVideoUrl) {
+    return 'image_to_video';
   }
   return 'text_to_video';
 }
@@ -179,7 +182,9 @@ exports.handler = async function(event) {
   const referenceVideoUrls = normalizeUrlList(body.reference_video_urls || body.referenceVideoUrls);
   const resolution = body.resolution === '1080p' ? '1080p' : '720p';
   const aspectRatio = String(body.aspect_ratio || body.aspectRatio || '16:9').trim();
-  const requestedMode = body.wan_mode === 'video_edit' ? 'video_edit' : 'auto';
+  const routeHintRaw = String(body.wan_route || body.wanRoute || '').trim();
+  const routeHint = ['text_to_video', 'image_to_video', 'reference_to_video', 'video_edit'].includes(routeHintRaw) ? routeHintRaw : '';
+  const requestedMode = body.wan_mode === 'video_edit' || routeHint === 'video_edit' ? 'video_edit' : 'auto';
   const promptExtend = typeof body.prompt_extend === 'boolean' ? body.prompt_extend : true;
   const watermark = typeof body.watermark === 'boolean' ? body.watermark : false;
   const creditsBefore = Number(body.credits_before || 0);
@@ -201,11 +206,23 @@ exports.handler = async function(event) {
   if (!telegramId) return jsonResponse(400, { ok: false, submitted: false, error: 'missing_telegram_id' });
   if (!prompt) return jsonResponse(400, { ok: false, submitted: false, error: 'missing_prompt' });
   if (lastFrameUrl && !firstFrameUrl) return jsonResponse(400, { ok: false, submitted: false, error: 'last_frame_requires_first_frame' });
-  if (referenceImageUrls.length > 5) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_reference_images' });
-  if (referenceVideoUrls.length > 5) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_reference_videos' });
-  if (referenceImageUrls.length + referenceVideoUrls.length > 5) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_total_references' });
+  const hasReferenceMedia = referenceImageUrls.length > 0 || referenceVideoUrls.length > 0;
+  if (lastFrameUrl && hasReferenceMedia && requestedMode !== 'video_edit') {
+    return jsonResponse(400, {
+      ok: false,
+      submitted: false,
+      error: 'last_frame_cannot_use_reference_media',
+      details: 'Remove Last Frame. Wan 2.7 Reference to Video accepts First Frame with reference images/videos, but not Last Frame.'
+    });
+  }
 
-  const wanMode = pickWanMode({ requestedMode, firstFrameUrl, lastFrameUrl, inputVideoUrl, referenceImageUrls, referenceVideoUrls });
+  const wanMode = pickWanMode({ requestedMode, routeHint, firstFrameUrl, lastFrameUrl, inputVideoUrl, referenceImageUrls, referenceVideoUrls });
+  const r2vUsesInputVideoAsReference = wanMode === 'reference_to_video' && !!inputVideoUrl;
+  const totalReferenceMedia = referenceImageUrls.length + referenceVideoUrls.length + (r2vUsesInputVideoAsReference ? 1 : 0);
+
+  if (referenceImageUrls.length > 5) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_reference_images' });
+  if (referenceVideoUrls.length + (r2vUsesInputVideoAsReference ? 1 : 0) > 5) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_reference_videos' });
+  if (totalReferenceMedia > 5) return jsonResponse(400, { ok: false, submitted: false, error: 'too_many_total_references' });
   const maxDuration = wanMode === 'video_edit' ? 10 : 15;
   const duration = clampInt(body.duration, 4, maxDuration);
 
@@ -217,7 +234,14 @@ exports.handler = async function(event) {
 
   if (wanMode === 'image_to_video') {
     if (!firstFrameUrl && !inputVideoUrl) return jsonResponse(400, { ok: false, submitted: false, error: 'image_to_video_requires_first_frame_or_video' });
-    if (referenceImageUrls.length || referenceVideoUrls.length) return jsonResponse(400, { ok: false, submitted: false, error: 'image_to_video_cannot_use_reference_media' });
+    if (referenceImageUrls.length || referenceVideoUrls.length) {
+      return jsonResponse(400, {
+        ok: false,
+        submitted: false,
+        error: 'image_to_video_cannot_use_reference_media',
+        details: 'Wan 2.7 Image to Video only uses first_frame_url, last_frame_url, or first_clip_url. Remove references or remove Last Frame so it routes to Reference to Video.'
+      });
+    }
   }
 
   if (wanMode === 'reference_to_video') {
@@ -289,8 +313,9 @@ exports.handler = async function(event) {
     if (audioUrl) input.audio_url = audioUrl;
   } else if (wanMode === 'reference_to_video') {
     input.aspect_ratio = aspectRatio;
+    const r2vReferenceVideoUrls = inputVideoUrl ? [inputVideoUrl, ...referenceVideoUrls] : referenceVideoUrls;
     if (referenceImageUrls.length) input.reference_image = referenceImageUrls;
-    if (referenceVideoUrls.length) input.reference_video = referenceVideoUrls;
+    if (r2vReferenceVideoUrls.length) input.reference_video = r2vReferenceVideoUrls;
     if (firstFrameUrl) input.first_frame = firstFrameUrl;
     if (audioUrl) input.reference_voice = audioUrl;
   } else if (wanMode === 'video_edit') {
