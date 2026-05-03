@@ -284,9 +284,12 @@
     async function updateRunAvailability(){
       if(!runBtn||runBtn.dataset.busy==='1')return;
       const prompt=(promptInput.value||'').trim();
-      if(!telegramId||!prompt){runBtn.disabled=true;return}
+      if(!telegramId){runBtn.disabled=true;setStatus('Missing telegram_id in URL. Please open this page from the bot.','text-rose-300');return}
+      if(!prompt){runBtn.disabled=true;setStatus('Please enter a prompt.','text-rose-300');return}
       const validation=await validateInputs(false);
       runBtn.disabled=!validation.ok;
+      if(!validation.ok){setStatus(validation.error,'text-rose-300');return}
+      showInfo(statusText,'Route: '+validation.route.replace(/_/g,' ')+' — ready.');
     }
 
     function parseQueryParams(){
@@ -329,15 +332,17 @@
     function clearInputVideo(){inputVideoFile=null;if(inputVideoInput)inputVideoInput.value='';clearObjectUrl(inputVideoUrl);inputVideoUrl=null;inputVideoThumbs.innerHTML='';showError(inputVideoError,'');updateRunAvailability()}
     function clearAudio(){audioFile=null;if(audioInput)audioInput.value='';clearObjectUrl(audioObjUrl);audioObjUrl=null;audioThumbs.innerHTML='';showError(audioError,'');updateRunAvailability()}
 
+    function getAutoReferenceVideoCount(){return referenceVideoFiles.length+(wanMode==='auto'&&inputVideoFile&&!lastFrameFile&&(referenceImageFiles.length>0||referenceVideoFiles.length>0)?1:0)}
+    function getAutoReferenceMediaCount(){return referenceImageFiles.length+getAutoReferenceVideoCount()}
     function validateFrameFiles(){showError(firstFrameError,firstFrameFile&&firstFrameFile.size>MAX_IMAGE_MB*1024*1024?'First Frame exceeds 10MB.':'');showError(lastFrameError,lastFrameFile&&lastFrameFile.size>MAX_IMAGE_MB*1024*1024?'Last Frame exceeds 10MB.':'')}
-    function validateReferenceImages(){const tooMany=referenceImageFiles.length+referenceVideoFiles.length>MAX_REFERENCE_TOTAL;const tooBig=referenceImageFiles.some(file=>file.size>MAX_IMAGE_MB*1024*1024);showError(referenceImagesError,tooMany?'Wan 2.7 supports up to 5 total reference images/videos.':(tooBig?'One or more reference images exceed 10MB.':''));return !tooMany&&!tooBig}
-    function validateReferenceVideos(){const tooMany=referenceImageFiles.length+referenceVideoFiles.length>MAX_REFERENCE_TOTAL;const tooBig=referenceVideoFiles.some(file=>file.size>MAX_VIDEO_MB*1024*1024);showError(referenceVideosError,tooMany?'Wan 2.7 supports up to 5 total reference images/videos.':(tooBig?'One or more reference videos exceed 80MB.':''));return !tooMany&&!tooBig}
+    function validateReferenceImages(){const tooMany=wanMode==='video_edit'?referenceImageFiles.length>MAX_REFERENCE_TOTAL:getAutoReferenceMediaCount()>MAX_REFERENCE_TOTAL;const tooBig=referenceImageFiles.some(file=>file.size>MAX_IMAGE_MB*1024*1024);showError(referenceImagesError,tooMany?'Wan 2.7 supports up to 5 total reference images/videos.':(tooBig?'One or more reference images exceed 10MB.':''));return !tooMany&&!tooBig}
+    function validateReferenceVideos(){const tooMany=wanMode==='video_edit'?false:getAutoReferenceMediaCount()>MAX_REFERENCE_TOTAL;const tooBig=referenceVideoFiles.some(file=>file.size>MAX_VIDEO_MB*1024*1024);showError(referenceVideosError,tooMany?'Wan 2.7 supports up to 5 total reference images/videos.':(tooBig?'One or more reference videos exceed 80MB.':''));return !tooMany&&!tooBig}
     function validateInputVideo(){const tooBig=inputVideoFile&&inputVideoFile.size>MAX_VIDEO_MB*1024*1024;showError(inputVideoError,tooBig?'Video exceeds 80MB.':'');return !tooBig}
     function validateAudio(){const tooBig=audioFile&&audioFile.size>MAX_AUDIO_MB*1024*1024;showError(audioError,tooBig?'Audio exceeds 30MB.':'');return !tooBig}
 
     function getAutoRoute(){
-      if(firstFrameFile||lastFrameFile||(inputVideoFile&&referenceImageFiles.length===0&&referenceVideoFiles.length===0))return 'image_to_video';
-      if(referenceImageFiles.length>0||referenceVideoFiles.length>0)return 'reference_to_video';
+      if((referenceImageFiles.length>0||referenceVideoFiles.length>0)&&!lastFrameFile)return 'reference_to_video';
+      if(firstFrameFile||lastFrameFile||inputVideoFile)return 'image_to_video';
       return 'text_to_video';
     }
 
@@ -356,7 +361,7 @@
       }
       const route=getAutoRoute();
       if(route==='text_to_video'&&(inputVideoFile||firstFrameFile||lastFrameFile||referenceImageFiles.length||referenceVideoFiles.length))return{ok:false,error:'Text to Video accepts only prompt and optional audio.'};
-      if(route==='image_to_video'&&(referenceImageFiles.length||referenceVideoFiles.length))return{ok:false,error:'Image to Video cannot use reference images/videos.'};
+      if(route==='image_to_video'&&(referenceImageFiles.length||referenceVideoFiles.length))return{ok:false,error:lastFrameFile?'Last Frame cannot be used together with reference images/videos. Remove Last Frame or remove the references.':'Image to Video cannot use reference images/videos.'};
       if(route==='reference_to_video'&&lastFrameFile)return{ok:false,error:'Reference to Video cannot use Last Frame.'};
       if(route==='reference_to_video'&&!referenceImageFiles.length&&!referenceVideoFiles.length)return{ok:false,error:'Reference to Video requires reference images or videos.'};
       if(showMainError)showInfo(statusText,'Route: '+route.replace(/_/g,' ')+' — ready.');
