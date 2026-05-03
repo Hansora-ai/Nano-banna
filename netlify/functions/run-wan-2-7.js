@@ -93,6 +93,23 @@ function normalizeUrlList(arr) {
   return Array.isArray(arr) ? arr.map(normalizeUrl).filter(Boolean) : [];
 }
 
+function isUnsupportedAudioUrl(u) {
+  const raw = String(u || '').toLowerCase();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    const pathname = decodeURIComponent(parsed.pathname || '').toLowerCase();
+    return /\.mp4($|[?#])/.test(pathname) || pathname.endsWith('.mp4');
+  } catch {
+    return /\.mp4($|[?#])/.test(raw) || raw.endsWith('.mp4');
+  }
+}
+
+function getKieErrorMessage(data) {
+  if (!data || typeof data !== 'object') return '';
+  return String(data.msg || data.message || data.error || data?.data?.msg || data?.data?.message || data?.data?.error || '').trim();
+}
+
 function clampInt(n, lo, hi) {
   const x = Math.round(Number(n));
   if (!Number.isFinite(x)) return lo;
@@ -205,6 +222,14 @@ exports.handler = async function(event) {
 
   if (!telegramId) return jsonResponse(400, { ok: false, submitted: false, error: 'missing_telegram_id' });
   if (!prompt) return jsonResponse(400, { ok: false, submitted: false, error: 'missing_prompt' });
+  if (audioUrl && isUnsupportedAudioUrl(audioUrl)) {
+    return jsonResponse(400, {
+      ok: false,
+      submitted: false,
+      error: 'unsupported_audio_file_type',
+      details: 'Do not upload .mp4/video as audio. Use a real audio file such as MP3, WAV, M4A, AAC, OGG, OPUS, or FLAC.'
+    });
+  }
   if (lastFrameUrl && !firstFrameUrl) return jsonResponse(400, { ok: false, submitted: false, error: 'last_frame_requires_first_frame' });
   const hasReferenceMedia = referenceImageUrls.length > 0 || referenceVideoUrls.length > 0;
   if (lastFrameUrl && hasReferenceMedia && requestedMode !== 'video_edit') {
@@ -347,18 +372,23 @@ exports.handler = async function(event) {
     let data;
     try { data = JSON.parse(text); } catch { data = { _raw: text }; }
 
-    if (!resp.ok) {
+    const kieMessage = getKieErrorMessage(data);
+    const kieCode = Number(data && data.code);
+    const kieRejected = Number.isFinite(kieCode) && kieCode >= 400;
+
+    if (!resp.ok || kieRejected) {
       return jsonResponse(resp.status || 502, {
         ok: false,
         submitted: false,
-        error: (data && (data.error || data.msg || data.message)) || 'wan_create_failed',
+        error: kieMessage || 'wan_create_failed',
+        details: kieMessage || 'Wan 2.7 task creation failed.',
         data
       });
     }
 
     const taskId = extractTaskId(data);
     if (!taskId) {
-      return jsonResponse(502, { ok: false, submitted: false, error: 'missing_task_id', data });
+      return jsonResponse(502, { ok: false, submitted: false, error: kieMessage || 'missing_task_id', details: kieMessage || 'KIE did not return a task id.', data });
     }
 
     await writeTelegramGeneration({
