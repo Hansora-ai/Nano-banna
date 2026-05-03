@@ -361,7 +361,7 @@
       }
       const route=getAutoRoute();
       if(route==='text_to_video'&&(inputVideoFile||firstFrameFile||lastFrameFile||referenceImageFiles.length||referenceVideoFiles.length))return{ok:false,error:'Text to Video accepts only prompt and optional audio.'};
-      if(route==='image_to_video'&&(referenceImageFiles.length||referenceVideoFiles.length))return{ok:false,error:lastFrameFile?'Last Frame cannot be used together with reference images/videos. Remove Last Frame or remove the references.':'Image to Video cannot use reference images/videos.'};
+      if(route==='image_to_video'&&(referenceImageFiles.length||referenceVideoFiles.length))return{ok:false,error:lastFrameFile?'Last Frame cannot be used together with reference images/videos. Remove Last Frame so First Frame + references routes to Reference to Video.':'Image to Video cannot use reference images/videos.'};
       if(route==='reference_to_video'&&lastFrameFile)return{ok:false,error:'Reference to Video cannot use Last Frame.'};
       if(route==='reference_to_video'&&!referenceImageFiles.length&&!referenceVideoFiles.length)return{ok:false,error:'Reference to Video requires reference images or videos.'};
       if(showMainError)showInfo(statusText,'Route: '+route.replace(/_/g,' ')+' — ready.');
@@ -390,7 +390,7 @@
         if(referenceImageFiles.length){setStatus('Uploading reference images…','text-zinc-400');referenceImageUrls=await uploadMany(referenceImageFiles,'wan-ref-image')}
         if(referenceVideoFiles.length){setStatus('Uploading reference videos…','text-zinc-400');referenceVideoUrls=await uploadMany(referenceVideoFiles,'wan-ref-video')}
         if(audioFile){setStatus('Uploading audio…','text-zinc-400');uploadedAudioUrl=await uploadFile(audioFile,'wan-audio')}
-        const payload={telegram_id:telegramId,credits_before:credits,cost,prompt:(promptInput.value||'').trim(),first_frame_url:firstFrameUrl,last_frame_url:lastFrameUrl,input_video_url:uploadedInputVideoUrl,audio_url:uploadedAudioUrl,reference_image_urls:referenceImageUrls,reference_video_urls:referenceVideoUrls,resolution:selectedResolution,aspect_ratio:ratioSelect.value,duration:Number(durationSelect.value),wan_mode:wanMode,mode,leng};
+        const payload={telegram_id:telegramId,credits_before:credits,cost,prompt:(promptInput.value||'').trim(),first_frame_url:firstFrameUrl,last_frame_url:lastFrameUrl,input_video_url:uploadedInputVideoUrl,audio_url:uploadedAudioUrl,reference_image_urls:referenceImageUrls,reference_video_urls:referenceVideoUrls,resolution:selectedResolution,aspect_ratio:ratioSelect.value,duration:Number(durationSelect.value),wan_mode:wanMode,wan_route:validation.route,mode,leng};
         setStatus('Submitting Wan 2.7 task…','text-zinc-400');
         const resp=await fetch('/.netlify/functions/run-wan-2-7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         const data=await resp.json().catch(()=>null);if(!resp.ok||!data||!data.ok)throw new Error((data&&(data.error||data.details))||'Request failed');
