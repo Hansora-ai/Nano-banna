@@ -118,10 +118,10 @@
 
             <div id="audioSection" class="space-y-2">
               <label class="block text-xs font-medium text-zinc-300 mb-1">Audio (optional)</label>
-              <input id="audioInput" type="file" accept="audio/*" class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
+              <input id="audioInput" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/aac,audio/ogg,audio/flac" class="input-dark block w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-400" />
               <div id="audioThumbs" class="mt-2 flex gap-2 flex-wrap"></div>
               <p id="audioError" class="hidden text-[11px] text-rose-300 mt-1"></p>
-              <p class="text-[11px] text-zinc-500">Optional for Text to Video, Image to Video, and Reference to Video. Disabled in Video Edit.</p>
+              <p class="text-[11px] text-zinc-500">Optional for Text to Video, Image to Video, and Reference to Video. Use real audio files only; .mp4 video files are not accepted as audio. Disabled in Video Edit.</p>
             </div>
 
             <div class="grid md:grid-cols-2 gap-4">
@@ -338,7 +338,9 @@
     function validateReferenceImages(){const tooMany=wanMode==='video_edit'?referenceImageFiles.length>MAX_REFERENCE_TOTAL:getAutoReferenceMediaCount()>MAX_REFERENCE_TOTAL;const tooBig=referenceImageFiles.some(file=>file.size>MAX_IMAGE_MB*1024*1024);showError(referenceImagesError,tooMany?'Wan 2.7 supports up to 5 total reference images/videos.':(tooBig?'One or more reference images exceed 10MB.':''));return !tooMany&&!tooBig}
     function validateReferenceVideos(){const tooMany=wanMode==='video_edit'?false:getAutoReferenceMediaCount()>MAX_REFERENCE_TOTAL;const tooBig=referenceVideoFiles.some(file=>file.size>MAX_VIDEO_MB*1024*1024);showError(referenceVideosError,tooMany?'Wan 2.7 supports up to 5 total reference images/videos.':(tooBig?'One or more reference videos exceed 80MB.':''));return !tooMany&&!tooBig}
     function validateInputVideo(){const tooBig=inputVideoFile&&inputVideoFile.size>MAX_VIDEO_MB*1024*1024;showError(inputVideoError,tooBig?'Video exceeds 80MB.':'');return !tooBig}
-    function validateAudio(){const tooBig=audioFile&&audioFile.size>MAX_AUDIO_MB*1024*1024;showError(audioError,tooBig?'Audio exceeds 30MB.':'');return !tooBig}
+    function getFileExt(file){const name=String(file&&file.name||'').toLowerCase();const m=name.match(/\.([a-z0-9]+)$/);return m?'.'+m[1]:''}
+    function isSupportedAudioFile(file){if(!file)return true;const ext=getFileExt(file);const type=String(file.type||'').toLowerCase();if(ext==='.mp4'||type.startsWith('video/'))return false;const allowed=['.mp3','.wav','.m4a','.aac','.ogg','.opus','.flac'];return allowed.includes(ext)||type.startsWith('audio/')}
+    function validateAudio(){const tooBig=audioFile&&audioFile.size>MAX_AUDIO_MB*1024*1024;const badType=audioFile&&!isSupportedAudioFile(audioFile);showError(audioError,badType?'This is not a supported audio file. Do not upload .mp4/video as audio. Use MP3, WAV, M4A, AAC, OGG, OPUS, or FLAC.':(tooBig?'Audio exceeds 30MB.':''));return !tooBig&&!badType}
 
     function getAutoRoute(){
       if((referenceImageFiles.length>0||referenceVideoFiles.length>0)&&!lastFrameFile)return 'reference_to_video';
@@ -372,8 +374,8 @@
       const resp=await fetch('/.netlify/functions/sign-upload',{method:'POST',headers:{'Content-Type':'application/json','X-USER-ID':telegramId||'tg-anon'},body:JSON.stringify({filename,mime})});
       const data=await resp.json().catch(()=>null);if(!resp.ok||!data||!data.uploadUrl||!data.publicUrl)throw new Error((data&&data.error)||'sign-upload failed');return data;
     }
-    function safeExtFromMime(mime,fallback){const t=String(mime||'').toLowerCase();if(t.includes('png'))return'.png';if(t.includes('jpeg')||t.includes('jpg'))return'.jpg';if(t.includes('webp'))return'.webp';if(t.includes('gif'))return'.gif';if(t.includes('mp4'))return'.mp4';if(t.includes('quicktime')||t.includes('mov'))return'.mov';if(t.includes('webm'))return'.webm';if(t.includes('mpeg'))return'.mp3';if(t.includes('wav'))return'.wav';if(t.includes('ogg'))return'.ogg';return fallback||''}
-    async function uploadFile(file,prefix){const type=(file.type||'application/octet-stream').toLowerCase();const origName=file.name||'file';const base=origName.replace(/\.[^./\\]+$/,'');const ext=safeExtFromMime(type,'');const filename=Date.now()+'-'+prefix+'-'+base+(ext||'');const signJson=await signUpload(filename,type);const putResp=await fetch(signJson.uploadUrl,{method:'PUT',headers:{'Content-Type':type},body:file});if(!putResp.ok)throw new Error('Upload failed');try{await fetch(signJson.publicUrl,{method:'HEAD',cache:'no-store'})}catch(_){}return signJson.publicUrl}
+    function safeExtFromMime(mime,fallback){const t=String(mime||'').toLowerCase();const fb=String(fallback||'').toLowerCase();if(t.startsWith('audio/')&&['.m4a','.aac','.opus','.flac'].includes(fb))return fb;if(t.includes('png'))return'.png';if(t.includes('jpeg')||t.includes('jpg'))return'.jpg';if(t.includes('webp'))return'.webp';if(t.includes('gif'))return'.gif';if(t.includes('quicktime')||t.includes('mov'))return'.mov';if(t.includes('webm'))return'.webm';if(t.includes('mpeg'))return'.mp3';if(t.includes('wav'))return'.wav';if(t.includes('ogg'))return'.ogg';if(t.includes('flac'))return'.flac';if(t.includes('aac'))return'.aac';if(t.includes('mp4'))return'.mp4';return fallback||''}
+    async function uploadFile(file,prefix){const type=(file.type||'application/octet-stream').toLowerCase();const origName=file.name||'file';const base=origName.replace(/\.[^./\\]+$/,'');const origExt=(origName.match(/\.[^./\\]+$/)||[''])[0];const ext=safeExtFromMime(type,origExt);const filename=Date.now()+'-'+prefix+'-'+base+(ext||'');const signJson=await signUpload(filename,type);const putResp=await fetch(signJson.uploadUrl,{method:'PUT',headers:{'Content-Type':type},body:file});if(!putResp.ok)throw new Error('Upload failed');try{await fetch(signJson.publicUrl,{method:'HEAD',cache:'no-store'})}catch(_){}return signJson.publicUrl}
     async function uploadMany(files,prefix){const urls=[];for(let i=0;i<files.length;i++)urls.push(await uploadFile(files[i],prefix+'-'+(i+1)));return urls}
     async function persistCredits(newCredits){try{if(window.supabaseClient){const{error}=await window.supabaseClient.from('telegram_users').update({credits:newCredits}).eq('telegram_id',telegramId);if(error)console.error('Error updating credits in Supabase',error)}}catch(e){console.error('Unexpected error updating credits in Supabase',e)}}
 
@@ -381,7 +383,7 @@
       if(successBox)successBox.classList.add('hidden');if(runBtn.disabled)return;if(!telegramId){setStatus('Missing telegram_id, cannot continue.','text-rose-300');return}
       const validation=await validateInputs();if(!validation.ok){setStatus(validation.error,'text-rose-300');return}
       const cost=getCost();if(credits<cost){setStatus('Not enough credits (need '+formatCredits(cost)+').','text-rose-300');return}
-      runBtn.disabled=true;runBtn.dataset.busy='1';runBtn.textContent='Working…';
+      runBtn.disabled=true;runBtn.dataset.busy='1';runBtn.textContent='Working…';let submitFailed=false;
       try{
         let firstFrameUrl='';let lastFrameUrl='';let uploadedInputVideoUrl='';let uploadedAudioUrl='';let referenceImageUrls=[];let referenceVideoUrls=[];
         if(firstFrameFile){setStatus('Uploading First Frame…','text-zinc-400');firstFrameUrl=await uploadFile(firstFrameFile,'wan-first-frame')}
@@ -393,12 +395,12 @@
         const payload={telegram_id:telegramId,credits_before:credits,cost,prompt:(promptInput.value||'').trim(),first_frame_url:firstFrameUrl,last_frame_url:lastFrameUrl,input_video_url:uploadedInputVideoUrl,audio_url:uploadedAudioUrl,reference_image_urls:referenceImageUrls,reference_video_urls:referenceVideoUrls,resolution:selectedResolution,aspect_ratio:ratioSelect.value,duration:Number(durationSelect.value),wan_mode:wanMode,wan_route:validation.route,mode,leng};
         setStatus('Submitting Wan 2.7 task…','text-zinc-400');
         const resp=await fetch('/.netlify/functions/run-wan-2-7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-        const data=await resp.json().catch(()=>null);if(!resp.ok||!data||!data.ok)throw new Error((data&&(data.error||data.details))||'Request failed');
+        const data=await resp.json().catch(()=>null);if(!resp.ok||!data||!data.ok){const serverMsg=data&&(data.details||data.error||(data.data&&(data.data.msg||data.data.message||data.data.error)));throw new Error(serverMsg||'Request failed')}
         const newCredits=Number(data.new_credits);if(Number.isFinite(newCredits)){credits=newCredits;repaintCredits();await persistCredits(newCredits)}
         successText.innerHTML='Your Wan 2.7 task was submitted successfully. The video will be sent to your Telegram bot chat when it is ready.';
         successBox.classList.remove('hidden');setStatus('Task submitted successfully. Route: '+String(data.wan_mode||validation.route||'wan').replace(/_/g,' ')+'.','text-emerald-300');
-      }catch(e){console.error(e);setStatus(e&&e.message?e.message:'Something went wrong.','text-rose-300')}
-      finally{delete runBtn.dataset.busy;updateRunButtonLabel();await updateRunAvailability()}
+      }catch(e){submitFailed=true;console.error(e);setStatus(e&&e.message?e.message:'Something went wrong.','text-rose-300')}
+      finally{delete runBtn.dataset.busy;updateRunButtonLabel();if(submitFailed){runBtn.disabled=false}else{await updateRunAvailability()}}
     }
 
     autoModeBtn.addEventListener('click',()=>{wanMode='auto';updateSegmentButtons();updateRunAvailability()});
