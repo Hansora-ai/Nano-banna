@@ -1,12 +1,15 @@
 // netlify/functions/sign-upload.js
-// v6: Accept Supabase upload signed path with or without `/storage/v1` prefix.
+// v7: Faster and more reliable signing.
+// Removes the normal bucket probe, adds timeout + one retry for Supabase signing.
+// Accept Supabase upload signed path with or without `/storage/v1` prefix.
 // Treat returned `signedUrl` as the PUT URL.
 
 const https = require('https');
 const { URL } = require('url');
 const crypto = require('crypto');
 
-const HANDLER_VERSION = 'sign-upload@v6-accept-sign-path';
+const HANDLER_VERSION = 'sign-upload@v7-timeout-retry-no-probe';
+const FETCH_TIMEOUT_MS = 12000;
 
 function cors() {
   return {
@@ -22,13 +25,28 @@ function json(code, obj, headers) {
   return resp(code, JSON.stringify(obj), { 'Content-Type': 'application/json', ...(headers || {}) });
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function tinyFetch(rawUrl, opts = {}) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+
+    function finish(fn, value) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      fn(value);
+    }
+
     try {
       const url = new URL(rawUrl);
       const method = (opts.method || 'GET').toUpperCase();
       const headers = opts.headers || {};
       const body = opts.body || null;
+      const timeoutMs = Number(opts.timeoutMs || FETCH_TIMEOUT_MS) || FETCH_TIMEOUT_MS;
 
       const req = https.request({
         protocol: url.protocol,
@@ -43,7 +61,7 @@ function tinyFetch(rawUrl, opts = {}) {
         res.on('end', () => {
           const buf = Buffer.concat(chunks);
           const text = buf.toString('utf8');
-          resolve({
+          finish(resolve, {
             ok: res.statusCode >= 200 && res.statusCode < 300,
             status: res.statusCode,
             headers: res.headers,
@@ -52,15 +70,41 @@ function tinyFetch(rawUrl, opts = {}) {
           });
         });
       });
-      req.on('error', reject);
+
+      timer = setTimeout(() => {
+        req.destroy(new Error(`tinyFetch timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      req.on('error', (err) => finish(reject, err));
       if (body) {
         if (Buffer.isBuffer(body)) req.write(body);
         else if (typeof body === 'string') req.write(body, 'utf8');
-        else return reject(new Error('Unsupported body type'));
+        else return finish(reject, new Error('Unsupported body type'));
       }
       req.end();
-    } catch (e) { reject(e); }
+    } catch (e) { finish(reject, e); }
   });
+}
+
+async function tinyFetchWithRetry(rawUrl, opts = {}, retries = 1) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const res = await tinyFetch(rawUrl, opts);
+      if (res.ok || attempt >= retries || (res.status >= 400 && res.status < 500 && res.status !== 429)) {
+        return res;
+      }
+      lastError = new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      lastError = e;
+      if (attempt >= retries) throw e;
+    }
+
+    await sleep(350 * (attempt + 1));
+  }
+
+  throw lastError || new Error('tinyFetchWithRetry failed');
 }
 
 function sanitize(name) {
@@ -103,15 +147,24 @@ async function signUpload(urlBase, key, bucket, objectPath, mime, exp) {
   // Request a signed PUT URL
   const u = `${urlBase}/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${encodePath(objectPath)}`;
   const body = { contentType: mime || 'application/octet-stream', upsert: true, expiresIn: exp };
-  const res = await tinyFetch(u, {
+  const res = await tinyFetchWithRetry(u, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+    timeoutMs: FETCH_TIMEOUT_MS,
+  }, 1);
   const txt = await res.text();
   let data = {};
   try { data = JSON.parse(txt); } catch {}
   return { ok: res.ok, status: res.status, data, raw: txt };
+}
+
+async function probeBucket(urlBase, key, bucket) {
+  return tinyFetch(`${urlBase}/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${key}` },
+    timeoutMs: FETCH_TIMEOUT_MS,
+  });
 }
 
 function objectPathFor(filename, mime) {
@@ -149,18 +202,20 @@ exports.handler = async (event) => {
     const mime = (payload.mime || '').toString().toLowerCase();
     const objectPath = objectPathFor(filename, mime);
 
-    // Bucket probe for precise diagnostics
-    const probe = await tinyFetch(`${url}/storage/v1/bucket/${encodeURIComponent(bucket)}`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${key}` },
-    });
-    if (probe.status === 404) {
-      return json(500, { error: 'bucket_not_found', detail: `Bucket '${bucket}' does not exist on ${new URL(url).host}` },
-        { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket });
-    }
-
     const signed = await signUpload(url, key, bucket, objectPath, mime, exp);
     if (!signed.ok) {
+      if (signed.status === 404) {
+        try {
+          const probe = await probeBucket(url, key, bucket);
+          if (probe.status === 404) {
+            return json(500, { error: 'bucket_not_found', detail: `Bucket '${bucket}' does not exist on ${new URL(url).host}` },
+              { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket });
+          }
+        } catch (probeError) {
+          console.error('bucket probe after sign failure failed', probeError && probeError.message ? probeError.message : probeError);
+        }
+      }
+
       return json(502, { error: 'sign_failed', detail: signed.raw || signed.data },
         { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket });
     }
