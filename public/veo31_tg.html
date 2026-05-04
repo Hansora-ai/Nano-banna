@@ -125,9 +125,31 @@
                 id="modelSelect"
                 class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
-                <option value="veo3_fast" selected>Veo 3.1 Fast (8⚡)</option>
-                <option value="veo3">Veo 3.1 (20⚡)</option>
+                <option value="veo3_fast" selected>Veo 3.1 Fast</option>
+                <option value="veo3">Veo 3.1</option>
               </select>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-zinc-300 mb-1">Quality</label>
+              <div class="grid grid-cols-2 gap-2" id="qualityButtons">
+                <button
+                  id="quality1080Btn"
+                  type="button"
+                  data-quality="1080p"
+                  class="quality-btn rounded-2xl px-3 py-3 text-left border border-indigo-400 bg-indigo-500/20 shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500/25">
+                  <span class="block text-sm font-semibold text-white">1080p HD</span>
+                  <span id="quality1080Price" class="block text-[11px] text-indigo-100 mt-0.5">5⚡</span>
+                </button>
+                <button
+                  id="quality4kBtn"
+                  type="button"
+                  data-quality="4k"
+                  class="quality-btn rounded-2xl px-3 py-3 text-left border border-white/10 bg-white/5 transition hover:bg-white/10">
+                  <span class="block text-sm font-semibold text-white">4K Ultra</span>
+                  <span id="quality4kPrice" class="block text-[11px] text-zinc-300 mt-0.5">12⚡</span>
+                </button>
+              </div>
             </div>
 
             <div class="space-y-2">
@@ -168,7 +190,8 @@
                 <li>Optionally upload a Start Frame image and an End Frame image.</li>
                 <li>If you add an End Frame, a Start Frame is required.</li>
                 <li>Type your prompt describing the motion (required in all cases).</li>
-                <li>Select Veo 3.1 Fast (8⚡) or Veo 3.1 (20⚡).</li>
+                <li>Select Veo 3.1 Fast or Veo 3.1.</li>
+                <li>Choose 1080p HD or 4K Ultra. Default is 1080p.</li>
                 <li>Choose aspect ratio 16:9 or 9:16.</li>
                 <li>Click Run. If you have enough credits, the result will be sent to your bot's chat.</li>
               </ol>
@@ -180,8 +203,10 @@
   </main>
 
   <script>
-    const COST_FAST = 8;
-    const COST_STD = 20;
+    const COST_FAST_1080 = 5;
+    const COST_FAST_4K = 12;
+    const COST_STD_1080 = 20;
+    const COST_STD_4K = 25;
     let telegramId = "";
     let credits = 0;
     let mode = "";
@@ -199,6 +224,11 @@
     const promptInput = document.getElementById("promptInput");
     const modelSelect = document.getElementById("modelSelect");
     const aspectSelect = document.getElementById("aspectSelect");
+    const quality1080Btn = document.getElementById("quality1080Btn");
+    const quality4kBtn = document.getElementById("quality4kBtn");
+    const quality1080Price = document.getElementById("quality1080Price");
+    const quality4kPrice = document.getElementById("quality4kPrice");
+    let selectedQuality = "1080p";
 
     let lastStartObjURL = null;
     let lastEndObjURL = null;
@@ -289,12 +319,36 @@
     }
 
     function getCurrentCost(){
-      if (!modelSelect) return COST_FAST;
-      return (modelSelect.value === "veo3") ? COST_STD : COST_FAST;
+      const isStandard = modelSelect && modelSelect.value === "veo3";
+      if (isStandard) {
+        return selectedQuality === "4k" ? COST_STD_4K : COST_STD_1080;
+      }
+      return selectedQuality === "4k" ? COST_FAST_4K : COST_FAST_1080;
+    }
+
+    function updateQualityPrices(){
+      const isStandard = modelSelect && modelSelect.value === "veo3";
+      if (quality1080Price) quality1080Price.textContent = (isStandard ? COST_STD_1080 : COST_FAST_1080) + "⚡";
+      if (quality4kPrice) quality4kPrice.textContent = (isStandard ? COST_STD_4K : COST_FAST_4K) + "⚡";
+    }
+
+    function updateQualityButtons(){
+      if (quality1080Btn) {
+        quality1080Btn.className = selectedQuality === "1080p"
+          ? "quality-btn rounded-2xl px-3 py-3 text-left border border-indigo-400 bg-indigo-500/20 shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500/25"
+          : "quality-btn rounded-2xl px-3 py-3 text-left border border-white/10 bg-white/5 transition hover:bg-white/10";
+      }
+      if (quality4kBtn) {
+        quality4kBtn.className = selectedQuality === "4k"
+          ? "quality-btn rounded-2xl px-3 py-3 text-left border border-indigo-400 bg-indigo-500/20 shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500/25"
+          : "quality-btn rounded-2xl px-3 py-3 text-left border border-white/10 bg-white/5 transition hover:bg-white/10";
+      }
     }
 
     function updateRunButtonLabel(){
       if (!runBtn) return;
+      updateQualityPrices();
+      updateQualityButtons();
       const c = getCurrentCost();
       runBtn.textContent = "Run (cost: " + c + "⚡)";
     }
@@ -483,6 +537,8 @@
             duration,
             prompt,
             aspect_ratio: aspectSelect ? aspectSelect.value : "16:9",
+            quality: selectedQuality,
+            resolution: selectedQuality,
             model: modelSelect ? modelSelect.value : "veo3_fast",
             firstFrameUrl: startImageUrl,
             lastFrameUrl: endImageUrl,
@@ -521,7 +577,7 @@
         setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "✦ Submitted successfully. You will receive the Veo 3.1 video in Telegram when it is ready.<br/>✦ Запрос успешно принят. Вы получите Kling v2.1 Pro видео в Telegram, когда оно будет готово.";
+          successText.innerHTML = "✦ Submitted successfully. You will receive the Veo 3.1 video in Telegram when it is ready.<br/>✦ Запрос успешно принят. Вы получите Veo 3.1 видео в Telegram, когда оно будет готово.";
         }
       } catch (err) {
         console.error(err);
@@ -537,6 +593,18 @@
       updateRunButtonLabel();
       if (modelSelect) {
         modelSelect.addEventListener("change", updateRunButtonLabel);
+      }
+      if (quality1080Btn) {
+        quality1080Btn.addEventListener("click", () => {
+          selectedQuality = "1080p";
+          updateRunButtonLabel();
+        });
+      }
+      if (quality4kBtn) {
+        quality4kBtn.addEventListener("click", () => {
+          selectedQuality = "4k";
+          updateRunButtonLabel();
+        });
       }
       runBtn.addEventListener("click", () => { handleRun(); });
     });
