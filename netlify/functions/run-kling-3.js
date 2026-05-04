@@ -19,10 +19,11 @@ const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258
 // n8n webhook that sends the temporary Telegram video loading/process message.
 const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/4f5c5e17-79f7-46d9-b9f7-b884fb09e030";
 
-// UI rate table (must match kling30_tg_fixed.html)
+// UI rate table (must match kling_3.html)
 const RATE = {
-  std: { nosound: 2.0, sound: 2.5 },
-  pro: { nosound: 2.5, sound: 3.5 }
+  std: { nosound: 1.0, sound: 1.5 },
+  pro: { nosound: 1.5, sound: 2.0 },
+  "4k": { nosound: 4.0, sound: 4.0 }
 };
 
 function jsonResponse(statusCode, body){
@@ -97,10 +98,18 @@ function normalizeUrl(u){
   }
 }
 
+function normalizeKlingMode(mode){
+  const m = String(mode || "std").trim();
+  const lower = m.toLowerCase();
+  if (lower === "pro") return "pro";
+  if (lower === "4k") return "4k";
+  return "std";
+}
+
 function getRate(mode, sound){
-  const m = (mode === "pro" || mode === "std") ? mode : "std";
+  const m = normalizeKlingMode(mode);
   const key = sound ? "sound" : "nosound";
-  return (RATE[m] && RATE[m][key]) ? RATE[m][key] : 2.0;
+  return (RATE[m] && RATE[m][key]) ? RATE[m][key] : 1.0;
 }
 
 function calcExpectedCost(totalSeconds, mode, sound){
@@ -189,7 +198,7 @@ exports.handler = async function(event){
   const endImageUrl   = normalizeUrl(body.endImageUrl   || body.end_image_url   || body.lastFrameUrl || body.last_frame_url || "");
 
   const aspectRatio = (body.aspectRatio || body.aspect_ratio || "").toString().trim(); // optional if using image_urls per docs
-  const klingMode = (body.kling_mode || body.klingMode || body.mode_quality || "std").toString().trim().toLowerCase();
+  const klingMode = normalizeKlingMode(body.kling_mode || body.klingMode || body.mode_quality || "std");
   const sound = !!(body.sound);
 
   const multiShots = !!(body.multi_shots);
@@ -305,7 +314,7 @@ exports.handler = async function(event){
     prompt,
     sound,
     duration: String(totalSeconds),
-    mode: (klingMode === "pro" || klingMode === "std") ? klingMode : "std",
+    mode: klingMode === "4k" ? "4K" : klingMode,
     multi_shots: multiShots
   };
 
