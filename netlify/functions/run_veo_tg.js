@@ -4,6 +4,7 @@
 // and also log into Supabase telegram_generations with telegram_id, model, credits, prompt.
 
 const KIE_URL = "https://api.kie.ai/api/v1/veo/generate";
+const KIE_4K_URL = "https://api.kie.ai/api/v1/veo/get-4k-video";
 const KIE_KEY = process.env.KIE_API_KEY || "";
 
 // Supabase (service role, same as other Telegram flows)
@@ -119,6 +120,14 @@ function normalizeAspect(a){
   a = String(a || "").trim();
   return /^(16:9|9:16)$/.test(a) ? a : "16:9";
 }
+function normalizeQuality(q){
+  const s = String(q || "").trim().toLowerCase();
+  return s === "4k" ? "4k" : "1080p";
+}
+function getVeoCost(model, quality){
+  if (model === "veo3") return quality === "4k" ? 25 : 20;
+  return quality === "4k" ? 12 : 5;
+}
 function normalizeUrl(u){
   try {
     const url = new URL(String(u || ""));
@@ -160,6 +169,35 @@ function extractTaskId(data){
   return scan(data) || "";
 }
 
+async function request4KVideo({ taskId, callbackUrl }) {
+  const resp = await fetch(KIE_4K_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${KIE_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      taskId,
+      index: 0,
+      callBackUrl: callbackUrl
+    })
+  });
+
+  const text = await resp.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { _raw: text };
+  }
+
+  if (!resp.ok && resp.status !== 422) {
+    throw new Error((data && (data.error || data.message || data.msg)) || "kie_4k_request_failed");
+  }
+
+  return data;
+}
+
 exports.handler = async function(event){
   if (event.httpMethod !== "POST") {
     return jsonResponse(405, { ok:false, error: "method_not_allowed" });
@@ -180,15 +218,18 @@ exports.handler = async function(event){
   const prompt = (body.prompt || "").toString();
   const aspectRatio = normalizeAspect(body.aspect_ratio || body.aspectRatio || "16:9");
   const model = normalizeModel(body.model || "veo3_fast");
+  const quality = normalizeQuality(body.quality || body.resolution || "1080p");
 
   const firstFrameUrl = normalizeUrl(body.firstFrameUrl || body.first_frame_url || "");
   const lastFrameUrl  = normalizeUrl(body.lastFrameUrl  || body.last_frame_url  || "");
 
   const creditsBefore = Number(body.credits_before || 0);
-  const newCredits = Number(body.new_credits || 0);
 
-  // Cost: 8⚡ for veo3_fast, 20⚡ for veo3
-  const cost = model === "veo3" ? 20 : 8;
+  // Cost matrix:
+  // Veo 3.1 Fast: 1080p = 5⚡, 4K = 12⚡
+  // Veo 3.1:      1080p = 20⚡, 4K = 25⚡
+  const cost = getVeoCost(model, quality);
+  const newCredits = Number.isFinite(creditsBefore) ? creditsBefore - cost : Number(body.new_credits || 0);
 
   // mode / leng collection from body, query, referer
   const query = event.queryStringParameters || {};
@@ -241,6 +282,8 @@ exports.handler = async function(event){
     "&new_credits=" + encodeURIComponent(newCredits) +
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
+    "&quality=" + encodeURIComponent(quality) +
+    "&resolution=" + encodeURIComponent(quality) +
     "&mode=" + encodeURIComponent(mode) +
     "&leng=" + encodeURIComponent(leng) +
     "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
@@ -250,6 +293,8 @@ exports.handler = async function(event){
     prompt,
     model,
     aspectRatio,
+    aspect_ratio: aspectRatio,
+    resolution: quality,
     callBackUrl: callbackUrl,
     loading_message_id: loadingMessageId
   };
@@ -303,8 +348,14 @@ exports.handler = async function(event){
       });
     }
 
+    let upscaleTask = null;
+    if (quality === "4k") {
+      const upscaleCallbackUrl = callbackUrl + "&upscale=4k";
+      upscaleTask = await request4KVideo({ taskId, callbackUrl: upscaleCallbackUrl });
+    }
+
     // Log into telegram_generations (non-blocking)
-    const providerLabel = model === "veo3" ? "Veo 3.1 Video" : "Veo 3.1 Fast Video";
+    const providerLabel = (model === "veo3" ? "Veo 3.1 Video" : "Veo 3.1 Fast Video") + " " + quality.toUpperCase();
     await writeTelegramGeneration({ telegramId, cost, prompt, provider: providerLabel });
 
     return jsonResponse(201, {
@@ -313,7 +364,10 @@ exports.handler = async function(event){
       run_id: runId,
       taskId,
       loading_message_id: loadingMessageId,
-      new_credits: newCredits
+      new_credits: newCredits,
+      quality,
+      resolution: quality,
+      upscale_task: upscaleTask
     });
   } catch (e) {
     return jsonResponse(500, {
