@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • Kling 2.5 Turbo (Text / Image → Video) • Telegram</title>
+  <title>HANSORA ‚Ä¢ Kling 2.5 Turbo (Text / Image ‚Üí Video) ‚Ä¢ Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,13 +52,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Kling 2.5 Turbo Text / Image → Video</span>
+          <span class="text-xs text-zinc-400">Kling 2.5 Turbo Text / Image ‚Üí Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Kling 2.5 Turbo (Text / Image → Video)
+              Kling 2.5 Turbo (Text / Image ‚Üí Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Use only text, or upload 1 image + prompt, and get a short AI video.
@@ -148,7 +148,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 5⚡)
+                Run (cost: 5‚ö°)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -157,7 +157,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">✅</div>
+                  <div class="text-2xl">‚úÖ</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -201,6 +201,96 @@
 
     let lastStartObjURL = null;
     let lastEndObjURL = null;
+    let selectedStartFile = null;
+    let selectedEndFile = null;
+    let pendingImagePreparations = 0;
+
+    const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+    function stableImageExt(mime){
+      const t = String(mime || "").toLowerCase();
+      if (t === "image/png") return ".png";
+      if (t === "image/webp") return ".webp";
+      return ".jpg";
+    }
+
+    function sniffImageMime(bytes){
+      if (!bytes || bytes.length < 4) return "";
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "image/jpeg";
+      if (
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+        bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
+      ) return "image/png";
+      if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+      ) return "image/webp";
+      return "";
+    }
+
+    function safeBaseName(name, fallback){
+      return String(name || fallback || "image")
+        .replace(/\.[^./\\]+$/, "")
+        .replace(/[^\w.-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80) || fallback || "image";
+    }
+
+    async function makeStableImageFile(file, prefix){
+      if (!file) return null;
+      const rawType = String(file.type || "").toLowerCase();
+      const buf = await file.arrayBuffer();
+      const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
+      if (rawType && !rawType.startsWith("image/") && !sniffedType){
+        throw new Error("Please choose an image file.");
+      }
+      let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
+      if (!type){
+        throw new Error("Only JPEG, PNG, or WebP images are allowed.");
+      }
+      type = type === "image/jpg" ? "image/jpeg" : type;
+      return new File([buf], Date.now() + "-" + prefix + "-" + safeBaseName(file.name, "image") + stableImageExt(type), {
+        type,
+        lastModified: Date.now()
+      });
+    }
+
+    function beginImagePreparation(label){
+      pendingImagePreparations += 1;
+      setStatus("Preparing " + label + "‚Ä¶", "text-zinc-400");
+    }
+
+    function endImagePreparation(){
+      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
+        setStatus("Ready.", "text-zinc-500");
+      }
+    }
+
+    function renderImagePreview(file, which){
+      const isStart = which === "start";
+      const thumbsEl = isStart ? startThumbsEl : endThumbsEl;
+      if (!thumbsEl || !file) return;
+      const u = URL.createObjectURL(file);
+      if (isStart) lastStartObjURL = u;
+      else lastEndObjURL = u;
+      const img = new Image();
+      img.src = u;
+      img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+      const wrap = document.createElement("div");
+      wrap.className = "relative inline-block";
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+      del.innerHTML = "√ó";
+      del.onclick = isStart ? clearStartSelection : clearEndSelection;
+      wrap.appendChild(img);
+      wrap.appendChild(del);
+      thumbsEl.appendChild(wrap);
+    }
 
     function clearStartSelection(){
       try {
@@ -209,6 +299,7 @@
           lastStartObjURL = null;
         }
       } catch {}
+      selectedStartFile = null;
       if (startFrameInput) startFrameInput.value = "";
       if (startThumbsEl) startThumbsEl.innerHTML = "";
     }
@@ -220,12 +311,13 @@
           lastEndObjURL = null;
         }
       } catch {}
+      selectedEndFile = null;
       if (endFrameInput) endFrameInput.value = "";
       if (endThumbsEl) endThumbsEl.innerHTML = "";
     }
 
     if (startFrameInput && startThumbsEl){
-      startFrameInput.addEventListener("change", () => {
+      startFrameInput.addEventListener("change", async () => {
         startThumbsEl.innerHTML = "";
         try {
           if (lastStartObjURL) {
@@ -233,28 +325,23 @@
             lastStartObjURL = null;
           }
         } catch {}
+        selectedStartFile = null;
         const f = startFrameInput.files && startFrameInput.files[0];
         if (!f) return;
-        const u = URL.createObjectURL(f);
-        lastStartObjURL = u;
-        const img = new Image();
-        img.src = u;
-        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-        const wrap = document.createElement("div");
-        wrap.className = "relative inline-block";
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "×";
-        del.onclick = clearStartSelection;
-        wrap.appendChild(img);
-        wrap.appendChild(del);
-        startThumbsEl.appendChild(wrap);
+        beginImagePreparation("Start Frame");
+        try {
+          selectedStartFile = await makeStableImageFile(f, "start");
+          renderImagePreview(selectedStartFile, "start");
+        } catch (err) {
+          setStatus(err && err.message ? err.message : "Could not read Start Frame.", "text-rose-300");
+        } finally {
+          endImagePreparation();
+        }
       });
     }
 
     if (endFrameInput && endThumbsEl){
-      endFrameInput.addEventListener("change", () => {
+      endFrameInput.addEventListener("change", async () => {
         endThumbsEl.innerHTML = "";
         try {
           if (lastEndObjURL) {
@@ -262,23 +349,18 @@
             lastEndObjURL = null;
           }
         } catch {}
+        selectedEndFile = null;
         const f = endFrameInput.files && endFrameInput.files[0];
         if (!f) return;
-        const u = URL.createObjectURL(f);
-        lastEndObjURL = u;
-        const img = new Image();
-        img.src = u;
-        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-        const wrap = document.createElement("div");
-        wrap.className = "relative inline-block";
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "×";
-        del.onclick = clearEndSelection;
-        wrap.appendChild(img);
-        wrap.appendChild(del);
-        endThumbsEl.appendChild(wrap);
+        beginImagePreparation("End Frame");
+        try {
+          selectedEndFile = await makeStableImageFile(f, "end");
+          renderImagePreview(selectedEndFile, "end");
+        } catch (err) {
+          setStatus(err && err.message ? err.message : "Could not read End Frame.", "text-rose-300");
+        } finally {
+          endImagePreparation();
+        }
       });
     }
 
@@ -298,11 +380,11 @@
     function updateRunButtonLabel(){
       if (!runBtn) return;
       const c = getCurrentCost();
-      runBtn.textContent = "Run (cost: " + c + "⚡)";
+      runBtn.textContent = "Run (cost: " + c + "‚ö°)";
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "‚ö°";
     }
 
     function parseQueryParams(){
@@ -377,8 +459,13 @@
         return;
       }
 
-      const startFile = (startFrameInput && startFrameInput.files && startFrameInput.files[0]) ? startFrameInput.files[0] : null;
-      const endFile = (endFrameInput && endFrameInput.files && endFrameInput.files[0]) ? endFrameInput.files[0] : null;
+      if (pendingImagePreparations > 0){
+        setStatus("Please wait until the images are ready.", "text-rose-300");
+        return;
+      }
+
+      const startFile = selectedStartFile;
+      const endFile = selectedEndFile;
 
       if (endFile && !startFile){
         setStatus("End Frame requires Start Frame.", "text-rose-300");
@@ -407,14 +494,14 @@ const cost = getCurrentCost();
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working…";
+      runBtn.textContent = "Working‚Ä¶";
 
       let imageUrl = "";
       let tailImageUrl = "";
       const duration = durationSelect ? (durationSelect.value === "10" ? 10 : 5) : 5;
       try {
         if (startFile){
-          setStatus("Uploading Start Frame…", "text-zinc-400");
+          setStatus("Uploading Start Frame‚Ä¶", "text-zinc-400");
           const file = startFile;
           const origName = file.name || "start.jpg";
           const type = (file.type || "image/jpeg").toLowerCase();
@@ -443,7 +530,7 @@ const cost = getCurrentCost();
         }
 
         if (endFile){
-          setStatus("Uploading End Frame…", "text-zinc-400");
+          setStatus("Uploading End Frame‚Ä¶", "text-zinc-400");
           const file = endFile;
           const origName = file.name || "end.jpg";
           const type = (file.type || "image/jpeg").toLowerCase();
@@ -471,7 +558,7 @@ const cost = getCurrentCost();
           tailImageUrl = signJson.publicUrl;
         }
 
-        setStatus("Submitting Kling video job…", "text-zinc-400");
+        setStatus("Submitting Kling video job‚Ä¶", "text-zinc-400");
 const resp = await fetch("/.netlify/functions/run-kling", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -517,10 +604,10 @@ const resp = await fetch("/.netlify/functions/run-kling", {
         credits = newCredits;
         repaintCredits();
 
-        setStatus("✅ Request submitted.", "text-emerald-300");
+        setStatus("‚úÖ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "✦ Submitted successfully. You will receive the Kling video in Telegram when it is ready.<br/>✦ Запрос успешно принят. Вы получите Runway-видео в Telegram, когда оно будет готово.";
+          successText.innerHTML = "‚ú¶ Submitted successfully. You will receive the Kling video in Telegram when it is ready.<br/>‚ú¶ –ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ Runway-–≤–∏–¥–µ–æ –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω–æ –±—É–¥–µ—Ç –≥–æ—Ç–æ–≤–æ.";
         }
       } catch (err) {
         console.error(err);
