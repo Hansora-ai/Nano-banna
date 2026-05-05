@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • Midjourney (Image → Video) • Telegram</title>
+  <title>HANSORA ‚Ä¢ Midjourney (Image ‚Üí Video) ‚Ä¢ Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,13 +52,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Midjourney Image → Video</span>
+          <span class="text-xs text-zinc-400">Midjourney Image ‚Üí Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Midjourney (Image → Video)
+              Midjourney (Image ‚Üí Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Upload 1 image, write your prompt, and that's it
@@ -112,7 +112,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 2⚡)
+                Run (cost: 2‚ö°)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -121,7 +121,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">✅</div>
+                  <div class="text-2xl">‚úÖ</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -159,6 +159,93 @@
     const thumbsEl = document.getElementById("thumbs");
 
     let lastObjURL = null;
+    let selectedImageFile = null;
+    let pendingImagePreparations = 0;
+
+    const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+    function stableImageExt(mime){
+      const t = String(mime || "").toLowerCase();
+      if (t === "image/png") return ".png";
+      if (t === "image/webp") return ".webp";
+      return ".jpg";
+    }
+
+    function sniffImageMime(bytes){
+      if (!bytes || bytes.length < 4) return "";
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "image/jpeg";
+      if (
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+        bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
+      ) return "image/png";
+      if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+      ) return "image/webp";
+      return "";
+    }
+
+    function safeBaseName(name, fallback){
+      return String(name || fallback || "image")
+        .replace(/\.[^./\\]+$/, "")
+        .replace(/[^\w.-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80) || fallback || "image";
+    }
+
+    async function makeStableImageFile(file, prefix){
+      if (!file) return null;
+      const rawType = String(file.type || "").toLowerCase();
+      const buf = await file.arrayBuffer();
+      const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
+      if (rawType && !rawType.startsWith("image/") && !sniffedType){
+        throw new Error("Please choose an image file.");
+      }
+      let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
+      if (!type){
+        throw new Error("Only JPEG, PNG, or WebP images are allowed.");
+      }
+      type = type === "image/jpg" ? "image/jpeg" : type;
+      return new File([buf], Date.now() + "-" + prefix + "-" + safeBaseName(file.name, "image") + stableImageExt(type), {
+        type,
+        lastModified: Date.now()
+      });
+    }
+
+    function beginImagePreparation(){
+      pendingImagePreparations += 1;
+      setStatus("Preparing image‚Ä¶", "text-zinc-400");
+    }
+
+    function endImagePreparation(){
+      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
+        setStatus("Ready.", "text-zinc-500");
+      }
+    }
+
+    function renderImagePreview(file){
+      if (!thumbsEl || !file) return;
+      const u = URL.createObjectURL(file);
+      lastObjURL = u;
+      const img = new Image();
+      img.src = u;
+      img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+      const wrap = document.createElement("div");
+      wrap.className = "relative inline-block";
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+      del.innerHTML = "\u00d7";
+      del.onclick = clearImageSelection;
+      wrap.appendChild(img);
+      wrap.appendChild(del);
+      thumbsEl.appendChild(wrap);
+    }
+
     function clearImageSelection(){
       try {
         if (lastObjURL) {
@@ -166,12 +253,13 @@
           lastObjURL = null;
         }
       } catch {}
+      selectedImageFile = null;
       if (imageInput) imageInput.value = "";
       if (thumbsEl) thumbsEl.innerHTML = "";
     }
 
     if (imageInput && thumbsEl){
-      imageInput.addEventListener("change", () => {
+      imageInput.addEventListener("change", async () => {
         thumbsEl.innerHTML = "";
         try {
           if (lastObjURL) {
@@ -179,23 +267,18 @@
             lastObjURL = null;
           }
         } catch {}
+        selectedImageFile = null;
         const f = imageInput.files && imageInput.files[0];
         if (!f) return;
-        const u = URL.createObjectURL(f);
-        lastObjURL = u;
-        const img = new Image();
-        img.src = u;
-        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-        const wrap = document.createElement("div");
-        wrap.className = "relative inline-block";
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "\u00d7";
-        del.onclick = clearImageSelection;
-        wrap.appendChild(img);
-        wrap.appendChild(del);
-        thumbsEl.appendChild(wrap);
+        beginImagePreparation();
+        try {
+          selectedImageFile = await makeStableImageFile(f, "mjvideo");
+          renderImagePreview(selectedImageFile);
+        } catch (err) {
+          setStatus(err && err.message ? err.message : "Could not read this image.", "text-rose-300");
+        } finally {
+          endImagePreparation();
+        }
       });
     }
 
@@ -207,7 +290,7 @@
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "‚ö°";
     }
 
     function parseQueryParams(){
@@ -282,9 +365,14 @@
         return;
       }
 
-      const files = Array.from(imageInput.files || []);
+      const files = selectedImageFile ? [selectedImageFile] : [];
       const prompt = (promptInput.value || "").trim();
       const ratio = ratioSelect.value || "1:1";
+
+      if (pendingImagePreparations > 0){
+        setStatus("Please wait until the image is ready.", "text-rose-300");
+        return;
+      }
 
       if (files.length !== 1 || !prompt){
         setStatus("Please upload 1 image and enter a prompt (both required).", "text-rose-300");
@@ -303,8 +391,8 @@
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working…";
-      setStatus("Uploading image…", "text-zinc-400");
+      runBtn.textContent = "Working‚Ä¶";
+      setStatus("Uploading image‚Ä¶", "text-zinc-400");
 
       try {
         const origName = file.name || "image.jpg";
@@ -332,7 +420,7 @@
         } catch {}
 
         const imageUrl = signJson.publicUrl;
-        setStatus("Submitting video job…", "text-zinc-400");
+        setStatus("Submitting video job‚Ä¶", "text-zinc-400");
 
         const resp = await fetch("/.netlify/functions/run-mjvideo", {
           method: "POST",
@@ -375,17 +463,17 @@
         credits = newCredits;
         repaintCredits();
 
-        setStatus("✅ Request submitted.", "text-emerald-300");
+        setStatus("‚úÖ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "✦Submitted successfully. You will receive the video in Telegram when it is ready.<br/>✦Запрос успешно принят. Вы получите видео в Telegram, когда он будет готов.";
+          successText.innerHTML = "‚ú¶Submitted successfully. You will receive the video in Telegram when it is ready.<br/>‚ú¶–ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ –≤–∏–¥–µ–æ –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω –±—É–¥–µ—Ç –≥–æ—Ç–æ–≤.";
         }
       } catch (err) {
         console.error(err);
         setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
       } finally {
         runBtn.disabled = false;
-        runBtn.textContent = "Run (cost: 2⚡)";
+        runBtn.textContent = "Run (cost: 2‚ö°)";
       }
     }
 
