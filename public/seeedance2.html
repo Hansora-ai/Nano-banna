@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • Seedance 2 • Telegram</title>
+  <title>HANSORA ‚Ä¢ Seedance 2 ‚Ä¢ Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -48,13 +48,13 @@
         <div class="h-8 w-8 rounded-2xl bg-indigo-500 flex items-center justify-center text-sm font-bold shadow-lg shadow-indigo-500/40">H</div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Seedance 2 Text / Image / Reference → Video</span>
+          <span class="text-xs text-zinc-400">Seedance 2 Text / Image / Reference ‚Üí Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
         </div>
       </div>
     </div>
@@ -173,14 +173,14 @@
             </div>
 
             <div class="space-y-2">
-              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 15⚡)</button>
+              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 15‚ö°)</button>
               <p id="statusText" class="text-[11px] text-zinc-500">Ready.</p>
             </div>
 
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">✅</div>
+                  <div class="text-2xl">‚úÖ</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -240,6 +240,7 @@
     let refImageUrls = [];
     let refVideoUrls = [];
     let refAudioUrls = [];
+    let pendingImagePreparations = 0;
 
     const creditsDisplay = document.getElementById('creditsDisplay');
     const statusText = document.getElementById('statusText');
@@ -285,7 +286,7 @@
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = formatCredits(credits) + '⚡';
+      creditsDisplay.textContent = formatCredits(credits) + '‚ö°';
     }
 
     function updateSegmentButtons(){
@@ -315,7 +316,7 @@
     }
 
     function updateRunButtonLabel(){
-      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '⚡)';
+      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '‚ö°)';
     }
 
     async function updateRunAvailability(){
@@ -330,6 +331,10 @@
         return;
       }
       if (lastFrameFile && !firstFrameFile){
+        runBtn.disabled = true;
+        return;
+      }
+      if (pendingImagePreparations > 0){
         runBtn.disabled = true;
         return;
       }
@@ -428,6 +433,71 @@
       el.classList.add('text-emerald-300');
     }
 
+    const SUPPORTED_IMAGE_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+
+    function stableImageExt(mime){
+      const t = String(mime || '').toLowerCase();
+      if (t === 'image/png') return '.png';
+      if (t === 'image/webp') return '.webp';
+      return '.jpg';
+    }
+
+    function sniffImageMime(bytes){
+      if (!bytes || bytes.length < 4) return '';
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
+      if (
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+        bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
+      ) return 'image/png';
+      if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+      ) return 'image/webp';
+      return '';
+    }
+
+    function safeBaseName(name, fallback){
+      return String(name || fallback || 'image')
+        .replace(/\.[^./\\]+$/, '')
+        .replace(/[^\w.-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || fallback || 'image';
+    }
+
+    async function makeStableImageFile(file, prefix){
+      if (!file) return null;
+      const rawType = String(file.type || '').toLowerCase();
+      const buf = await file.arrayBuffer();
+      const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
+      if (rawType && !rawType.startsWith('image/') && !sniffedType){
+        throw new Error('Please choose an image file.');
+      }
+      let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
+      if (!type){
+        throw new Error('Only JPEG, PNG, or WebP images are allowed.');
+      }
+      type = type === 'image/jpg' ? 'image/jpeg' : type;
+      return new File([buf], Date.now() + '-' + prefix + '-' + safeBaseName(file.name, 'image') + stableImageExt(type), {
+        type,
+        lastModified: Date.now()
+      });
+    }
+
+    function beginImagePreparation(label){
+      pendingImagePreparations += 1;
+      setStatus('Preparing ' + label + '‚Ä¶', 'text-zinc-400');
+    }
+
+    function endImagePreparation(){
+      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || '')){
+        setStatus('Ready.', 'text-zinc-500');
+      }
+    }
+
     function clearObjectUrl(url){
       if (!url) return;
       try { URL.revokeObjectURL(url); } catch (_) {}
@@ -457,7 +527,7 @@
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-      del.innerHTML = '×';
+      del.innerHTML = '√ó';
       del.onclick = onDelete;
       wrap.appendChild(img);
       wrap.appendChild(del);
@@ -478,7 +548,7 @@
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-        del.innerHTML = '×';
+        del.innerHTML = '√ó';
         del.onclick = () => {
           referenceImageFiles.splice(idx, 1);
           renderImageList(referenceImageFiles, referenceImagesThumbs);
@@ -506,7 +576,7 @@
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-        del.innerHTML = '×';
+        del.innerHTML = '√ó';
         del.onclick = () => {
           referenceVideoFiles.splice(idx, 1);
           renderVideoList(referenceVideoFiles, referenceVideosThumbs);
@@ -534,7 +604,7 @@
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-        del.innerHTML = '×';
+        del.innerHTML = '√ó';
         del.onclick = () => {
           referenceAudioFiles.splice(idx, 1);
           renderAudioList(referenceAudioFiles, referenceAudiosThumbs);
@@ -672,6 +742,7 @@
       const audiosOk = await validateReferenceAudios();
 
       if (!prompt) return { ok:false, error:'Please enter a prompt.' };
+      if (pendingImagePreparations > 0) return { ok:false, error:'Please wait until the images are ready.' };
       if (firstFrameFile && firstFrameFile.size > MAX_IMAGE_MB * 1024 * 1024) return { ok:false, error:'First Frame exceeds 10MB.' };
       if (lastFrameFile && lastFrameFile.size > MAX_IMAGE_MB * 1024 * 1024) return { ok:false, error:'Last Frame exceeds 10MB.' };
       if (lastFrameFile && !firstFrameFile) return { ok:false, error:'Last Frame requires First Frame.' };
@@ -774,7 +845,7 @@
 
       runBtn.disabled = true;
       runBtn.dataset.busy = '1';
-      runBtn.textContent = 'Working…';
+      runBtn.textContent = 'Working‚Ä¶';
 
       try {
         let firstFrameUrl = '';
@@ -784,23 +855,23 @@
         let referenceAudioUrls = [];
 
         if (firstFrameFile) {
-          setStatus('Uploading First Frame…', 'text-zinc-400');
+          setStatus('Uploading First Frame‚Ä¶', 'text-zinc-400');
           firstFrameUrl = await uploadFile(firstFrameFile, 'first-frame');
         }
         if (lastFrameFile) {
-          setStatus('Uploading Last Frame…', 'text-zinc-400');
+          setStatus('Uploading Last Frame‚Ä¶', 'text-zinc-400');
           lastFrameUrl = await uploadFile(lastFrameFile, 'last-frame');
         }
         if (referenceImageFiles.length) {
-          setStatus('Uploading reference images…', 'text-zinc-400');
+          setStatus('Uploading reference images‚Ä¶', 'text-zinc-400');
           referenceImageUrls = await uploadMany(referenceImageFiles, 'ref-image');
         }
         if (referenceVideoFiles.length) {
-          setStatus('Uploading reference videos…', 'text-zinc-400');
+          setStatus('Uploading reference videos‚Ä¶', 'text-zinc-400');
           referenceVideoUrls = await uploadMany(referenceVideoFiles, 'ref-video');
         }
         if (referenceAudioFiles.length) {
-          setStatus('Uploading reference audios…', 'text-zinc-400');
+          setStatus('Uploading reference audios‚Ä¶', 'text-zinc-400');
           referenceAudioUrls = await uploadMany(referenceAudioFiles, 'ref-audio');
         }
 
@@ -824,7 +895,7 @@
           leng
         };
 
-        setStatus('Submitting Seedance 2 task…', 'text-zinc-400');
+        setStatus('Submitting Seedance 2 task‚Ä¶', 'text-zinc-400');
         const resp = await fetch('/.netlify/functions/run-seedance-2', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -883,26 +954,78 @@
     });
     runBtn.addEventListener('click', handleRun);
 
-    firstFrameInput.addEventListener('change', () => {
-      firstFrameFile = firstFrameInput.files && firstFrameInput.files[0] ? firstFrameInput.files[0] : null;
+    firstFrameInput.addEventListener('change', async () => {
+      const file = firstFrameInput.files && firstFrameInput.files[0] ? firstFrameInput.files[0] : null;
+      firstFrameFile = null;
       renderSingleImagePreview(firstFrameFile, firstFrameThumbs, 'first', clearFirstFrame);
-      validateFrameFiles();
-      updateRunAvailability();
-    });
-    lastFrameInput.addEventListener('change', () => {
-      lastFrameFile = lastFrameInput.files && lastFrameInput.files[0] ? lastFrameInput.files[0] : null;
-      renderSingleImagePreview(lastFrameFile, lastFrameThumbs, 'last', clearLastFrame);
-      validateFrameFiles();
-      updateRunAvailability();
-    });
-    referenceImagesInput.addEventListener('change', () => {
-      referenceImageFiles = Array.from(referenceImagesInput.files || []).slice(0, MAX_IMAGE_COUNT);
-      renderImageList(referenceImageFiles, referenceImagesThumbs);
-      validateReferenceImages();
-      if ((referenceImagesInput.files || []).length > MAX_IMAGE_COUNT) {
-        showError(referenceImagesError, 'You can upload up to 9 reference images.');
+      if (!file) {
+        validateFrameFiles();
+        await updateRunAvailability();
+        return;
       }
-      updateRunAvailability();
+      beginImagePreparation('First Frame');
+      try {
+        firstFrameFile = await makeStableImageFile(file, 'first-frame');
+        renderSingleImagePreview(firstFrameFile, firstFrameThumbs, 'first', clearFirstFrame);
+        validateFrameFiles();
+      } catch (err) {
+        firstFrameFile = null;
+        renderSingleImagePreview(firstFrameFile, firstFrameThumbs, 'first', clearFirstFrame);
+        showError(firstFrameError, err && err.message ? err.message : 'Could not read First Frame.');
+      } finally {
+        endImagePreparation();
+      }
+      await updateRunAvailability();
+    });
+    lastFrameInput.addEventListener('change', async () => {
+      const file = lastFrameInput.files && lastFrameInput.files[0] ? lastFrameInput.files[0] : null;
+      lastFrameFile = null;
+      renderSingleImagePreview(lastFrameFile, lastFrameThumbs, 'last', clearLastFrame);
+      if (!file) {
+        validateFrameFiles();
+        await updateRunAvailability();
+        return;
+      }
+      beginImagePreparation('Last Frame');
+      try {
+        lastFrameFile = await makeStableImageFile(file, 'last-frame');
+        renderSingleImagePreview(lastFrameFile, lastFrameThumbs, 'last', clearLastFrame);
+        validateFrameFiles();
+      } catch (err) {
+        lastFrameFile = null;
+        renderSingleImagePreview(lastFrameFile, lastFrameThumbs, 'last', clearLastFrame);
+        showError(lastFrameError, err && err.message ? err.message : 'Could not read Last Frame.');
+      } finally {
+        endImagePreparation();
+      }
+      await updateRunAvailability();
+    });
+    referenceImagesInput.addEventListener('change', async () => {
+      const incomingFiles = Array.from(referenceImagesInput.files || []);
+      referenceImageFiles = [];
+      renderImageList(referenceImageFiles, referenceImagesThumbs);
+      if (!incomingFiles.length) {
+        validateReferenceImages();
+        await updateRunAvailability();
+        return;
+      }
+      beginImagePreparation('reference images');
+      try {
+        const filesToUse = incomingFiles.slice(0, MAX_IMAGE_COUNT);
+        referenceImageFiles = await Promise.all(filesToUse.map((file, index) => makeStableImageFile(file, 'ref-image-' + (index + 1))));
+        renderImageList(referenceImageFiles, referenceImagesThumbs);
+        validateReferenceImages();
+        if (incomingFiles.length > MAX_IMAGE_COUNT) {
+          showError(referenceImagesError, 'You can upload up to 9 reference images.');
+        }
+      } catch (err) {
+        referenceImageFiles = [];
+        renderImageList(referenceImageFiles, referenceImagesThumbs);
+        showError(referenceImagesError, err && err.message ? err.message : 'Could not read one of the reference images.');
+      } finally {
+        endImagePreparation();
+      }
+      await updateRunAvailability();
     });
     referenceVideosInput.addEventListener('change', async () => {
       referenceVideoFiles = Array.from(referenceVideosInput.files || []).slice(0, MAX_VIDEO_COUNT);
