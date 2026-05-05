@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA ‚Ä¢ Kling 2.6 (Text / Image ‚Üí Video) ‚Ä¢ Telegram</title>
+  <title>HANSORA • Kling 2.6 (Text / Image → Video) • Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,13 +52,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Kling 2.6 Text / Image ‚Üí Video</span>
+          <span class="text-xs text-zinc-400">Kling 2.6 Text / Image → Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Kling 2.6 (Text / Image ‚Üí Video)
+              Kling 2.6 (Text / Image → Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Kling 2.6 The first video generator with sounds.
@@ -132,7 +132,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 5‚ö°)
+                Run (cost: 5⚡)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -141,7 +141,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">‚úÖ</div>
+                  <div class="text-2xl">✅</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -213,7 +213,7 @@
 
     function safeBaseName(name, fallback){
       return String(name || fallback || "image")
-        .replace(/\.[^./\\]+$/, "")
+        .replace(/\.[^./\]+$/, "")
         .replace(/[^\w.-]+/g, "-")
         .replace(/-+/g, "-")
         .replace(/^-+|-+$/g, "")
@@ -239,9 +239,21 @@
       });
     }
 
-    function syncInputFile(){
+    function beginImagePreparation(){
+      pendingImagePreparations += 1;
+      setStatus("Preparing image…", "text-zinc-400");
+    }
+
+    function endImagePreparation(){
+      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
+        setStatus("Ready.", "text-zinc-500");
+      }
+    }
+
+    function syncImageInputFile(){
       if (!imageInput) return;
-      if (!selectedImageFile){
+      if (!selectedImageFile) {
         imageInput.value = "";
         return;
       }
@@ -249,18 +261,8 @@
         const dt = new DataTransfer();
         dt.items.add(selectedImageFile);
         imageInput.files = dt.files;
-      } catch {}
-    }
-
-    function beginImagePreparation(){
-      pendingImagePreparations += 1;
-      setStatus("Preparing image‚Ä¶", "text-zinc-400");
-    }
-
-    function endImagePreparation(){
-      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
-      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
-        setStatus("Ready.", "text-zinc-500");
+      } catch (e) {
+        // Fallback: if DataTransfer unsupported, the internal selectedImageFile is still used for upload.
       }
     }
 
@@ -277,7 +279,7 @@
       if (thumbsEl) thumbsEl.innerHTML = "";
     }
 
-    function renderImageThumb(){
+    function renderImagePreview(file){
       if (!thumbsEl) return;
       thumbsEl.innerHTML = "";
       try {
@@ -286,8 +288,8 @@
           lastObjURL = null;
         }
       } catch {}
-      if (!selectedImageFile) return;
-      const u = URL.createObjectURL(selectedImageFile);
+      if (!file) return;
+      const u = URL.createObjectURL(file);
       lastObjURL = u;
       const img = new Image();
       img.src = u;
@@ -310,9 +312,9 @@
         imageSelectionToken = currentToken;
         const incomingFiles = Array.from(imageInput.files || []);
         selectedImageFile = null;
-        renderImageThumb();
+        renderImagePreview(null);
         if (!incomingFiles.length){
-          syncInputFile();
+          syncImageInputFile();
           return;
         }
         if (incomingFiles.length > 1){
@@ -323,11 +325,10 @@
 
         beginImagePreparation();
         try {
-          const stableFile = await makeStableImageFile(incomingFiles[0], "image");
+          selectedImageFile = await makeStableImageFile(incomingFiles[0], "image");
           if (currentToken !== imageSelectionToken) return;
-          selectedImageFile = stableFile;
-          renderImageThumb();
-          syncInputFile();
+          renderImagePreview(selectedImageFile);
+          syncImageInputFile();
         } catch (err) {
           if (currentToken === imageSelectionToken){
             clearImageSelection();
@@ -355,11 +356,11 @@
     function updateRunButtonLabel(){
       if (!runBtn) return;
       const c = getCurrentCost();
-      runBtn.textContent = "Run (cost: " + c + "‚ö°)";
+      runBtn.textContent = "Run (cost: " + c + "⚡)";
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "‚ö°";
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
     }
 
     function parseQueryParams(){
@@ -469,13 +470,13 @@
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working‚Ä¶";
+      runBtn.textContent = "Working…";
 
       let imageUrl = "";
       const duration = durationSelect ? (durationSelect.value === "10" ? 10 : 5) : 5;
       try {
         if (hasFile){
-          setStatus("Uploading image‚Ä¶", "text-zinc-400");
+          setStatus("Uploading image…", "text-zinc-400");
           const file = files[0];
           const origName = file.name || "image.jpg";
           const type = (file.type || "image/jpeg").toLowerCase();
@@ -503,7 +504,7 @@
           imageUrl = signJson.publicUrl;
         }
 
-        setStatus("Submitting Kling 2.6 video job‚Ä¶", "text-zinc-400");
+        setStatus("Submitting Kling 2.6 video job…", "text-zinc-400");
 
         const resp = await fetch("/.netlify/functions/run-kling26", {
           method: "POST",
@@ -549,10 +550,10 @@
         credits = newCredits;
         repaintCredits();
 
-        setStatus("‚úÖ Request submitted.", "text-emerald-300");
+        setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "‚ú¶ Submitted successfully. You will receive the Kling 2.6 video in Telegram when it is ready.<br/>‚ú¶ –ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ Kling 2.6‚Äë–≤–∏–¥–µ–æ –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω–æ –±—É–¥–µ—Ç –≥–æ—Ç–æ–≤–æ.";
+          successText.innerHTML = "✦ Submitted successfully. You will receive the Kling 2.6 video in Telegram when it is ready.<br/>✦ Запрос успешно принят. Вы получите Kling 2.6‑видео в Telegram, когда оно будет готово.";
         }
       } catch (err) {
         console.error(err);
