@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA ‚Ä¢ MidJourney Image ‚Ä¢ Telegram</title>
+  <title>HANSORA &#8226; MidJourney Image &#8226; Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -58,7 +58,7 @@
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0&#9889;</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              MidJourney (Text / Image ‚Üí Image)
+              MidJourney (Text / Image &#8594; Image)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Use MidJourney with text-only (prompt) or text + image to create high-quality AI images.
@@ -125,7 +125,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 3‚ö°)
+                Run (cost: 3&#9889;)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -134,7 +134,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">‚úÖ</div>
+                  <div class="text-2xl">&#9989;</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -174,73 +174,74 @@
     const thumbsEl = document.getElementById("thumbs");
 
     let selectedFiles = [];
-    let pendingImagePreparations = 0;
-
-    const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
-
-    function stableImageExt(mime){
-      const t = String(mime || "").toLowerCase();
-      if (t === "image/png") return ".png";
-      if (t === "image/webp") return ".webp";
-      return ".jpg";
-    }
-
-    function sniffImageMime(bytes){
-      if (!bytes || bytes.length < 4) return "";
-      if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "image/jpeg";
-      if (
-        bytes.length >= 8 &&
-        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
-        bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
-      ) return "image/png";
-      if (
-        bytes.length >= 12 &&
-        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
-      ) return "image/webp";
-      return "";
-    }
-
-    function safeBaseName(name, fallback){
-      return String(name || fallback || "image")
-        .replace(/\.[^./\\]+$/, "")
-        .replace(/[^\w.-]+/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 80) || fallback || "image";
-    }
-
-    async function makeStableImageFile(file, prefix){
-      if (!file) return null;
-      const rawType = String(file.type || "").toLowerCase();
-      const buf = await file.arrayBuffer();
-      const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
-      if (rawType && !rawType.startsWith("image/") && !sniffedType){
-        throw new Error("Please choose an image file.");
-      }
-      let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
-      if (!type){
-        throw new Error("Only JPEG, PNG, or WebP images are allowed.");
-      }
-      type = type === "image/jpg" ? "image/jpeg" : type;
-      return new File([buf], Date.now() + "-" + prefix + "-" + safeBaseName(file.name, "image") + stableImageExt(type), {
-        type,
-        lastModified: Date.now()
-      });
-    }
-
-    function beginImagePreparation(){
-      pendingImagePreparations += 1;
-      setStatus("Preparing images‚Ä¶", "text-zinc-400");
-    }
-
-    function endImagePreparation(){
-      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
-      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
-        setStatus("Ready.", "text-zinc-500");
-      }
-    }
 let previewUrls = [];
+let pendingImagePreparations = 0;
+let imageSelectionToken = 0;
+
+const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+function stableImageExt(mime){
+  const t = String(mime || "").toLowerCase();
+  if (t === "image/png") return ".png";
+  if (t === "image/webp") return ".webp";
+  return ".jpg";
+}
+
+function sniffImageMime(bytes){
+  if (!bytes || bytes.length < 4) return "";
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "image/jpeg";
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+    bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
+  ) return "image/png";
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) return "image/webp";
+  return "";
+}
+
+function safeBaseName(name, fallback){
+  return String(name || fallback || "image")
+    .replace(/\.[^./\\]+$/, "")
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || fallback || "image";
+}
+
+async function makeStableImageFile(file, prefix){
+  if (!file) return null;
+  const rawType = String(file.type || "").toLowerCase();
+  const buf = await file.arrayBuffer();
+  const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
+  if (rawType && !rawType.startsWith("image/") && !sniffedType){
+    throw new Error("Please choose an image file.");
+  }
+  let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
+  if (!type){
+    throw new Error("Only JPEG, PNG, or WebP images are allowed.");
+  }
+  type = type === "image/jpg" ? "image/jpeg" : type;
+  return new File([buf], Date.now() + "-" + prefix + "-" + safeBaseName(file.name, "image") + stableImageExt(type), {
+    type,
+    lastModified: Date.now()
+  });
+}
+
+function beginImagePreparation(){
+  pendingImagePreparations += 1;
+  setStatus("Preparing image\u2026", "text-zinc-400");
+}
+
+function endImagePreparation(){
+  pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+  if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
+    setStatus("Ready.", "text-zinc-500");
+  }
+}
 
 function syncInputFiles() {
   if (!imageInput) return;
@@ -269,6 +270,7 @@ function revokePreviewUrls(){
 }
 
 function clearImageSelection(){
+  imageSelectionToken += 1;
   revokePreviewUrls();
   selectedFiles = [];
   if (imageInput) imageInput.value = "";
@@ -304,6 +306,8 @@ function renderImageThumbs(){
 
 if (imageInput && thumbsEl){
   imageInput.addEventListener("change", async () => {
+    const currentToken = imageSelectionToken + 1;
+    imageSelectionToken = currentToken;
     const incomingFiles = Array.from(imageInput.files || []);
     selectedFiles = [];
     renderImageThumbs();
@@ -311,17 +315,23 @@ if (imageInput && thumbsEl){
       syncInputFiles();
       return;
     }
+    if (incomingFiles.length > 1){
+      clearImageSelection();
+      setStatus("Only 1 image is allowed.", "text-rose-300");
+      return;
+    }
 
     beginImagePreparation();
     try {
       selectedFiles = await Promise.all(incomingFiles.map((file, index) => makeStableImageFile(file, String(index + 1))));
+      if (currentToken !== imageSelectionToken) return;
       renderImageThumbs();
       syncInputFiles();
     } catch (err) {
-      selectedFiles = [];
-      renderImageThumbs();
-      syncInputFiles();
-      setStatus(err && err.message ? err.message : "Could not read one of the images.", "text-rose-300");
+      if (currentToken === imageSelectionToken){
+        clearImageSelection();
+        setStatus(err && err.message ? err.message : "Could not read the image.", "text-rose-300");
+      }
     } finally {
       endImagePreparation();
     }
@@ -341,11 +351,11 @@ const sizeSelect = document.getElementById("sizeSelect");
 
     function updateRunButtonLabel(){
       if (!runBtn) return;
-      runBtn.textContent = "Run (cost: " + COST_NB + "‚ö°)";
+      runBtn.textContent = "Run (cost: " + COST_NB + "\u26a1)";
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "‚ö°";
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "\u26a1";
     }
 
     function parseQueryParams(){
@@ -421,7 +431,7 @@ const sizeSelect = document.getElementById("sizeSelect");
       }
 
       if (pendingImagePreparations > 0){
-        setStatus("Please wait until the images are ready.", "text-rose-300");
+        setStatus("Please wait until the image is ready.", "text-rose-300");
         return;
       }
 
@@ -455,14 +465,14 @@ const sizeSelect = document.getElementById("sizeSelect");
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working‚Ä¶";
+      runBtn.textContent = "Working\u2026";
 
       let imageUrl = "";
       try {
         let index = 0;
         for (const file of files){
           index += 1;
-          setStatus("Uploading image " + index + " of " + files.length + "‚Ä¶", "text-zinc-400");
+          setStatus("Uploading image " + index + " of " + files.length + "\u2026", "text-zinc-400");
           const origName = file.name || "image.jpg";
           const type = (file.type || "image/jpeg").toLowerCase();
           const safeExt = type.includes("png") ? ".png"
@@ -489,7 +499,7 @@ const sizeSelect = document.getElementById("sizeSelect");
           imageUrl = signJson.publicUrl;
         }
 
-        setStatus("Submitting MidJourney job‚Ä¶", "text-zinc-400");
+        setStatus("Submitting MidJourney job\u2026", "text-zinc-400");
 
         const resp = await fetch("/.netlify/functions/run-mj-tg", {
           method: "POST",
@@ -534,10 +544,10 @@ const sizeSelect = document.getElementById("sizeSelect");
         credits = newCredits;
         repaintCredits();
 
-        setStatus("‚úÖ Request submitted.", "text-emerald-300");
+        setStatus("\u2705 Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "‚ú¶ Submitted successfully. You will receive the MidJourney images in Telegram when they are ready.<br/>‚ú¶ –ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ –æ–±—Ä–∞–±–æ—Ç–∞–Ω–Ω—ã–µ –∏–∑–æ–±—Ä–∞–∂–µ–Ω–∏—è MidJourney –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω–∏ –±—É–¥—É—Ç –≥–æ—Ç–æ–≤—ã.";
+          successText.innerHTML = "\u2726 Submitted successfully. You will receive the MidJourney images in Telegram when they are ready.<br/>\u2726 \u0417\u0430\u043f\u0440\u043e\u0441 \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u043f\u0440\u0438\u043d\u044f\u0442. \u0412\u044b \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0430\u043d\u043d\u044b\u0435 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u044f MidJourney \u0432 Telegram, \u043a\u043e\u0433\u0434\u0430 \u043e\u043d\u0438 \u0431\u0443\u0434\u0443\u0442 \u0433\u043e\u0442\u043e\u0432\u044b.";
         }
       } catch (err) {
         console.error(err);
