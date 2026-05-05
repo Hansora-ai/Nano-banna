@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • Seedream 4.5 (Text / Image → Image) • Telegram</title>
+  <title>HANSORA ‚Ä¢ Seedream 4.5 (Text / Image ‚Üí Image) ‚Ä¢ Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,13 +52,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Seedream 4.5 Image → Image</span>
+          <span class="text-xs text-zinc-400">Seedream 4.5 Image ‚Üí Image</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Seedream 4.5 (Text / Image → Image)
+              Seedream 4.5 (Text / Image ‚Üí Image)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Use Seedream 4.5 with text-only (prompt) or text + images to create high-quality styled images.
@@ -91,7 +91,7 @@
               />
               <div id="thumbs" class="mt-2 flex gap-2 flex-wrap"></div>
               <p class="text-[11px] text-zinc-500">
-                Required. Upload 1–6 images (max 30MB each). All images will be edited in the same style.
+                Required. Upload 1‚Äì6 images (max 30MB each). All images will be edited in the same style.
               </p>
             </div>
 
@@ -127,7 +127,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 1⚡)
+                Run (cost: 1‚ö°)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -136,7 +136,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">✅</div>
+                  <div class="text-2xl">‚úÖ</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -148,7 +148,7 @@
               <h2 class="text-xs font-semibold text-zinc-200 mb-1">Instructions</h2>
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
                 <li>Type a prompt (required) describing the desired edit or style.</li>
-                <li>Optionally upload 1–6 images (up to 30MB each) for image-to-image editing.</li>
+                <li>Optionally upload 1‚Äì6 images (up to 30MB each) for image-to-image editing.</li>
                 <li>Choose the aspect ratio (Auto, Square, Portrait, Landscape).</li>
                 <li>Click Run. If you have enough credits, the edited images will be sent to your bot's chat.</li>
               </ol>
@@ -176,6 +176,72 @@
     const thumbsEl = document.getElementById("thumbs");
 
     let selectedFiles = [];
+    let pendingImagePreparations = 0;
+
+    const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+    function stableImageExt(mime){
+      const t = String(mime || "").toLowerCase();
+      if (t === "image/png") return ".png";
+      if (t === "image/webp") return ".webp";
+      return ".jpg";
+    }
+
+    function sniffImageMime(bytes){
+      if (!bytes || bytes.length < 4) return "";
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "image/jpeg";
+      if (
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+        bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
+      ) return "image/png";
+      if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+      ) return "image/webp";
+      return "";
+    }
+
+    function safeBaseName(name, fallback){
+      return String(name || fallback || "image")
+        .replace(/\.[^./\\]+$/, "")
+        .replace(/[^\w.-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80) || fallback || "image";
+    }
+
+    async function makeStableImageFile(file, prefix){
+      if (!file) return null;
+      const rawType = String(file.type || "").toLowerCase();
+      const buf = await file.arrayBuffer();
+      const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
+      if (rawType && !rawType.startsWith("image/") && !sniffedType){
+        throw new Error("Please choose an image file.");
+      }
+      let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
+      if (!type){
+        throw new Error("Only JPEG, PNG, or WebP images are allowed.");
+      }
+      type = type === "image/jpg" ? "image/jpeg" : type;
+      return new File([buf], Date.now() + "-" + prefix + "-" + safeBaseName(file.name, "image") + stableImageExt(type), {
+        type,
+        lastModified: Date.now()
+      });
+    }
+
+    function beginImagePreparation(){
+      pendingImagePreparations += 1;
+      setStatus("Preparing images‚Ä¶", "text-zinc-400");
+    }
+
+    function endImagePreparation(){
+      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
+        setStatus("Ready.", "text-zinc-500");
+      }
+    }
 
 function syncInputFiles() {
   if (!imageInput) return;
@@ -239,10 +305,28 @@ function renderImageThumbs(){
 }
 
 if (imageInput && thumbsEl){
-  imageInput.addEventListener("change", () => {
-    selectedFiles = Array.from(imageInput.files || []);
+  imageInput.addEventListener("change", async () => {
+    const incomingFiles = Array.from(imageInput.files || []);
+    selectedFiles = [];
     renderImageThumbs();
-    syncInputFiles();
+    if (!incomingFiles.length){
+      syncInputFiles();
+      return;
+    }
+
+    beginImagePreparation();
+    try {
+      selectedFiles = await Promise.all(incomingFiles.map((file, index) => makeStableImageFile(file, String(index + 1))));
+      renderImageThumbs();
+      syncInputFiles();
+    } catch (err) {
+      selectedFiles = [];
+      renderImageThumbs();
+      syncInputFiles();
+      setStatus(err && err.message ? err.message : "Could not read one of the images.", "text-rose-300");
+    } finally {
+      endImagePreparation();
+    }
   });
 }
 
@@ -259,11 +343,11 @@ const sizeSelect = document.getElementById("sizeSelect");
 
     function updateRunButtonLabel(){
       if (!runBtn) return;
-      runBtn.textContent = "Run (cost: " + COST_NB + "⚡)";
+      runBtn.textContent = "Run (cost: " + COST_NB + "‚ö°)";
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "‚ö°";
     }
 
     function parseQueryParams(){
@@ -338,6 +422,11 @@ const sizeSelect = document.getElementById("sizeSelect");
         return;
       }
 
+      if (pendingImagePreparations > 0){
+        setStatus("Please wait until the images are ready.", "text-rose-300");
+        return;
+      }
+
       const files = Array.isArray(selectedFiles)
         ? selectedFiles.slice()
         : Array.from(imageInput.files || []);
@@ -368,14 +457,14 @@ const sizeSelect = document.getElementById("sizeSelect");
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working…";
+      runBtn.textContent = "Working‚Ä¶";
 
       const imageUrls = [];
       try {
         let index = 0;
         for (const file of files){
           index += 1;
-          setStatus("Uploading image " + index + " of " + files.length + "…", "text-zinc-400");
+          setStatus("Uploading image " + index + " of " + files.length + "‚Ä¶", "text-zinc-400");
           const origName = file.name || "image.jpg";
           const type = (file.type || "image/jpeg").toLowerCase();
           const safeExt = type.includes("png") ? ".png"
@@ -402,7 +491,7 @@ const sizeSelect = document.getElementById("sizeSelect");
           imageUrls.push(signJson.publicUrl);
         }
 
-        setStatus("Submitting Seedream 4.5 job…", "text-zinc-400");
+        setStatus("Submitting Seedream 4.5 job‚Ä¶", "text-zinc-400");
 
         const resp = await fetch("/.netlify/functions/run-seedream-45-tg", {
           method: "POST",
@@ -447,10 +536,10 @@ const sizeSelect = document.getElementById("sizeSelect");
         credits = newCredits;
         repaintCredits();
 
-        setStatus("✅ Request submitted.", "text-emerald-300");
+        setStatus("‚úÖ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "✦ Submitted successfully. You will receive the Seedream 4.5 images in Telegram when they are ready.<br/>✦ Запрос успешно принят. Вы получите обработанные изображения Seedream 4.5 в Telegram, когда они будут готовы.";
+          successText.innerHTML = "‚ú¶ Submitted successfully. You will receive the Seedream 4.5 images in Telegram when they are ready.<br/>‚ú¶ –ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ –æ–±—Ä–∞–±–æ—Ç–∞–Ω–Ω—ã–µ –∏–∑–æ–±—Ä–∞–∂–µ–Ω–∏—è Seedream 4.5 –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω–∏ –±—É–¥—É—Ç –≥–æ—Ç–æ–≤—ã.";
         }
       } catch (err) {
         console.error(err);
