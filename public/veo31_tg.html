@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA ‚Ä¢ Veo 3.1 (Text/Image ‚Üí Video) ‚Ä¢ Telegram</title>
+  <title>HANSORA • Veo 3.1 (Text/Image → Video) • Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,13 +52,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Veo 3.1 Text/Image ‚Üí Video</span>
+          <span class="text-xs text-zinc-400">Veo 3.1 Text/Image → Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Veo 3.1 (Text/Image ‚Üí Video)
+              Veo 3.1 (Text/Image → Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Google's best video Model.
@@ -139,7 +139,7 @@
                   data-quality="1080p"
                   class="quality-btn rounded-2xl px-3 py-3 text-left border border-indigo-400 bg-indigo-500/20 shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500/25">
                   <span class="block text-sm font-semibold text-white">1080p HD</span>
-                  <span id="quality1080Price" class="block text-[11px] text-indigo-100 mt-0.5">5‚ö°</span>
+                  <span id="quality1080Price" class="block text-[11px] text-indigo-100 mt-0.5">5⚡</span>
                 </button>
                 <button
                   id="quality4kBtn"
@@ -147,7 +147,7 @@
                   data-quality="4k"
                   class="quality-btn rounded-2xl px-3 py-3 text-left border border-white/10 bg-white/5 transition hover:bg-white/10">
                   <span class="block text-sm font-semibold text-white">4K Ultra</span>
-                  <span id="quality4kPrice" class="block text-[11px] text-zinc-300 mt-0.5">12‚ö°</span>
+                  <span id="quality4kPrice" class="block text-[11px] text-zinc-300 mt-0.5">12⚡</span>
                 </button>
               </div>
             </div>
@@ -167,7 +167,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 5‚ö°)
+                Run (cost: 5⚡)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -176,7 +176,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">‚úÖ</div>
+                  <div class="text-2xl">✅</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -235,6 +235,8 @@
     let selectedStartFile = null;
     let selectedEndFile = null;
     let pendingImagePreparations = 0;
+    let startImageSelectionToken = 0;
+    let endImageSelectionToken = 0;
 
     const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 
@@ -289,9 +291,9 @@
       });
     }
 
-    function beginImagePreparation(label){
+    function beginImagePreparation(){
       pendingImagePreparations += 1;
-      setStatus("Preparing " + label + "‚Ä¶", "text-zinc-400");
+      setStatus("Preparing images\u2026", "text-zinc-400");
     }
 
     function endImagePreparation(){
@@ -301,47 +303,80 @@
       }
     }
 
-    function renderImagePreview(file, which){
-      const isStart = which === "start";
-      const thumbsEl = isStart ? startThumbsEl : endThumbsEl;
-      if (!thumbsEl || !file) return;
-      const u = URL.createObjectURL(file);
-      if (isStart) lastStartObjURL = u;
-      else lastEndObjURL = u;
-      const img = new Image();
-      img.src = u;
-      img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-      const wrap = document.createElement("div");
-      wrap.className = "relative inline-block";
-      const del = document.createElement("button");
-      del.type = "button";
-      del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-      del.innerHTML = "\u00d7";
-      del.onclick = isStart ? clearStartSelection : clearEndSelection;
-      wrap.appendChild(img);
-      wrap.appendChild(del);
-      thumbsEl.appendChild(wrap);
+    function syncSingleInputFile(input, file){
+      if (!input) return;
+      if (!file) {
+        input.value = "";
+        return;
+      }
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+      } catch (e) {
+        // Fallback: handleRun reads the selected stable file directly.
+      }
     }
 
-    function clearStartSelection(){
+    function revokeStartPreviewUrl(){
       try {
         if (lastStartObjURL) {
           URL.revokeObjectURL(lastStartObjURL);
           lastStartObjURL = null;
         }
       } catch {}
-      selectedStartFile = null;
-      if (startImageInput) startImageInput.value = "";
-      if (startThumbsEl) startThumbsEl.innerHTML = "";
     }
 
-    function clearEndSelection(){
+    function revokeEndPreviewUrl(){
       try {
         if (lastEndObjURL) {
           URL.revokeObjectURL(lastEndObjURL);
           lastEndObjURL = null;
         }
       } catch {}
+    }
+
+    function renderSingleImageThumb(file, thumbsEl, clearFn, isStart){
+      if (!thumbsEl) return;
+      thumbsEl.innerHTML = "";
+      if (!file) return;
+      if (isStart) {
+        revokeStartPreviewUrl();
+      } else {
+        revokeEndPreviewUrl();
+      }
+      const u = URL.createObjectURL(file);
+      if (isStart) {
+        lastStartObjURL = u;
+      } else {
+        lastEndObjURL = u;
+      }
+      const img = new Image();
+      img.src = u;
+      img.className = "block w-full max-h-56 object-contain rounded-lg border border:white/10 bg-black/20".replace("border:white","border-white");
+      const wrap = document.createElement("div");
+      wrap.className = "relative inline-block";
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+      del.innerHTML = "\u00d7";
+      del.onclick = clearFn;
+      wrap.appendChild(img);
+      wrap.appendChild(del);
+      thumbsEl.appendChild(wrap);
+    }
+
+    function clearStartSelection(){
+      startImageSelectionToken += 1;
+      revokeStartPreviewUrl();
+      selectedStartFile = null;
+      if (startImageInput) startImageInput.value = "";
+      if (startThumbsEl) startThumbsEl.innerHTML = "";
+    }
+
+    function clearEndSelection(){
+      endImageSelectionToken += 1;
+      revokeEndPreviewUrl();
       selectedEndFile = null;
       if (endImageInput) endImageInput.value = "";
       if (endThumbsEl) endThumbsEl.innerHTML = "";
@@ -349,22 +384,29 @@
 
     if (startImageInput && startThumbsEl){
       startImageInput.addEventListener("change", async () => {
-        startThumbsEl.innerHTML = "";
-        try {
-          if (lastStartObjURL) {
-            URL.revokeObjectURL(lastStartObjURL);
-            lastStartObjURL = null;
-          }
-        } catch {}
+        const currentToken = startImageSelectionToken + 1;
+        startImageSelectionToken = currentToken;
+        revokeStartPreviewUrl();
         selectedStartFile = null;
-        const f = startImageInput.files && startImageInput.files[0];
-        if (!f) return;
-        beginImagePreparation("Start Frame");
+        startThumbsEl.innerHTML = "";
+        const incomingFile = startImageInput.files && startImageInput.files[0];
+        if (!incomingFile){
+          syncSingleInputFile(startImageInput, null);
+          return;
+        }
+
+        beginImagePreparation();
         try {
-          selectedStartFile = await makeStableImageFile(f, "start");
-          renderImagePreview(selectedStartFile, "start");
+          const stableFile = await makeStableImageFile(incomingFile, "start");
+          if (currentToken !== startImageSelectionToken) return;
+          selectedStartFile = stableFile;
+          renderSingleImageThumb(selectedStartFile, startThumbsEl, clearStartSelection, true);
+          syncSingleInputFile(startImageInput, selectedStartFile);
         } catch (err) {
-          setStatus(err && err.message ? err.message : "Could not read Start Frame.", "text-rose-300");
+          if (currentToken === startImageSelectionToken){
+            clearStartSelection();
+            setStatus(err && err.message ? err.message : "Could not read the Start Frame image.", "text-rose-300");
+          }
         } finally {
           endImagePreparation();
         }
@@ -373,22 +415,29 @@
 
     if (endImageInput && endThumbsEl){
       endImageInput.addEventListener("change", async () => {
-        endThumbsEl.innerHTML = "";
-        try {
-          if (lastEndObjURL) {
-            URL.revokeObjectURL(lastEndObjURL);
-            lastEndObjURL = null;
-          }
-        } catch {}
+        const currentToken = endImageSelectionToken + 1;
+        endImageSelectionToken = currentToken;
+        revokeEndPreviewUrl();
         selectedEndFile = null;
-        const f = endImageInput.files && endImageInput.files[0];
-        if (!f) return;
-        beginImagePreparation("End Frame");
+        endThumbsEl.innerHTML = "";
+        const incomingFile = endImageInput.files && endImageInput.files[0];
+        if (!incomingFile){
+          syncSingleInputFile(endImageInput, null);
+          return;
+        }
+
+        beginImagePreparation();
         try {
-          selectedEndFile = await makeStableImageFile(f, "end");
-          renderImagePreview(selectedEndFile, "end");
+          const stableFile = await makeStableImageFile(incomingFile, "end");
+          if (currentToken !== endImageSelectionToken) return;
+          selectedEndFile = stableFile;
+          renderSingleImageThumb(selectedEndFile, endThumbsEl, clearEndSelection, false);
+          syncSingleInputFile(endImageInput, selectedEndFile);
         } catch (err) {
-          setStatus(err && err.message ? err.message : "Could not read End Frame.", "text-rose-300");
+          if (currentToken === endImageSelectionToken){
+            clearEndSelection();
+            setStatus(err && err.message ? err.message : "Could not read the End Frame image.", "text-rose-300");
+          }
         } finally {
           endImagePreparation();
         }
@@ -410,8 +459,8 @@
 
     function updateQualityPrices(){
       const isStandard = modelSelect && modelSelect.value === "veo3";
-      if (quality1080Price) quality1080Price.textContent = (isStandard ? COST_STD_1080 : COST_FAST_1080) + "‚ö°";
-      if (quality4kPrice) quality4kPrice.textContent = (isStandard ? COST_STD_4K : COST_FAST_4K) + "‚ö°";
+      if (quality1080Price) quality1080Price.textContent = (isStandard ? COST_STD_1080 : COST_FAST_1080) + "⚡";
+      if (quality4kPrice) quality4kPrice.textContent = (isStandard ? COST_STD_4K : COST_FAST_4K) + "⚡";
     }
 
     function updateQualityButtons(){
@@ -432,11 +481,11 @@
       updateQualityPrices();
       updateQualityButtons();
       const c = getCurrentCost();
-      runBtn.textContent = "Run (cost: " + c + "‚ö°)";
+      runBtn.textContent = "Run (cost: " + c + "⚡)";
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "‚ö°";
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
     }
 
     function parseQueryParams(){
@@ -516,8 +565,8 @@
         return;
       }
 
-      const startFile = selectedStartFile;
-      const endFile = selectedEndFile;
+      const startFile = selectedStartFile || (startImageInput && startImageInput.files && startImageInput.files[0]);
+      const endFile = selectedEndFile || (endImageInput && endImageInput.files && endImageInput.files[0]);
 
       if (endFile && !startFile) {
         setStatus("End Frame requires a Start Frame.", "text-rose-300");
@@ -547,7 +596,7 @@
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working‚Ä¶";
+      runBtn.textContent = "Working…";
 
       let startImageUrl = "";
       let endImageUrl = "";
@@ -555,7 +604,7 @@
 
       try {
         if (startFile){
-          setStatus("Uploading Start Frame‚Ä¶", "text-zinc-400");
+          setStatus("Uploading Start Frame…", "text-zinc-400");
           const startOrigName = startFile.name || "start.jpg";
           const startType = (startFile.type || "image/jpeg").toLowerCase();
           const startSafeExt = startType.includes("png") ? ".png"
@@ -584,7 +633,7 @@
 
         // Upload End Frame if present
         if (endFile){
-          setStatus("Uploading End Frame‚Ä¶", "text-zinc-400");
+          setStatus("Uploading End Frame…", "text-zinc-400");
           const endOrigName = endFile.name || "end.jpg";
           const endType = (endFile.type || "image/jpeg").toLowerCase();
           const endSafeExt = endType.includes("png") ? ".png"
@@ -611,7 +660,7 @@
           endImageUrl = endSign.publicUrl;
         }
 
-        setStatus("Submitting Veo 3.1 job‚Ä¶", "text-zinc-400");
+        setStatus("Submitting Veo 3.1 job…", "text-zinc-400");
 
         const resp = await fetch("/.netlify/functions/run_veo_tg", {
           method: "POST",
@@ -661,10 +710,10 @@
         credits = newCredits;
         repaintCredits();
 
-        setStatus("‚úÖ Request submitted.", "text-emerald-300");
+        setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "‚ú¶ Submitted successfully. You will receive the Veo 3.1 video in Telegram when it is ready.<br/>‚ú¶ –ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ Veo 3.1 –≤–∏–¥–µ–æ –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω–æ –±—É–¥–µ—Ç –≥–æ—Ç–æ–≤–æ.";
+          successText.innerHTML = "✦ Submitted successfully. You will receive the Veo 3.1 video in Telegram when it is ready.<br/>✦ Запрос успешно принят. Вы получите Veo 3.1 видео в Telegram, когда оно будет готово.";
         }
       } catch (err) {
         console.error(err);
