@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA ‚Ä¢ Grok Video (Text / Image ‚Üí Video) ‚Ä¢ Telegram</title>
+  <title>HANSORA &#8226; Grok Video (Text / Image &#8594; Video) &#8226; Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,13 +52,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Grok Video Text / Image ‚Üí Video</span>
+          <span class="text-xs text-zinc-400">Grok Video Text / Image &#8594; Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0&#9889;</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Grok Video (Text / Image ‚Üí Video)
+              Grok Video (Text / Image &#8594; Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Grok Video creates text-to-video and image-to-video clips with sound.
@@ -136,7 +136,7 @@
                 class="w-full"
               />
               <p class="text-[11px] text-zinc-500">
-                Choose from 6 to 30 seconds. Cost is 0.3‚ö° per second.
+                Choose from 6 to 30 seconds. Cost is 0.3&#9889; per second.
               </p>
             </div>
 
@@ -144,7 +144,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 1.8‚ö°)
+                Run (cost: 1.8&#9889;)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -153,7 +153,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">‚úÖ</div>
+                  <div class="text-2xl">&#9989;</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -201,6 +201,7 @@
     let lastObjURLs = [];
     let selectedFiles = [];
     let pendingImagePreparations = 0;
+    let imageSelectionToken = 0;
 
     const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 
@@ -270,7 +271,7 @@
 
     function beginImagePreparation(){
       pendingImagePreparations += 1;
-      setStatus("Preparing images‚Ä¶", "text-zinc-400");
+      setStatus("Preparing images\u2026", "text-zinc-400");
     }
 
     function endImagePreparation(){
@@ -281,6 +282,7 @@
     }
 
     function clearImageSelection(){
+      imageSelectionToken += 1;
       try {
         lastObjURLs.forEach(u => URL.revokeObjectURL(u));
         lastObjURLs = [];
@@ -318,6 +320,8 @@
 
     if (imageInput && thumbsEl){
       imageInput.addEventListener("change", async () => {
+        const currentToken = imageSelectionToken + 1;
+        imageSelectionToken = currentToken;
         const incomingFiles = Array.from(imageInput.files || []);
         selectedFiles = [];
         renderImageThumbs();
@@ -333,12 +337,16 @@
 
         beginImagePreparation();
         try {
-          selectedFiles = await Promise.all(incomingFiles.map((file, index) => makeStableImageFile(file, String(index + 1))));
+          const stableFiles = await Promise.all(incomingFiles.map((file, index) => makeStableImageFile(file, String(index + 1))));
+          if (currentToken !== imageSelectionToken) return;
+          selectedFiles = stableFiles;
           renderImageThumbs();
           syncInputFiles();
         } catch (err) {
-          clearImageSelection();
-          setStatus(err && err.message ? err.message : "Could not read one of the images.", "text-rose-300");
+          if (currentToken === imageSelectionToken){
+            clearImageSelection();
+            setStatus(err && err.message ? err.message : "Could not read one of the images.", "text-rose-300");
+          }
         } finally {
           endImagePreparation();
         }
@@ -374,11 +382,11 @@
       if (durationValue) durationValue.textContent = String(getDuration());
       if (!runBtn) return;
       const c = getCurrentCost();
-      runBtn.textContent = "Run (cost: " + formatCreditsValue(c) + "‚ö°)";
+      runBtn.textContent = "Run (cost: " + formatCreditsValue(c) + "\u26a1)";
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = formatCreditsValue(credits) + "‚ö°";
+      creditsDisplay.textContent = formatCreditsValue(credits) + "\u26a1";
     }
 
     function parseQueryParams(){
@@ -490,12 +498,12 @@
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working‚Ä¶";
+      runBtn.textContent = "Working\u2026";
 
       let imageUrls = [];
       try {
         if (hasFile){
-          setStatus("Uploading images‚Ä¶", "text-zinc-400");
+          setStatus("Uploading images\u2026", "text-zinc-400");
           for (const file of files){
             const origName = file.name || "image.jpg";
             const type = (file.type || "image/jpeg").toLowerCase();
@@ -524,7 +532,7 @@
           }
         }
 
-        setStatus("Submitting Grok Video job‚Ä¶", "text-zinc-400");
+        setStatus("Submitting Grok Video job\u2026", "text-zinc-400");
 
         const resp = await fetch("/.netlify/functions/run-grok-video", {
           method: "POST",
@@ -571,10 +579,10 @@
         credits = newCredits;
         repaintCredits();
 
-        setStatus("‚úÖ Request submitted.", "text-emerald-300");
+        setStatus("\u2705 Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "‚ú¶ Submitted successfully. You will receive the Grok Video in Telegram when it is ready.<br/>‚ú¶ –ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ Grok Video –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω–æ –±—É–¥–µ—Ç –≥–æ—Ç–æ–≤–æ.";
+          successText.innerHTML = "\u2726 Submitted successfully. You will receive the Grok Video in Telegram when it is ready.<br/>\u2726 \u0417\u0430\u043f\u0440\u043e\u0441 \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u043f\u0440\u0438\u043d\u044f\u0442. \u0412\u044b \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 Grok Video \u0432 Telegram, \u043a\u043e\u0433\u0434\u0430 \u043e\u043d\u043e \u0431\u0443\u0434\u0435\u0442 \u0433\u043e\u0442\u043e\u0432\u043e.";
         }
       } catch (err) {
         console.error(err);
