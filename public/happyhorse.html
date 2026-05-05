@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • HappyHorse 1.0 • Telegram</title>
+  <title>HANSORA ‚Ä¢ HappyHorse 1.0 ‚Ä¢ Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -54,7 +54,7 @@
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
         </div>
       </div>
     </div>
@@ -127,18 +127,18 @@
                 <button id="res720Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold active">720p</button>
                 <button id="res1080Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold">1080p</button>
               </div>
-              <p class="text-[11px] text-zinc-500">720p costs 2.5⚡ per second. 1080p costs 3.5⚡ per second.</p>
+              <p class="text-[11px] text-zinc-500">720p costs 2.5‚ö° per second. 1080p costs 3.5‚ö° per second.</p>
             </div>
 
             <div class="space-y-2">
-              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 7.5⚡)</button>
+              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 7.5‚ö°)</button>
               <p id="statusText" class="text-[11px] text-zinc-500">Ready.</p>
             </div>
 
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">✅</div>
+                  <div class="text-2xl">‚úÖ</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -185,6 +185,7 @@
     let isVideoDurationLoading = false;
     let imageObjUrls = [];
     let videoObjUrl = null;
+    let pendingImagePreparations = 0;
 
     const creditsDisplay = document.getElementById('creditsDisplay');
     const statusText = document.getElementById('statusText');
@@ -214,7 +215,7 @@
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = formatCredits(credits) + '⚡';
+      creditsDisplay.textContent = formatCredits(credits) + '‚ö°';
     }
 
     function clearObjectUrl(url){
@@ -237,6 +238,71 @@
       el.classList.remove('hidden');
     }
 
+    const SUPPORTED_IMAGE_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+
+    function stableImageExt(mime){
+      const t = String(mime || '').toLowerCase();
+      if (t === 'image/png') return '.png';
+      if (t === 'image/webp') return '.webp';
+      return '.jpg';
+    }
+
+    function sniffImageMime(bytes){
+      if (!bytes || bytes.length < 4) return '';
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
+      if (
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+        bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
+      ) return 'image/png';
+      if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+      ) return 'image/webp';
+      return '';
+    }
+
+    function safeBaseName(name, fallback){
+      return String(name || fallback || 'image')
+        .replace(/\.[^./\\]+$/, '')
+        .replace(/[^\w.-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80) || fallback || 'image';
+    }
+
+    async function makeStableImageFile(file, prefix){
+      if (!file) return null;
+      const rawType = String(file.type || '').toLowerCase();
+      const buf = await file.arrayBuffer();
+      const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
+      if (rawType && !rawType.startsWith('image/') && !sniffedType){
+        throw new Error('Please choose an image file.');
+      }
+      let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
+      if (!type){
+        throw new Error('Only JPEG, PNG, or WebP images are allowed.');
+      }
+      type = type === 'image/jpg' ? 'image/jpeg' : type;
+      return new File([buf], Date.now() + '-' + prefix + '-' + safeBaseName(file.name, 'image') + stableImageExt(type), {
+        type,
+        lastModified: Date.now()
+      });
+    }
+
+    function beginImagePreparation(){
+      pendingImagePreparations += 1;
+      setStatus('Preparing images‚Ä¶', 'text-zinc-400');
+    }
+
+    function endImagePreparation(){
+      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || '')){
+        setStatus('Ready.', 'text-zinc-500');
+      }
+    }
+
     function getEffectiveDurationSeconds(){
       if (videoFile && Number.isFinite(videoDurationSeconds) && videoDurationSeconds > 0) {
         return videoDurationSeconds;
@@ -254,7 +320,7 @@
     }
 
     function updateRunButtonLabel(){
-      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '⚡)';
+      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '‚ö°)';
     }
 
     function updateSegmentButtons(){
@@ -364,7 +430,7 @@
     async function updateRunAvailability(){
       if (!runBtn || runBtn.dataset.busy === '1') return;
       const prompt = (promptInput.value || '').trim();
-      if (!telegramId || !prompt || !validateImages() || !validateVideo()) {
+      if (!telegramId || !prompt || pendingImagePreparations > 0 || !validateImages() || !validateVideo()) {
         runBtn.disabled = true;
         return;
       }
@@ -385,7 +451,7 @@
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-        del.innerHTML = '×';
+        del.innerHTML = '√ó';
         del.onclick = () => {
           imageFiles.splice(idx, 1);
           renderImageList(imageFiles);
@@ -428,7 +494,7 @@
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-      del.innerHTML = '×';
+      del.innerHTML = '√ó';
       del.onclick = clearVideo;
       wrap.appendChild(vid);
       wrap.appendChild(del);
@@ -438,6 +504,7 @@
     async function validateInputs(){
       const prompt = (promptInput.value || '').trim();
       if (!prompt) return { ok:false, error:'Please enter a prompt.' };
+      if (pendingImagePreparations > 0) return { ok:false, error:'Please wait until the images are ready.' };
       if (!validateImages()) return { ok:false, error:'Please fix the image file errors.' };
       if (!validateVideo()) return { ok:false, error:'Please fix the video file error.' };
       return { ok:true };
@@ -534,18 +601,18 @@
 
       runBtn.disabled = true;
       runBtn.dataset.busy = '1';
-      runBtn.textContent = 'Working…';
+      runBtn.textContent = 'Working‚Ä¶';
 
       try {
         let imageUrls = [];
         let videoUrl = '';
 
         if (imageFiles.length) {
-          setStatus('Uploading images…', 'text-zinc-400');
+          setStatus('Uploading images‚Ä¶', 'text-zinc-400');
           imageUrls = await uploadMany(imageFiles, 'happyhorse-image');
         }
         if (videoFile) {
-          setStatus('Uploading video…', 'text-zinc-400');
+          setStatus('Uploading video‚Ä¶', 'text-zinc-400');
           videoUrl = await uploadFile(videoFile, 'happyhorse-video');
         }
 
@@ -564,7 +631,7 @@
           leng
         };
 
-        setStatus('Submitting HappyHorse 1.0 task…', 'text-zinc-400');
+        setStatus('Submitting HappyHorse 1.0 task‚Ä¶', 'text-zinc-400');
         const resp = await fetch('/.netlify/functions/run-happyhorse-1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -612,15 +679,35 @@
     runBtn.addEventListener('click', handleRun);
     promptInput.addEventListener('input', updateRunAvailability);
 
-    imagesInput.addEventListener('change', () => {
-      imageFiles = Array.from(imagesInput.files || []).slice(0, MAX_IMAGE_COUNT);
+    imagesInput.addEventListener('change', async () => {
+      const incomingFiles = Array.from(imagesInput.files || []);
+      imageFiles = [];
       renderImageList(imageFiles);
-      validateImages();
-      if ((imagesInput.files || []).length > MAX_IMAGE_COUNT) {
-        showError(imagesError, 'You can upload up to 6 images.');
+      if (!incomingFiles.length) {
+        validateImages();
+        updateRunButtonLabel();
+        await updateRunAvailability();
+        return;
+      }
+
+      beginImagePreparation();
+      try {
+        const filesToUse = incomingFiles.slice(0, MAX_IMAGE_COUNT);
+        imageFiles = await Promise.all(filesToUse.map((file, index) => makeStableImageFile(file, 'happyhorse-image-' + (index + 1))));
+        renderImageList(imageFiles);
+        validateImages();
+        if (incomingFiles.length > MAX_IMAGE_COUNT) {
+          showError(imagesError, 'You can upload up to 6 images.');
+        }
+      } catch (err) {
+        imageFiles = [];
+        renderImageList(imageFiles);
+        showError(imagesError, err && err.message ? err.message : 'Could not read one of the images.');
+      } finally {
+        endImagePreparation();
       }
       updateRunButtonLabel();
-      updateRunAvailability();
+      await updateRunAvailability();
     });
 
     videoInput.addEventListener('change', async () => {
