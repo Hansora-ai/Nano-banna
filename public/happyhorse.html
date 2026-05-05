@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA ‚Ä¢ HappyHorse 1.0 ‚Ä¢ Telegram</title>
+  <title>HANSORA • HappyHorse 1.0 • Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -54,7 +54,7 @@
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
         </div>
       </div>
     </div>
@@ -127,18 +127,18 @@
                 <button id="res720Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold active">720p</button>
                 <button id="res1080Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold">1080p</button>
               </div>
-              <p class="text-[11px] text-zinc-500">720p costs 2.5‚ö° per second. 1080p costs 3.5‚ö° per second.</p>
+              <p class="text-[11px] text-zinc-500">720p costs 2.5⚡ per second. 1080p costs 3.5⚡ per second.</p>
             </div>
 
             <div class="space-y-2">
-              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 7.5‚ö°)</button>
+              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 7.5⚡)</button>
               <p id="statusText" class="text-[11px] text-zinc-500">Ready.</p>
             </div>
 
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">‚úÖ</div>
+                  <div class="text-2xl">✅</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -186,57 +186,7 @@
     let imageObjUrls = [];
     let videoObjUrl = null;
     let pendingImagePreparations = 0;
-
-    const creditsDisplay = document.getElementById('creditsDisplay');
-    const statusText = document.getElementById('statusText');
-    const successBox = document.getElementById('successBox');
-    const successText = document.getElementById('successText');
-    const runBtn = document.getElementById('runBtn');
-    const promptInput = document.getElementById('promptInput');
-    const ratioSelect = document.getElementById('ratioSelect');
-    const durationSelect = document.getElementById('durationSelect');
-    const durationWrap = document.getElementById('durationWrap');
-    const res720Btn = document.getElementById('res720Btn');
-    const res1080Btn = document.getElementById('res1080Btn');
-    const imagesInput = document.getElementById('imagesInput');
-    const videoInput = document.getElementById('videoInput');
-    const imagesThumbs = document.getElementById('imagesThumbs');
-    const videoThumbs = document.getElementById('videoThumbs');
-    const imagesError = document.getElementById('imagesError');
-    const videoError = document.getElementById('videoError');
-
-    function setStatus(msg, tone){
-      statusText.textContent = msg;
-      statusText.className = 'text-[11px] ' + (tone || 'text-zinc-500');
-    }
-
-    function formatCredits(x){
-      return (Math.round(Number(x) * 10) / 10).toFixed(1).replace(/\.0$/, '');
-    }
-
-    function repaintCredits(){
-      creditsDisplay.textContent = formatCredits(credits) + '‚ö°';
-    }
-
-    function clearObjectUrl(url){
-      if (!url) return;
-      try { URL.revokeObjectURL(url); } catch (_) {}
-    }
-
-    function clearObjectUrlArray(arr){
-      arr.forEach(clearObjectUrl);
-      arr.length = 0;
-    }
-
-    function showError(el, msg){
-      if (!msg) {
-        el.textContent = '';
-        el.classList.add('hidden');
-        return;
-      }
-      el.textContent = msg;
-      el.classList.remove('hidden');
-    }
+    let imageSelectionToken = 0;
 
     const SUPPORTED_IMAGE_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 
@@ -293,7 +243,7 @@
 
     function beginImagePreparation(){
       pendingImagePreparations += 1;
-      setStatus('Preparing images‚Ä¶', 'text-zinc-400');
+      setStatus('Preparing images…', 'text-zinc-400');
     }
 
     function endImagePreparation(){
@@ -301,6 +251,74 @@
       if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || '')){
         setStatus('Ready.', 'text-zinc-500');
       }
+    }
+
+    function syncImagesInputFiles(){
+      if (!imagesInput) return;
+      if (!imageFiles || imageFiles.length === 0) {
+        imagesInput.value = '';
+        return;
+      }
+      try {
+        const dt = new DataTransfer();
+        for (const f of imageFiles) {
+          dt.items.add(f);
+        }
+        imagesInput.files = dt.files;
+      } catch (e) {
+        // Fallback: if DataTransfer unsupported, imageFiles still remains the source of truth.
+      }
+    }
+
+    const creditsDisplay = document.getElementById('creditsDisplay');
+    const statusText = document.getElementById('statusText');
+    const successBox = document.getElementById('successBox');
+    const successText = document.getElementById('successText');
+    const runBtn = document.getElementById('runBtn');
+    const promptInput = document.getElementById('promptInput');
+    const ratioSelect = document.getElementById('ratioSelect');
+    const durationSelect = document.getElementById('durationSelect');
+    const durationWrap = document.getElementById('durationWrap');
+    const res720Btn = document.getElementById('res720Btn');
+    const res1080Btn = document.getElementById('res1080Btn');
+    const imagesInput = document.getElementById('imagesInput');
+    const videoInput = document.getElementById('videoInput');
+    const imagesThumbs = document.getElementById('imagesThumbs');
+    const videoThumbs = document.getElementById('videoThumbs');
+    const imagesError = document.getElementById('imagesError');
+    const videoError = document.getElementById('videoError');
+
+    function setStatus(msg, tone){
+      statusText.textContent = msg;
+      statusText.className = 'text-[11px] ' + (tone || 'text-zinc-500');
+    }
+
+    function formatCredits(x){
+      return (Math.round(Number(x) * 10) / 10).toFixed(1).replace(/\.0$/, '');
+    }
+
+    function repaintCredits(){
+      creditsDisplay.textContent = formatCredits(credits) + '⚡';
+    }
+
+    function clearObjectUrl(url){
+      if (!url) return;
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    }
+
+    function clearObjectUrlArray(arr){
+      arr.forEach(clearObjectUrl);
+      arr.length = 0;
+    }
+
+    function showError(el, msg){
+      if (!msg) {
+        el.textContent = '';
+        el.classList.add('hidden');
+        return;
+      }
+      el.textContent = msg;
+      el.classList.remove('hidden');
     }
 
     function getEffectiveDurationSeconds(){
@@ -320,7 +338,7 @@
     }
 
     function updateRunButtonLabel(){
-      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '‚ö°)';
+      runBtn.textContent = 'Run (cost: ' + formatCredits(getCost()) + '⚡)';
     }
 
     function updateSegmentButtons(){
@@ -430,7 +448,11 @@
     async function updateRunAvailability(){
       if (!runBtn || runBtn.dataset.busy === '1') return;
       const prompt = (promptInput.value || '').trim();
-      if (!telegramId || !prompt || pendingImagePreparations > 0 || !validateImages() || !validateVideo()) {
+      if (pendingImagePreparations > 0) {
+        runBtn.disabled = true;
+        return;
+      }
+      if (!telegramId || !prompt || !validateImages() || !validateVideo()) {
         runBtn.disabled = true;
         return;
       }
@@ -451,10 +473,11 @@
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-        del.innerHTML = '√ó';
+        del.innerHTML = '×';
         del.onclick = () => {
           imageFiles.splice(idx, 1);
           renderImageList(imageFiles);
+          syncImagesInputFiles();
           validateImages();
           updateRunButtonLabel();
           updateRunAvailability();
@@ -494,7 +517,7 @@
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';
-      del.innerHTML = '√ó';
+      del.innerHTML = '×';
       del.onclick = clearVideo;
       wrap.appendChild(vid);
       wrap.appendChild(del);
@@ -601,18 +624,18 @@
 
       runBtn.disabled = true;
       runBtn.dataset.busy = '1';
-      runBtn.textContent = 'Working‚Ä¶';
+      runBtn.textContent = 'Working…';
 
       try {
         let imageUrls = [];
         let videoUrl = '';
 
         if (imageFiles.length) {
-          setStatus('Uploading images‚Ä¶', 'text-zinc-400');
+          setStatus('Uploading images…', 'text-zinc-400');
           imageUrls = await uploadMany(imageFiles, 'happyhorse-image');
         }
         if (videoFile) {
-          setStatus('Uploading video‚Ä¶', 'text-zinc-400');
+          setStatus('Uploading video…', 'text-zinc-400');
           videoUrl = await uploadFile(videoFile, 'happyhorse-video');
         }
 
@@ -631,7 +654,7 @@
           leng
         };
 
-        setStatus('Submitting HappyHorse 1.0 task‚Ä¶', 'text-zinc-400');
+        setStatus('Submitting HappyHorse 1.0 task…', 'text-zinc-400');
         const resp = await fetch('/.netlify/functions/run-happyhorse-1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -680,34 +703,49 @@
     promptInput.addEventListener('input', updateRunAvailability);
 
     imagesInput.addEventListener('change', async () => {
+      const currentToken = imageSelectionToken + 1;
+      imageSelectionToken = currentToken;
       const incomingFiles = Array.from(imagesInput.files || []);
       imageFiles = [];
       renderImageList(imageFiles);
+      showError(imagesError, '');
       if (!incomingFiles.length) {
-        validateImages();
+        syncImagesInputFiles();
+        updateRunButtonLabel();
+        await updateRunAvailability();
+        return;
+      }
+      if (incomingFiles.length > MAX_IMAGE_COUNT) {
+        imageSelectionToken += 1;
+        imageFiles = [];
+        renderImageList(imageFiles);
+        syncImagesInputFiles();
+        showError(imagesError, 'You can upload up to 6 images.');
         updateRunButtonLabel();
         await updateRunAvailability();
         return;
       }
 
       beginImagePreparation();
+      await updateRunAvailability();
       try {
-        const filesToUse = incomingFiles.slice(0, MAX_IMAGE_COUNT);
-        imageFiles = await Promise.all(filesToUse.map((file, index) => makeStableImageFile(file, 'happyhorse-image-' + (index + 1))));
+        imageFiles = await Promise.all(incomingFiles.map((file, index) => makeStableImageFile(file, 'happyhorse-image-' + (index + 1))));
+        if (currentToken !== imageSelectionToken) return;
         renderImageList(imageFiles);
+        syncImagesInputFiles();
         validateImages();
-        if (incomingFiles.length > MAX_IMAGE_COUNT) {
-          showError(imagesError, 'You can upload up to 6 images.');
-        }
       } catch (err) {
-        imageFiles = [];
-        renderImageList(imageFiles);
-        showError(imagesError, err && err.message ? err.message : 'Could not read one of the images.');
+        if (currentToken === imageSelectionToken) {
+          imageFiles = [];
+          renderImageList(imageFiles);
+          syncImagesInputFiles();
+          showError(imagesError, err && err.message ? err.message : 'Could not read one of the images.');
+        }
       } finally {
         endImagePreparation();
+        updateRunButtonLabel();
+        await updateRunAvailability();
       }
-      updateRunButtonLabel();
-      await updateRunAvailability();
     });
 
     videoInput.addEventListener('change', async () => {
