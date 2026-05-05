@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA ‚Ä¢ Midjourney (Image ‚Üí Video) ‚Ä¢ Telegram</title>
+  <title>HANSORA • Midjourney (Image → Video) • Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -52,13 +52,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Midjourney Image ‚Üí Video</span>
+          <span class="text-xs text-zinc-400">Midjourney Image → Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
         </div>
       </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Midjourney (Image ‚Üí Video)
+              Midjourney (Image → Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Upload 1 image, write your prompt, and that's it
@@ -112,7 +112,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 2‚ö°)
+                Run (cost: 2⚡)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -121,7 +121,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">‚úÖ</div>
+                  <div class="text-2xl">✅</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -161,6 +161,7 @@
     let lastObjURL = null;
     let selectedImageFile = null;
     let pendingImagePreparations = 0;
+    let imageSelectionToken = 0;
 
     const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 
@@ -217,7 +218,7 @@
 
     function beginImagePreparation(){
       pendingImagePreparations += 1;
-      setStatus("Preparing image‚Ä¶", "text-zinc-400");
+      setStatus("Preparing image…", "text-zinc-400");
     }
 
     function endImagePreparation(){
@@ -227,8 +228,44 @@
       }
     }
 
+    function syncImageInputFile(){
+      if (!imageInput) return;
+      if (!selectedImageFile) {
+        imageInput.value = "";
+        return;
+      }
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(selectedImageFile);
+        imageInput.files = dt.files;
+      } catch (e) {
+        // Fallback: if DataTransfer unsupported, the internal selectedImageFile is still used for upload.
+      }
+    }
+
+    function clearImageSelection(){
+      imageSelectionToken += 1;
+      try {
+        if (lastObjURL) {
+          URL.revokeObjectURL(lastObjURL);
+          lastObjURL = null;
+        }
+      } catch {}
+      selectedImageFile = null;
+      if (imageInput) imageInput.value = "";
+      if (thumbsEl) thumbsEl.innerHTML = "";
+    }
+
     function renderImagePreview(file){
-      if (!thumbsEl || !file) return;
+      if (!thumbsEl) return;
+      thumbsEl.innerHTML = "";
+      try {
+        if (lastObjURL) {
+          URL.revokeObjectURL(lastObjURL);
+          lastObjURL = null;
+        }
+      } catch {}
+      if (!file) return;
       const u = URL.createObjectURL(file);
       lastObjURL = u;
       const img = new Image();
@@ -246,36 +283,34 @@
       thumbsEl.appendChild(wrap);
     }
 
-    function clearImageSelection(){
-      try {
-        if (lastObjURL) {
-          URL.revokeObjectURL(lastObjURL);
-          lastObjURL = null;
-        }
-      } catch {}
-      selectedImageFile = null;
-      if (imageInput) imageInput.value = "";
-      if (thumbsEl) thumbsEl.innerHTML = "";
-    }
-
     if (imageInput && thumbsEl){
       imageInput.addEventListener("change", async () => {
-        thumbsEl.innerHTML = "";
-        try {
-          if (lastObjURL) {
-            URL.revokeObjectURL(lastObjURL);
-            lastObjURL = null;
-          }
-        } catch {}
+        const currentToken = imageSelectionToken + 1;
+        imageSelectionToken = currentToken;
+        const incomingFiles = Array.from(imageInput.files || []);
         selectedImageFile = null;
-        const f = imageInput.files && imageInput.files[0];
-        if (!f) return;
+        renderImagePreview(null);
+        if (!incomingFiles.length){
+          syncImageInputFile();
+          return;
+        }
+        if (incomingFiles.length > 1){
+          clearImageSelection();
+          setStatus("Please upload only 1 image.", "text-rose-300");
+          return;
+        }
+
         beginImagePreparation();
         try {
-          selectedImageFile = await makeStableImageFile(f, "mjvideo");
+          selectedImageFile = await makeStableImageFile(incomingFiles[0], "image");
+          if (currentToken !== imageSelectionToken) return;
           renderImagePreview(selectedImageFile);
+          syncImageInputFile();
         } catch (err) {
-          setStatus(err && err.message ? err.message : "Could not read this image.", "text-rose-300");
+          if (currentToken === imageSelectionToken){
+            clearImageSelection();
+            setStatus(err && err.message ? err.message : "Could not read the image.", "text-rose-300");
+          }
         } finally {
           endImagePreparation();
         }
@@ -290,7 +325,7 @@
     }
 
     function repaintCredits(){
-      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "‚ö°";
+      creditsDisplay.textContent = credits.toFixed(1).replace(/\.0$/, "") + "⚡";
     }
 
     function parseQueryParams(){
@@ -365,14 +400,14 @@
         return;
       }
 
-      const files = selectedImageFile ? [selectedImageFile] : [];
-      const prompt = (promptInput.value || "").trim();
-      const ratio = ratioSelect.value || "1:1";
-
       if (pendingImagePreparations > 0){
         setStatus("Please wait until the image is ready.", "text-rose-300");
         return;
       }
+
+      const files = selectedImageFile ? [selectedImageFile] : Array.from(imageInput.files || []);
+      const prompt = (promptInput.value || "").trim();
+      const ratio = ratioSelect.value || "1:1";
 
       if (files.length !== 1 || !prompt){
         setStatus("Please upload 1 image and enter a prompt (both required).", "text-rose-300");
@@ -391,8 +426,8 @@
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working‚Ä¶";
-      setStatus("Uploading image‚Ä¶", "text-zinc-400");
+      runBtn.textContent = "Working…";
+      setStatus("Uploading image…", "text-zinc-400");
 
       try {
         const origName = file.name || "image.jpg";
@@ -420,7 +455,7 @@
         } catch {}
 
         const imageUrl = signJson.publicUrl;
-        setStatus("Submitting video job‚Ä¶", "text-zinc-400");
+        setStatus("Submitting video job…", "text-zinc-400");
 
         const resp = await fetch("/.netlify/functions/run-mjvideo", {
           method: "POST",
@@ -463,17 +498,17 @@
         credits = newCredits;
         repaintCredits();
 
-        setStatus("‚úÖ Request submitted.", "text-emerald-300");
+        setStatus("✅ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
-          successText.innerHTML = "‚ú¶Submitted successfully. You will receive the video in Telegram when it is ready.<br/>‚ú¶–ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ –≤–∏–¥–µ–æ –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω –±—É–¥–µ—Ç –≥–æ—Ç–æ–≤.";
+          successText.innerHTML = "✦Submitted successfully. You will receive the video in Telegram when it is ready.<br/>✦Запрос успешно принят. Вы получите видео в Telegram, когда он будет готов.";
         }
       } catch (err) {
         console.error(err);
         setStatus("Error: " + (err && err.message ? err.message : "Something went wrong."), "text-rose-300");
       } finally {
         runBtn.disabled = false;
-        runBtn.textContent = "Run (cost: 2‚ö°)";
+        runBtn.textContent = "Run (cost: 2⚡)";
       }
     }
 
