@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • Kling 3.0 (Text / Image → Video) • Telegram</title>
+  <title>HANSORA ‚Ä¢ Kling 3.0 (Text / Image ‚Üí Video) ‚Ä¢ Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -113,13 +113,13 @@
         </div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Kling 3.0 Text / Image → Video</span>
+          <span class="text-xs text-zinc-400">Kling 3.0 Text / Image ‚Üí Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
         </div>
       </div>
     </div>
@@ -131,7 +131,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h1 class="text-lg md:text-xl font-semibold text-white">
-              Kling 3.0 (Text / Image → Video)
+              Kling 3.0 (Text / Image ‚Üí Video)
             </h1>
             <p class="text-xs md:text-sm text-zinc-400 mt-1">
               Use only text, or upload 1 image + prompt, and get a short AI video.
@@ -206,9 +206,9 @@
                 <option value="4K">4K</option>
               </select>
               <div class="option-grid" data-option-group="mode">
-                <button type="button" class="option-card active" data-mode-value="std"><span class="main">720p</span><span class="sub">from 1⚡/s</span></button>
-                <button type="button" class="option-card" data-mode-value="pro"><span class="main">1080p</span><span class="sub">from 1.5⚡/s</span></button>
-                <button type="button" class="option-card" data-mode-value="4K"><span class="main">4K</span><span class="sub">4⚡/s</span></button>
+                <button type="button" class="option-card active" data-mode-value="std"><span class="main">720p</span><span class="sub">from 1‚ö°/s</span></button>
+                <button type="button" class="option-card" data-mode-value="pro"><span class="main">1080p</span><span class="sub">from 1.5‚ö°/s</span></button>
+                <button type="button" class="option-card" data-mode-value="4K"><span class="main">4K</span><span class="sub">4‚ö°/s</span></button>
               </div>
             </div>
 
@@ -238,7 +238,7 @@
                 </span>
               </label>
               <p class="text-[11px] text-zinc-500">
-                Each shot duration: 3–12s. All shots combined must be ≤ 15s.
+                Each shot duration: 3‚Äì12s. All shots combined must be ‚â§ 15s.
               </p>
             </div>
 
@@ -262,7 +262,7 @@
                 <option value="14">14s</option>
                 <option value="15">15s</option>
               </select>
-              <p class="text-[11px] text-zinc-500">Single video duration must be 3–15 seconds.</p>
+              <p class="text-[11px] text-zinc-500">Single video duration must be 3‚Äì15 seconds.</p>
             </div>
 
             <div id="multiShotsBuilder" class="hidden space-y-3">
@@ -287,7 +287,7 @@
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
-                Run (cost: 5⚡)
+                Run (cost: 5‚ö°)
               </button>
               <p id="statusText" class="text-[11px] text-zinc-500">
                 Ready.
@@ -296,7 +296,7 @@
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
                 <div class="flex items-start gap-2">
-                  <div class="text-2xl">✅</div>
+                  <div class="text-2xl">‚úÖ</div>
                   <div id="successText" class="flex-1"></div>
                 </div>
               </div>
@@ -419,6 +419,96 @@
 
     let lastStartObjURL = null;
     let lastEndObjURL = null;
+    let selectedStartFile = null;
+    let selectedEndFile = null;
+    let pendingImagePreparations = 0;
+
+    const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+    function stableImageExt(mime){
+      const t = String(mime || "").toLowerCase();
+      if (t === "image/png") return ".png";
+      if (t === "image/webp") return ".webp";
+      return ".jpg";
+    }
+
+    function sniffImageMime(bytes){
+      if (!bytes || bytes.length < 4) return "";
+      if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return "image/jpeg";
+      if (
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+        bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A
+      ) return "image/png";
+      if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+      ) return "image/webp";
+      return "";
+    }
+
+    function safeBaseName(name, fallback){
+      return String(name || fallback || "image")
+        .replace(/\.[^./\\]+$/, "")
+        .replace(/[^\w.-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80) || fallback || "image";
+    }
+
+    async function makeStableImageFile(file, prefix){
+      if (!file) return null;
+      const rawType = String(file.type || "").toLowerCase();
+      const buf = await file.arrayBuffer();
+      const sniffedType = sniffImageMime(new Uint8Array(buf.slice(0, 16)));
+      if (rawType && !rawType.startsWith("image/") && !sniffedType){
+        throw new Error("Please choose an image file.");
+      }
+      let type = SUPPORTED_IMAGE_MIMES.has(rawType) ? rawType : sniffedType;
+      if (!type){
+        throw new Error("Only JPEG, PNG, or WebP images are allowed.");
+      }
+      type = type === "image/jpg" ? "image/jpeg" : type;
+      return new File([buf], Date.now() + "-" + prefix + "-" + safeBaseName(file.name, "image") + stableImageExt(type), {
+        type,
+        lastModified: Date.now()
+      });
+    }
+
+    function beginImagePreparation(label){
+      pendingImagePreparations += 1;
+      setStatus("Preparing " + label + "‚Ä¶", "text-zinc-400");
+    }
+
+    function endImagePreparation(){
+      pendingImagePreparations = Math.max(0, pendingImagePreparations - 1);
+      if (pendingImagePreparations === 0 && statusText && /^Preparing /.test(statusText.textContent || "")){
+        setStatus("Ready.", "text-zinc-500");
+      }
+    }
+
+    function renderImagePreview(file, which){
+      const isStart = which === "start";
+      const thumbsEl = isStart ? startThumbsEl : endThumbsEl;
+      if (!thumbsEl || !file) return;
+      const u = URL.createObjectURL(file);
+      if (isStart) lastStartObjURL = u;
+      else lastEndObjURL = u;
+      const img = new Image();
+      img.src = u;
+      img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
+      const wrap = document.createElement("div");
+      wrap.className = "relative inline-block";
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
+      del.innerHTML = "√ó";
+      del.onclick = isStart ? clearStartSelection : clearEndSelection;
+      wrap.appendChild(img);
+      wrap.appendChild(del);
+      thumbsEl.appendChild(wrap);
+    }
 
     // Multi-shots state
     // Each shot: { prompt: string, duration: number, element: Element|null }
@@ -433,7 +523,7 @@
 
     function repaintCredits(){
       const s = (Math.round(credits * 10) / 10).toFixed(1).replace(/\.0$/, "");
-      creditsDisplay.textContent = s + "⚡";
+      creditsDisplay.textContent = s + "‚ö°";
     }
 
     function parseQueryParams(){
@@ -489,6 +579,7 @@
           lastStartObjURL = null;
         }
       } catch {}
+      selectedStartFile = null;
       if (startFrameInput) startFrameInput.value = "";
       if (startThumbsEl) startThumbsEl.innerHTML = "";
       if (startSizeError){ startSizeError.textContent=""; startSizeError.classList.add("hidden"); }
@@ -501,13 +592,14 @@
           lastEndObjURL = null;
         }
       } catch {}
+      selectedEndFile = null;
       if (endFrameInput) endFrameInput.value = "";
       if (endThumbsEl) endThumbsEl.innerHTML = "";
       if (endSizeError){ endSizeError.textContent=""; endSizeError.classList.add("hidden"); }
     }
 
     if (startFrameInput && startThumbsEl){
-      startFrameInput.addEventListener("change", () => {
+      startFrameInput.addEventListener("change", async () => {
         startThumbsEl.innerHTML = "";
         try {
           if (lastStartObjURL) {
@@ -515,6 +607,7 @@
             lastStartObjURL = null;
           }
         } catch {}
+        selectedStartFile = null;
         const f = startFrameInput.files && startFrameInput.files[0];
         if (!f) return;
         if (startSizeError){
@@ -526,30 +619,23 @@
             startSizeError.classList.add("hidden");
           }
         }
-        const u = URL.createObjectURL(f);
-        lastStartObjURL = u;
-
-        const img = new Image();
-        img.src = u;
-        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-
-        const wrap = document.createElement("div");
-        wrap.className = "relative inline-block";
-
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "×";
-        del.onclick = clearStartSelection;
-
-        wrap.appendChild(img);
-        wrap.appendChild(del);
-        startThumbsEl.appendChild(wrap);
+        beginImagePreparation("Start Frame");
+        try {
+          selectedStartFile = await makeStableImageFile(f, "start");
+          renderImagePreview(selectedStartFile, "start");
+        } catch (err) {
+          if (startSizeError){
+            startSizeError.textContent = err && err.message ? err.message : "Could not read Start Frame.";
+            startSizeError.classList.remove("hidden");
+          }
+        } finally {
+          endImagePreparation();
+        }
       });
     }
 
     if (endFrameInput && endThumbsEl){
-      endFrameInput.addEventListener("change", () => {
+      endFrameInput.addEventListener("change", async () => {
         endThumbsEl.innerHTML = "";
         try {
           if (lastEndObjURL) {
@@ -557,6 +643,7 @@
             lastEndObjURL = null;
           }
         } catch {}
+        selectedEndFile = null;
         const f = endFrameInput.files && endFrameInput.files[0];
         if (!f) return;
         if (endSizeError){
@@ -568,25 +655,18 @@
             endSizeError.classList.add("hidden");
           }
         }
-        const u = URL.createObjectURL(f);
-        lastEndObjURL = u;
-
-        const img = new Image();
-        img.src = u;
-        img.className = "block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20";
-
-        const wrap = document.createElement("div");
-        wrap.className = "relative inline-block";
-
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-        del.innerHTML = "×";
-        del.onclick = clearEndSelection;
-
-        wrap.appendChild(img);
-        wrap.appendChild(del);
-        endThumbsEl.appendChild(wrap);
+        beginImagePreparation("End Frame");
+        try {
+          selectedEndFile = await makeStableImageFile(f, "end");
+          renderImagePreview(selectedEndFile, "end");
+        } catch (err) {
+          if (endSizeError){
+            endSizeError.textContent = err && err.message ? err.message : "Could not read End Frame.";
+            endSizeError.classList.remove("hidden");
+          }
+        } finally {
+          endImagePreparation();
+        }
       });
     }
 
@@ -670,7 +750,7 @@
     function updateRunButtonLabel(){
       if (!runBtn) return;
       const c = getCost();
-      runBtn.textContent = "Run (cost: " + formatCredits(c) + "⚡)";
+      runBtn.textContent = "Run (cost: " + formatCredits(c) + "‚ö°)";
       // keep enabled state as-is; we disable only while working
     }
 
@@ -768,7 +848,7 @@
         const elemBtn = document.createElement("button");
         elemBtn.type = "button";
         elemBtn.className = "px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 text-xs font-semibold";
-        elemBtn.innerHTML = "🧩 Elements";
+        elemBtn.innerHTML = "üß© Elements";
         elemBtn.onclick = () => openElementsModal(idx);
 
         const removeBtn = document.createElement("button");
@@ -810,12 +890,12 @@
 
         const durLabel = document.createElement("div");
         durLabel.className = "text-[11px] font-medium text-zinc-300 mb-1";
-        durLabel.textContent = "Duration (3–12s)";
+        durLabel.textContent = "Duration (3‚Äì12s)";
 
         const dur = document.createElement("select");
         dur.dataset.shotDuration = String(idx);
         dur.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500";
-        // Duration options are dynamic: each shot 3–12s, total across all shots ≤ 15s.
+        // Duration options are dynamic: each shot 3‚Äì12s, total across all shots ‚â§ 15s.
         function buildDurationOptions(){
           const otherSum = shots.reduce((sum, s, j) => {
             if (j === idx) return sum;
@@ -952,7 +1032,7 @@ durWrap.appendChild(durLabel);
       const imgs = Array.isArray(el.images) ? el.images : [];
       if (imgs.length === 0) return { ok:true };
       if (imgs.length < 2 || imgs.length > 4){
-        return { ok:false, msg:"Image element must have 2–4 images (or leave empty)." };
+        return { ok:false, msg:"Image element must have 2‚Äì4 images (or leave empty)." };
       }
       for (let i=0;i<imgs.length;i++){
         if (imgs[i] && imgs[i].size > 10 * 1024 * 1024){
@@ -1033,7 +1113,7 @@ durWrap.appendChild(durLabel);
       const typeSelect = document.createElement("select");
       typeSelect.className = "input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500";
       typeSelect.innerHTML = `
-        <option value="image">image (2–4)</option>
+        <option value="image">image (2‚Äì4)</option>
         <option value="video">video (1)</option>
       `;
       typeSelect.value = el.type || "image";
@@ -1079,7 +1159,7 @@ durWrap.appendChild(durLabel);
 
       const fileLabel = document.createElement("div");
       fileLabel.className = "text-[11px] font-medium text-zinc-300";
-      fileLabel.textContent = (el.type === "video") ? "Video file (exactly 1)" : "Image files (2–4)";
+      fileLabel.textContent = (el.type === "video") ? "Video file (exactly 1)" : "Image files (2‚Äì4)";
 
       const fileInput = document.createElement("input");
       fileInput.type = "file";
@@ -1152,7 +1232,7 @@ durWrap.appendChild(durLabel);
           const del = document.createElement("button");
           del.type = "button";
           del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-          del.innerHTML = "×";
+          del.innerHTML = "√ó";
           del.onclick = () => {
             e.video = null;
             setShotElement(activeElementsShotIndex, e);
@@ -1189,7 +1269,7 @@ durWrap.appendChild(durLabel);
           const del = document.createElement("button");
           del.type = "button";
           del.className = "absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center";
-          del.innerHTML = "×";
+          del.innerHTML = "√ó";
           del.onclick = () => {
             const arr = Array.isArray(e.images) ? [...e.images] : [];
             arr.splice(fi, 1);
@@ -1205,14 +1285,26 @@ durWrap.appendChild(durLabel);
         });
       }
 
-      fileInput.onchange = () => {
+      fileInput.onchange = async () => {
         const files = Array.from(fileInput.files || []);
         const e = getShotElement(activeElementsShotIndex) || el;
 
-        if (e.type === "video"){
-          e.video = files[0] || null;
-        } else {
-          e.images = files;
+        try {
+          if (e.type === "video"){
+            e.video = files[0] || null;
+          } else {
+            e.images = [];
+            if (files.length){
+              beginImagePreparation("element images");
+              showElementsError("Preparing images‚Ä¶");
+              e.images = await Promise.all(files.map((file, idx) => makeStableImageFile(file, "element-" + (idx + 1))));
+            }
+          }
+        } catch (err) {
+          showElementsError(err && err.message ? err.message : "Could not read one of the images.");
+          return;
+        } finally {
+          if (e.type !== "video" && files.length) endImagePreparation();
         }
 
         setShotElement(activeElementsShotIndex, e);
@@ -1342,13 +1434,15 @@ durWrap.appendChild(durLabel);
     function validateInputs(){
       const prompt = (promptInput.value || "").trim();
 
-      const startFile = (startFrameInput && startFrameInput.files && startFrameInput.files[0]) ? startFrameInput.files[0] : null;
-      const endFile = (endFrameInput && endFrameInput.files && endFrameInput.files[0]) ? endFrameInput.files[0] : null;
+      const startFile = selectedStartFile;
+      const endFile = selectedEndFile;
+
+      if (pendingImagePreparations > 0) return { ok:false, error:"Please wait until the images are ready." };
 
       if (!isMultiShotsEnabled()){
         if (!prompt) return { ok:false, error:"Please enter a prompt." };
         const sec = getSingleSeconds();
-        if (sec < 3 || sec > 15) return { ok:false, error:"Duration must be 3–15 seconds." };
+        if (sec < 3 || sec > 15) return { ok:false, error:"Duration must be 3‚Äì15 seconds." };
         if (endFile && !startFile) return { ok:false, error:"End Frame requires Start Frame." };
       } else {
         // multi shots
@@ -1359,10 +1453,10 @@ durWrap.appendChild(durLabel);
           const p = String(shots[i].prompt || "").trim();
           const d = clampInt(shots[i].duration, 3, 15);
           if (!p) return { ok:false, error:"Shot " + (i+1) + " prompt is required." };
-          if (d < 3 || d > 15) return { ok:false, error:"Shot " + (i+1) + " duration must be 3–15s." };
+          if (d < 3 || d > 15) return { ok:false, error:"Shot " + (i+1) + " duration must be 3‚Äì15s." };
           total += d;
         }
-        if (total > 15) return { ok:false, error:"All shots combined must be ≤ 15 seconds." };
+        if (total > 15) return { ok:false, error:"All shots combined must be ‚â§ 15 seconds." };
         // top prompt can be empty in multi-shot; still keep for UI but ignore
       }
 
@@ -1406,13 +1500,13 @@ durWrap.appendChild(durLabel);
           if (!el) continue;
           const ev = validateElement(el);
           if (!ev.ok){
-            setStatus(`Shot ${i + 1} • ${ev.msg}`, "text-rose-300");
+            setStatus(`Shot ${i + 1} ‚Ä¢ ${ev.msg}`, "text-rose-300");
             return;
           }
         }
       }
-const startFile = (startFrameInput && startFrameInput.files && startFrameInput.files[0]) ? startFrameInput.files[0] : null;
-      const endFile = (endFrameInput && endFrameInput.files && endFrameInput.files[0]) ? endFrameInput.files[0] : null;
+      const startFile = selectedStartFile;
+      const endFile = selectedEndFile;
 
       if (startFile && startFile.size > 10 * 1024 * 1024){
         setStatus("Start Frame too large (max 10MB).", "text-rose-300");
@@ -1430,24 +1524,24 @@ const startFile = (startFrameInput && startFrameInput.files && startFrameInput.f
       }
 
       runBtn.disabled = true;
-      runBtn.textContent = "Working…";
+      runBtn.textContent = "Working‚Ä¶";
 
       let startImageUrl = "";
       let endImageUrl = "";
 
       try {
         if (startFile){
-          setStatus("Uploading Start Frame…", "text-zinc-400");
+          setStatus("Uploading Start Frame‚Ä¶", "text-zinc-400");
           startImageUrl = await uploadFile(startFile, "start");
         }
 
         if (!isMultiShotsEnabled() && endFile){
-          setStatus("Uploading End Frame…", "text-zinc-400");
+          setStatus("Uploading End Frame‚Ä¶", "text-zinc-400");
           endImageUrl = await uploadFile(endFile, "end");
         }
 
         // Upload elements
-        setStatus("Preparing elements…", "text-zinc-400");
+        setStatus("Preparing elements‚Ä¶", "text-zinc-400");
 
         const allElements = [];
         const usedNames = new Set();
@@ -1480,7 +1574,7 @@ const startFile = (startFrameInput && startFrameInput.files && startFrameInput.f
               if (vf.size > 50 * 1024 * 1024){
                 throw new Error("Shot " + (si+1) + ": element video too large (max 50MB).");
               }
-              setStatus("Uploading element video…", "text-zinc-400");
+              setStatus("Uploading element video‚Ä¶", "text-zinc-400");
               const videoUrl = await uploadFile(vf, "elv-shot" + (si+1));
 
               allElements.push({
@@ -1495,7 +1589,7 @@ const startFile = (startFrameInput && startFrameInput.files && startFrameInput.f
                 continue;
               }
               if (imgs.length < 2 || imgs.length > 4){
-                throw new Error("Shot " + (si+1) + ": image element must have 2–4 images.");
+                throw new Error("Shot " + (si+1) + ": image element must have 2‚Äì4 images.");
               }
               for (let ii=0; ii<imgs.length; ii++){
                 const f = imgs[ii];
@@ -1503,7 +1597,7 @@ const startFile = (startFrameInput && startFrameInput.files && startFrameInput.f
                   throw new Error("Shot " + (si+1) + ": image " + (ii+1) + " too large (max 10MB).");
                 }
               }
-              setStatus("Uploading element images…", "text-zinc-400");
+              setStatus("Uploading element images‚Ä¶", "text-zinc-400");
               const urls = [];
               for (let ii=0; ii<imgs.length; ii++){
                 const u = await uploadFile(imgs[ii], "eli-shot" + (si+1) + "-" + (ii+1));
@@ -1566,12 +1660,12 @@ const startFile = (startFrameInput && startFrameInput.files && startFrameInput.f
         credits = newCredits;
         repaintCredits();
 
-        setStatus("✅ Request submitted.", "text-emerald-300");
+        setStatus("‚úÖ Request submitted.", "text-emerald-300");
         if (successBox && successText){
           successBox.classList.remove("hidden");
           successText.innerHTML =
-            "✦ Submitted successfully. You will receive the Kling 3.0 video in Telegram when it is ready.<br/>" +
-            "✦ Запрос успешно принят. Вы получите Kling 3.0 видео в Telegram, когда оно будет готово.";
+            "‚ú¶ Submitted successfully. You will receive the Kling 3.0 video in Telegram when it is ready.<br/>" +
+            "‚ú¶ –ó–∞–ø—Ä–æ—Å —É—Å–ø–µ—à–Ω–æ –ø—Ä–∏–Ω—è—Ç. –í—ã –ø–æ–ª—É—á–∏—Ç–µ Kling 3.0 –≤–∏–¥–µ–æ –≤ Telegram, –∫–æ–≥–¥–∞ –æ–Ω–æ –±—É–¥–µ—Ç –≥–æ—Ç–æ–≤–æ.";
         }
       } catch (err) {
         console.error(err);
@@ -1606,7 +1700,7 @@ const startFile = (startFrameInput && startFrameInput.files && startFrameInput.f
             <span class="text-sm font-semibold text-white">Kling Elements</span>
             <span id="elementsModalSub" class="text-[11px] text-zinc-400">Shot elements</span>
           </div>
-          <button id="closeElementsModal" type="button" class="h-9 w-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white flex items-center justify-center">✕</button>
+          <button id="closeElementsModal" type="button" class="h-9 w-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white flex items-center justify-center">‚úï</button>
         </div>
 
         <div class="p-4 space-y-3 max-h-[70vh] overflow-y-auto overscroll-contain">
@@ -1629,7 +1723,7 @@ const startFile = (startFrameInput && startFrameInput.files && startFrameInput.f
           </div>
 
           <p class="text-[11px] text-zinc-500">
-            Image element: 2–4 images (≤10MB each). Video element: 1 video (≤50MB).
+            Image element: 2‚Äì4 images (‚â§10MB each). Video element: 1 video (‚â§50MB).
           </p>
         </div>
       </div>
