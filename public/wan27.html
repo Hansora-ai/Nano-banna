@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANSORA • Wan 2.7 • Telegram</title>
+  <title>HANSORA ‚Ä¢ Wan 2.7 ‚Ä¢ Telegram</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111827'/%3E%3Ctext x='50%25' y='52%25' font-size='32' text-anchor='middle' fill='white' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -37,13 +37,13 @@
         <div class="h-8 w-8 rounded-2xl bg-indigo-500 flex items-center justify-center text-sm font-bold shadow-lg shadow-indigo-500/40">H</div>
         <div class="flex flex-col leading-tight">
           <span class="text-sm font-semibold text-white">Hansora AI</span>
-          <span class="text-xs text-zinc-400">Wan 2.7 Text / Image / Reference / Edit → Video</span>
+          <span class="text-xs text-zinc-400">Wan 2.7 Text / Image / Reference / Edit ‚Üí Video</span>
         </div>
       </div>
       <div class="flex items-center gap-3 text-xs">
         <div class="px-3 py-1 rounded-full border border-base-line bg-black/40">
           <span class="text-zinc-400">Credits:</span>
-          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0⚡</span>
+          <span id="creditsDisplay" class="font-semibold text-emerald-300 ml-1">0‚ö°</span>
         </div>
       </div>
     </div>
@@ -148,17 +148,17 @@
                 <button id="res720Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold active">720p</button>
                 <button id="res1080Btn" type="button" class="seg-btn rounded-xl px-4 py-3 text-sm font-semibold">1080p</button>
               </div>
-              <p id="resolutionHelp" class="text-[11px] text-zinc-500">720p costs 1.5⚡/sec. 1080p costs 2⚡/sec.</p>
+              <p id="resolutionHelp" class="text-[11px] text-zinc-500">720p costs 1.5‚ö°/sec. 1080p costs 2‚ö°/sec.</p>
             </div>
 
             <div class="space-y-2">
-              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 7.5⚡)</button>
+              <button id="runBtn" class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">Run (cost: 7.5‚ö°)</button>
               <p id="statusText" class="text-[11px] text-zinc-500">Ready.</p>
             </div>
 
             <div id="successBox" class="mt-3 hidden">
               <div class="rounded-2xl border border-emerald-500 bg-emerald-900/80 px-4 py-3 text-emerald-50 text-sm md:text-base leading-snug">
-                <div class="flex items-start gap-2"><div class="text-2xl">✅</div><div id="successText" class="flex-1"></div></div>
+                <div class="flex items-start gap-2"><div class="text-2xl">‚úÖ</div><div id="successText" class="flex-1"></div></div>
               </div>
             </div>
           </div>
@@ -167,15 +167,15 @@
             <div class="rounded-2xl border border-base-line bg-black/40 p-3 md:p-4">
               <h2 class="text-xs font-semibold text-zinc-200 mb-1">Mode routing</h2>
               <ol class="list-decimal list-inside text-[11px] text-zinc-400 space-y-1.5">
-                <li>Prompt only or prompt + audio → Text to Video.</li>
-                <li>First Frame, First + Last Frame, or video continuation → Image to Video.</li>
-                <li>No Last Frame + reference images/videos → Reference to Video.</li>
+                <li>Prompt only or prompt + audio ‚Üí Text to Video.</li>
+                <li>First Frame, First + Last Frame, or video continuation ‚Üí Image to Video.</li>
+                <li>No Last Frame + reference images/videos ‚Üí Reference to Video.</li>
                 <li>Click Video Edit for video + reference images + prompt only.</li>
               </ol>
             </div>
             <div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 md:p-4">
               <h2 class="text-xs font-semibold text-amber-200 mb-1">Important</h2>
-              <p class="text-[11px] text-amber-100/90 leading-5">Video Edit allows only video, reference images, prompt, duration, ratio, and resolution. Its max duration is 10s. Other modes allow 4–15s.</p>
+              <p class="text-[11px] text-amber-100/90 leading-5">Video Edit allows only video, reference images, prompt, duration, ratio, and resolution. Its max duration is 10s. Other modes allow 4‚Äì15s.</p>
             </div>
           </div>
         </div>
@@ -213,6 +213,7 @@
     let audioObjUrl = null;
     let refImageUrls = [];
     let refVideoUrls = [];
+    let pendingImagePreparations = 0;
 
     const creditsDisplay = document.getElementById('creditsDisplay');
     const statusText = document.getElementById('statusText');
@@ -252,14 +253,21 @@
 
     function setStatus(msg, tone){statusText.textContent=msg;statusText.className='text-[11px] '+(tone||'text-zinc-500')}
     function formatCredits(x){return (Math.round(Number(x)*10)/10).toFixed(1).replace(/\.0$/,'')}
-    function repaintCredits(){creditsDisplay.textContent=formatCredits(credits)+'⚡'}
+    function repaintCredits(){creditsDisplay.textContent=formatCredits(credits)+'‚ö°'}
     function getDurationMax(){return wanMode==='video_edit'?VIDEO_EDIT_MAX_DURATION:AUTO_MAX_DURATION}
     function getCost(){return Number(durationSelect.value||5)*COST_RATE[selectedResolution]}
-    function updateRunButtonLabel(){runBtn.textContent='Run (cost: '+formatCredits(getCost())+'⚡)'}
+    function updateRunButtonLabel(){runBtn.textContent='Run (cost: '+formatCredits(getCost())+'‚ö°)'}
     function clearObjectUrl(url){if(!url)return;try{URL.revokeObjectURL(url)}catch(_){}}
     function clearObjectUrlArray(arr){arr.forEach(clearObjectUrl);arr.length=0}
     function showError(el,msg){if(!msg){el.textContent='';el.classList.add('hidden');el.classList.remove('text-emerald-300');el.classList.add('text-rose-300');return}el.textContent=msg;el.classList.remove('hidden');el.classList.remove('text-emerald-300');el.classList.add('text-rose-300')}
     function showInfo(el,msg){if(!msg){el.textContent='';el.classList.add('hidden');el.classList.remove('text-emerald-300');el.classList.add('text-rose-300');return}el.textContent=msg;el.classList.remove('hidden');el.classList.remove('text-rose-300');el.classList.add('text-emerald-300')}
+    const SUPPORTED_IMAGE_MIMES=new Set(['image/jpeg','image/jpg','image/png','image/webp']);
+    function stableImageExt(mime){const t=String(mime||'').toLowerCase();if(t==='image/png')return'.png';if(t==='image/webp')return'.webp';return'.jpg'}
+    function sniffImageMime(bytes){if(!bytes||bytes.length<4)return'';if(bytes[0]===0xFF&&bytes[1]===0xD8&&bytes[2]===0xFF)return'image/jpeg';if(bytes.length>=8&&bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4E&&bytes[3]===0x47&&bytes[4]===0x0D&&bytes[5]===0x0A&&bytes[6]===0x1A&&bytes[7]===0x0A)return'image/png';if(bytes.length>=12&&bytes[0]===0x52&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x46&&bytes[8]===0x57&&bytes[9]===0x45&&bytes[10]===0x42&&bytes[11]===0x50)return'image/webp';return''}
+    function safeBaseName(name,fallback){return String(name||fallback||'image').replace(/\.[^./\\]+$/,'').replace(/[^\w.-]+/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,'').slice(0,80)||fallback||'image'}
+    async function makeStableImageFile(file,prefix){if(!file)return null;const rawType=String(file.type||'').toLowerCase();const buf=await file.arrayBuffer();const sniffedType=sniffImageMime(new Uint8Array(buf.slice(0,16)));if(rawType&&!rawType.startsWith('image/')&&!sniffedType)throw new Error('Please choose an image file.');let type=SUPPORTED_IMAGE_MIMES.has(rawType)?rawType:sniffedType;if(!type)throw new Error('Only JPEG, PNG, or WebP images are allowed.');type=type==='image/jpg'?'image/jpeg':type;return new File([buf],Date.now()+'-'+prefix+'-'+safeBaseName(file.name,'image')+stableImageExt(type),{type,lastModified:Date.now()})}
+    function beginImagePreparation(label){pendingImagePreparations+=1;setStatus('Preparing '+label+'‚Ä¶','text-zinc-400')}
+    function endImagePreparation(){pendingImagePreparations=Math.max(0,pendingImagePreparations-1);if(pendingImagePreparations===0&&statusText&&/^Preparing /.test(statusText.textContent||''))setStatus('Ready.','text-zinc-500')}
 
     function updateSegmentButtons(){
       autoModeBtn.classList.toggle('active',wanMode==='auto');
@@ -286,10 +294,11 @@
       const prompt=(promptInput.value||'').trim();
       if(!telegramId){runBtn.disabled=true;setStatus('Missing telegram_id in URL. Please open this page from the bot.','text-rose-300');return}
       if(!prompt){runBtn.disabled=true;setStatus('Please enter a prompt.','text-rose-300');return}
+      if(pendingImagePreparations>0){runBtn.disabled=true;return}
       const validation=await validateInputs(false);
       runBtn.disabled=!validation.ok;
       if(!validation.ok){setStatus(validation.error,'text-rose-300');return}
-      showInfo(statusText,'Route: '+validation.route.replace(/_/g,' ')+' — ready.');
+      showInfo(statusText,'Route: '+validation.route.replace(/_/g,' ')+' ‚Äî ready.');
     }
 
     function parseQueryParams(){
@@ -308,23 +317,23 @@
 
     function renderSingleImagePreview(file,container,kind,onDelete){
       container.innerHTML='';if(!file)return;const url=URL.createObjectURL(file);if(kind==='first'){clearObjectUrl(lastFirstObjUrl);lastFirstObjUrl=url}else{clearObjectUrl(lastLastObjUrl);lastLastObjUrl=url}
-      const wrap=document.createElement('div');wrap.className='thumb inline-block';const img=new Image();img.src=url;img.className='block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='×';del.onclick=onDelete;wrap.appendChild(img);wrap.appendChild(del);container.appendChild(wrap);
+      const wrap=document.createElement('div');wrap.className='thumb inline-block';const img=new Image();img.src=url;img.className='block w-full max-h-56 object-contain rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='√ó';del.onclick=onDelete;wrap.appendChild(img);wrap.appendChild(del);container.appendChild(wrap);
     }
 
     function renderImageList(files,container){
-      container.innerHTML='';clearObjectUrlArray(refImageUrls);files.forEach((file,idx)=>{const url=URL.createObjectURL(file);refImageUrls.push(url);const wrap=document.createElement('div');wrap.className='thumb inline-block';const img=new Image();img.src=url;img.className='block w-24 h-24 object-cover rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='×';del.onclick=()=>{referenceImageFiles.splice(idx,1);renderImageList(referenceImageFiles,referenceImagesThumbs);validateReferenceImages();updateRunAvailability()};wrap.appendChild(img);wrap.appendChild(del);container.appendChild(wrap)})
+      container.innerHTML='';clearObjectUrlArray(refImageUrls);files.forEach((file,idx)=>{const url=URL.createObjectURL(file);refImageUrls.push(url);const wrap=document.createElement('div');wrap.className='thumb inline-block';const img=new Image();img.src=url;img.className='block w-24 h-24 object-cover rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='√ó';del.onclick=()=>{referenceImageFiles.splice(idx,1);renderImageList(referenceImageFiles,referenceImagesThumbs);validateReferenceImages();updateRunAvailability()};wrap.appendChild(img);wrap.appendChild(del);container.appendChild(wrap)})
     }
 
     function renderVideoPreview(file,container,onDelete){
-      container.innerHTML='';clearObjectUrl(inputVideoUrl);inputVideoUrl=null;if(!file)return;const url=URL.createObjectURL(file);inputVideoUrl=url;const wrap=document.createElement('div');wrap.className='thumb inline-block';const vid=document.createElement('video');vid.src=url;vid.controls=true;vid.className='block w-48 max-h-32 object-cover rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='×';del.onclick=onDelete;wrap.appendChild(vid);wrap.appendChild(del);container.appendChild(wrap);
+      container.innerHTML='';clearObjectUrl(inputVideoUrl);inputVideoUrl=null;if(!file)return;const url=URL.createObjectURL(file);inputVideoUrl=url;const wrap=document.createElement('div');wrap.className='thumb inline-block';const vid=document.createElement('video');vid.src=url;vid.controls=true;vid.className='block w-48 max-h-32 object-cover rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='√ó';del.onclick=onDelete;wrap.appendChild(vid);wrap.appendChild(del);container.appendChild(wrap);
     }
 
     function renderVideoList(files,container){
-      container.innerHTML='';clearObjectUrlArray(refVideoUrls);files.forEach((file,idx)=>{const url=URL.createObjectURL(file);refVideoUrls.push(url);const wrap=document.createElement('div');wrap.className='thumb inline-block';const vid=document.createElement('video');vid.src=url;vid.controls=true;vid.className='block w-40 max-h-28 object-cover rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='×';del.onclick=()=>{referenceVideoFiles.splice(idx,1);renderVideoList(referenceVideoFiles,referenceVideosThumbs);validateReferenceVideos();updateRunAvailability()};wrap.appendChild(vid);wrap.appendChild(del);container.appendChild(wrap)})
+      container.innerHTML='';clearObjectUrlArray(refVideoUrls);files.forEach((file,idx)=>{const url=URL.createObjectURL(file);refVideoUrls.push(url);const wrap=document.createElement('div');wrap.className='thumb inline-block';const vid=document.createElement('video');vid.src=url;vid.controls=true;vid.className='block w-40 max-h-28 object-cover rounded-lg border border-white/10 bg-black/20';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='√ó';del.onclick=()=>{referenceVideoFiles.splice(idx,1);renderVideoList(referenceVideoFiles,referenceVideosThumbs);validateReferenceVideos();updateRunAvailability()};wrap.appendChild(vid);wrap.appendChild(del);container.appendChild(wrap)})
     }
 
     function renderAudioPreview(file,container,onDelete){
-      container.innerHTML='';clearObjectUrl(audioObjUrl);audioObjUrl=null;if(!file)return;const url=URL.createObjectURL(file);audioObjUrl=url;const wrap=document.createElement('div');wrap.className='thumb w-full';const audio=document.createElement('audio');audio.src=url;audio.controls=true;audio.className='block w-full rounded-lg';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='×';del.onclick=onDelete;wrap.appendChild(audio);wrap.appendChild(del);container.appendChild(wrap);
+      container.innerHTML='';clearObjectUrl(audioObjUrl);audioObjUrl=null;if(!file)return;const url=URL.createObjectURL(file);audioObjUrl=url;const wrap=document.createElement('div');wrap.className='thumb w-full';const audio=document.createElement('audio');audio.src=url;audio.controls=true;audio.className='block w-full rounded-lg';const del=document.createElement('button');del.type='button';del.className='absolute -top-2 -right-2 h-7 w-7 rounded-full bg-black/70 border border-white/20 text-white/80 hover:text-white hover:bg-black/90 flex items-center justify-center';del.innerHTML='√ó';del.onclick=onDelete;wrap.appendChild(audio);wrap.appendChild(del);container.appendChild(wrap);
     }
 
     function clearFirstFrame(){firstFrameFile=null;if(firstFrameInput)firstFrameInput.value='';clearObjectUrl(lastFirstObjUrl);lastFirstObjUrl=null;firstFrameThumbs.innerHTML='';showError(firstFrameError,'');updateRunAvailability()}
@@ -351,6 +360,7 @@
     async function validateInputs(showMainError=true){
       const prompt=(promptInput.value||'').trim();validateFrameFiles();const imagesOk=validateReferenceImages();const refsOk=validateReferenceVideos();const videoOk=validateInputVideo();const audioOk=validateAudio();
       if(!prompt)return{ok:false,error:'Please enter a prompt.'};
+      if(pendingImagePreparations>0)return{ok:false,error:'Please wait until the images are ready.'};
       if(firstFrameFile&&firstFrameFile.size>MAX_IMAGE_MB*1024*1024)return{ok:false,error:'First Frame exceeds 10MB.'};
       if(lastFrameFile&&lastFrameFile.size>MAX_IMAGE_MB*1024*1024)return{ok:false,error:'Last Frame exceeds 10MB.'};
       if(lastFrameFile&&!firstFrameFile)return{ok:false,error:'Last Frame requires First Frame.'};
@@ -366,7 +376,7 @@
       if(route==='image_to_video'&&(referenceImageFiles.length||referenceVideoFiles.length))return{ok:false,error:lastFrameFile?'Last Frame cannot be used together with reference images/videos. Remove Last Frame so First Frame + references routes to Reference to Video.':'Image to Video cannot use reference images/videos.'};
       if(route==='reference_to_video'&&lastFrameFile)return{ok:false,error:'Reference to Video cannot use Last Frame.'};
       if(route==='reference_to_video'&&!referenceImageFiles.length&&!referenceVideoFiles.length)return{ok:false,error:'Reference to Video requires reference images or videos.'};
-      if(showMainError)showInfo(statusText,'Route: '+route.replace(/_/g,' ')+' — ready.');
+      if(showMainError)showInfo(statusText,'Route: '+route.replace(/_/g,' ')+' ‚Äî ready.');
       return{ok:true,route};
     }
 
@@ -383,17 +393,17 @@
       if(successBox)successBox.classList.add('hidden');if(runBtn.disabled)return;if(!telegramId){setStatus('Missing telegram_id, cannot continue.','text-rose-300');return}
       const validation=await validateInputs();if(!validation.ok){setStatus(validation.error,'text-rose-300');return}
       const cost=getCost();if(credits<cost){setStatus('Not enough credits (need '+formatCredits(cost)+').','text-rose-300');return}
-      runBtn.disabled=true;runBtn.dataset.busy='1';runBtn.textContent='Working…';let submitFailed=false;
+      runBtn.disabled=true;runBtn.dataset.busy='1';runBtn.textContent='Working‚Ä¶';let submitFailed=false;
       try{
         let firstFrameUrl='';let lastFrameUrl='';let uploadedInputVideoUrl='';let uploadedAudioUrl='';let referenceImageUrls=[];let referenceVideoUrls=[];
-        if(firstFrameFile){setStatus('Uploading First Frame…','text-zinc-400');firstFrameUrl=await uploadFile(firstFrameFile,'wan-first-frame')}
-        if(lastFrameFile){setStatus('Uploading Last Frame…','text-zinc-400');lastFrameUrl=await uploadFile(lastFrameFile,'wan-last-frame')}
-        if(inputVideoFile){setStatus('Uploading video…','text-zinc-400');uploadedInputVideoUrl=await uploadFile(inputVideoFile,'wan-video')}
-        if(referenceImageFiles.length){setStatus('Uploading reference images…','text-zinc-400');referenceImageUrls=await uploadMany(referenceImageFiles,'wan-ref-image')}
-        if(referenceVideoFiles.length){setStatus('Uploading reference videos…','text-zinc-400');referenceVideoUrls=await uploadMany(referenceVideoFiles,'wan-ref-video')}
-        if(audioFile){setStatus('Uploading audio…','text-zinc-400');uploadedAudioUrl=await uploadFile(audioFile,'wan-audio')}
+        if(firstFrameFile){setStatus('Uploading First Frame‚Ä¶','text-zinc-400');firstFrameUrl=await uploadFile(firstFrameFile,'wan-first-frame')}
+        if(lastFrameFile){setStatus('Uploading Last Frame‚Ä¶','text-zinc-400');lastFrameUrl=await uploadFile(lastFrameFile,'wan-last-frame')}
+        if(inputVideoFile){setStatus('Uploading video‚Ä¶','text-zinc-400');uploadedInputVideoUrl=await uploadFile(inputVideoFile,'wan-video')}
+        if(referenceImageFiles.length){setStatus('Uploading reference images‚Ä¶','text-zinc-400');referenceImageUrls=await uploadMany(referenceImageFiles,'wan-ref-image')}
+        if(referenceVideoFiles.length){setStatus('Uploading reference videos‚Ä¶','text-zinc-400');referenceVideoUrls=await uploadMany(referenceVideoFiles,'wan-ref-video')}
+        if(audioFile){setStatus('Uploading audio‚Ä¶','text-zinc-400');uploadedAudioUrl=await uploadFile(audioFile,'wan-audio')}
         const payload={telegram_id:telegramId,credits_before:credits,cost,prompt:(promptInput.value||'').trim(),first_frame_url:firstFrameUrl,last_frame_url:lastFrameUrl,input_video_url:uploadedInputVideoUrl,audio_url:uploadedAudioUrl,reference_image_urls:referenceImageUrls,reference_video_urls:referenceVideoUrls,resolution:selectedResolution,aspect_ratio:ratioSelect.value,duration:Number(durationSelect.value),wan_mode:wanMode,wan_route:validation.route,mode,leng};
-        setStatus('Submitting Wan 2.7 task…','text-zinc-400');
+        setStatus('Submitting Wan 2.7 task‚Ä¶','text-zinc-400');
         const resp=await fetch('/.netlify/functions/run-wan-2-7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         const data=await resp.json().catch(()=>null);if(!resp.ok||!data||!data.ok){const serverMsg=data&&(data.details||data.error||(data.data&&(data.data.msg||data.data.message||data.data.error)));throw new Error(serverMsg||'Request failed')}
         const newCredits=Number(data.new_credits);if(Number.isFinite(newCredits)){credits=newCredits;repaintCredits();await persistCredits(newCredits)}
@@ -409,11 +419,11 @@
     res1080Btn.addEventListener('click',()=>{selectedResolution='1080p';updateSegmentButtons();updateRunAvailability()});
     durationSelect.addEventListener('change',async()=>{if(Number(durationSelect.value)>getDurationMax())durationSelect.value=String(getDurationMax());updateRunButtonLabel();await updateRunAvailability()});
     runBtn.addEventListener('click',handleRun);
-    firstFrameInput.addEventListener('change',()=>{firstFrameFile=firstFrameInput.files&&firstFrameInput.files[0]?firstFrameInput.files[0]:null;renderSingleImagePreview(firstFrameFile,firstFrameThumbs,'first',clearFirstFrame);validateFrameFiles();updateRunAvailability()});
-    lastFrameInput.addEventListener('change',()=>{lastFrameFile=lastFrameInput.files&&lastFrameInput.files[0]?lastFrameInput.files[0]:null;renderSingleImagePreview(lastFrameFile,lastFrameThumbs,'last',clearLastFrame);validateFrameFiles();updateRunAvailability()});
+    firstFrameInput.addEventListener('change',async()=>{const file=firstFrameInput.files&&firstFrameInput.files[0]?firstFrameInput.files[0]:null;firstFrameFile=null;renderSingleImagePreview(firstFrameFile,firstFrameThumbs,'first',clearFirstFrame);if(!file){validateFrameFiles();await updateRunAvailability();return}beginImagePreparation('First Frame');try{firstFrameFile=await makeStableImageFile(file,'first-frame');renderSingleImagePreview(firstFrameFile,firstFrameThumbs,'first',clearFirstFrame);validateFrameFiles()}catch(err){firstFrameFile=null;renderSingleImagePreview(firstFrameFile,firstFrameThumbs,'first',clearFirstFrame);showError(firstFrameError,err&&err.message?err.message:'Could not read First Frame.')}finally{endImagePreparation()}await updateRunAvailability()});
+    lastFrameInput.addEventListener('change',async()=>{const file=lastFrameInput.files&&lastFrameInput.files[0]?lastFrameInput.files[0]:null;lastFrameFile=null;renderSingleImagePreview(lastFrameFile,lastFrameThumbs,'last',clearLastFrame);if(!file){validateFrameFiles();await updateRunAvailability();return}beginImagePreparation('Last Frame');try{lastFrameFile=await makeStableImageFile(file,'last-frame');renderSingleImagePreview(lastFrameFile,lastFrameThumbs,'last',clearLastFrame);validateFrameFiles()}catch(err){lastFrameFile=null;renderSingleImagePreview(lastFrameFile,lastFrameThumbs,'last',clearLastFrame);showError(lastFrameError,err&&err.message?err.message:'Could not read Last Frame.')}finally{endImagePreparation()}await updateRunAvailability()});
     inputVideoInput.addEventListener('change',()=>{inputVideoFile=inputVideoInput.files&&inputVideoInput.files[0]?inputVideoInput.files[0]:null;renderVideoPreview(inputVideoFile,inputVideoThumbs,clearInputVideo);validateInputVideo();updateRunAvailability()});
     audioInput.addEventListener('change',()=>{audioFile=audioInput.files&&audioInput.files[0]?audioInput.files[0]:null;renderAudioPreview(audioFile,audioThumbs,clearAudio);validateAudio();updateRunAvailability()});
-    referenceImagesInput.addEventListener('change',()=>{referenceImageFiles=Array.from(referenceImagesInput.files||[]).slice(0,MAX_REFERENCE_TOTAL);renderImageList(referenceImageFiles,referenceImagesThumbs);validateReferenceImages();validateReferenceVideos();if((referenceImagesInput.files||[]).length>MAX_REFERENCE_TOTAL)showError(referenceImagesError,'Wan 2.7 supports up to 5 total reference images/videos.');updateRunAvailability()});
+    referenceImagesInput.addEventListener('change',async()=>{const incomingFiles=Array.from(referenceImagesInput.files||[]);referenceImageFiles=[];renderImageList(referenceImageFiles,referenceImagesThumbs);if(!incomingFiles.length){validateReferenceImages();validateReferenceVideos();await updateRunAvailability();return}beginImagePreparation('reference images');try{const filesToUse=incomingFiles.slice(0,MAX_REFERENCE_TOTAL);referenceImageFiles=await Promise.all(filesToUse.map((file,index)=>makeStableImageFile(file,'ref-image-'+(index+1))));renderImageList(referenceImageFiles,referenceImagesThumbs);validateReferenceImages();validateReferenceVideos();if(incomingFiles.length>MAX_REFERENCE_TOTAL)showError(referenceImagesError,'Wan 2.7 supports up to 5 total reference images/videos.')}catch(err){referenceImageFiles=[];renderImageList(referenceImageFiles,referenceImagesThumbs);showError(referenceImagesError,err&&err.message?err.message:'Could not read one of the reference images.')}finally{endImagePreparation()}await updateRunAvailability()});
     referenceVideosInput.addEventListener('change',()=>{referenceVideoFiles=Array.from(referenceVideosInput.files||[]).slice(0,MAX_REFERENCE_TOTAL);renderVideoList(referenceVideoFiles,referenceVideosThumbs);validateReferenceImages();validateReferenceVideos();if((referenceVideosInput.files||[]).length>MAX_REFERENCE_TOTAL)showError(referenceVideosError,'Wan 2.7 supports up to 5 total reference images/videos.');updateRunAvailability()});
     promptInput.addEventListener('input',updateRunAvailability);
 
