@@ -204,7 +204,7 @@ function sniffImageMime(bytes){
 
 function safeBaseName(name, fallback){
   return String(name || fallback || "image")
-    .replace(/\.[^./\]+$/, "")
+    .replace(/\.[^./\\]+$/, "")
     .replace(/[^\w.-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
