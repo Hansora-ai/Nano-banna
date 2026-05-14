@@ -129,6 +129,20 @@
             </div>
 
             <div class="space-y-2">
+              <label for="soundSelect" class="block text-xs font-medium text-zinc-300 mb-1">Sound</label>
+              <select
+                id="soundSelect"
+                class="input-dark w-full text-xs rounded-xl px-3 py-2 text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="on" selected>Sound On</option>
+                <option value="off">Sound Off</option>
+              </select>
+              <p class="text-[11px] text-zinc-500">
+                Sound On cost: 8⚡ for 5s, 15⚡ for 10s. Sound Off cost: 4⚡ for 5s, 8⚡ for 10s.
+              </p>
+            </div>
+
+            <div class="space-y-2">
               <button
                 id="runBtn"
                 class="btn w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg shadow-indigo-500/40">
@@ -165,8 +179,10 @@
   </main>
 
   <script>
-    const COST_5S = 10;
-    const COST_10S = 18;
+    const COST_SOUND_ON_5S = 8;
+    const COST_SOUND_ON_10S = 15;
+    const COST_SOUND_OFF_5S = 4;
+    const COST_SOUND_OFF_10S = 8;
     let telegramId = "";
     let credits = 0;
     let mode = "";
@@ -342,6 +358,7 @@
 
     const ratioSelect = document.getElementById("ratioSelect");
     const durationSelect = document.getElementById("durationSelect");
+    const soundSelect = document.getElementById("soundSelect");
 
     function setStatus(msg, tone){
       statusText.textContent = msg;
@@ -349,8 +366,10 @@
     }
 
     function getCurrentCost(){
-      if (!durationSelect) return COST_5S;
-      return (durationSelect.value === "10") ? COST_10S : COST_5S;
+      const duration = durationSelect && durationSelect.value === "10" ? 10 : 5;
+      const soundOn = !soundSelect || soundSelect.value !== "off";
+      if (soundOn) return duration === 10 ? COST_SOUND_ON_10S : COST_SOUND_ON_5S;
+      return duration === 10 ? COST_SOUND_OFF_10S : COST_SOUND_OFF_5S;
     }
 
     function updateRunButtonLabel(){
@@ -464,6 +483,7 @@
       }
 
       const cost = getCurrentCost();
+      const sound = !soundSelect || soundSelect.value !== "off";
       if (credits < cost){
         setStatus("Not enough credits (need " + cost + ").", "text-rose-300");
         return;
@@ -515,6 +535,7 @@
             new_credits: credits - cost,
             cost,
             duration,
+            sound,
             prompt,
             imageUrl,
             aspectRatio: ratio,
@@ -569,6 +590,9 @@
       updateRunButtonLabel();
       if (durationSelect) {
         durationSelect.addEventListener("change", updateRunButtonLabel);
+      }
+      if (soundSelect) {
+        soundSelect.addEventListener("change", updateRunButtonLabel);
       }
       runBtn.addEventListener("click", () => { handleRun(); });
     });
