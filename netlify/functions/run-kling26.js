@@ -161,8 +161,8 @@ exports.handler = async function(event){
   // Sound: true by default. Sound off is cheaper.
   const sound = body.sound === false || String(body.sound).toLowerCase() === "false" || String(body.sound).toLowerCase() === "off" ? false : true;
 
-  // Cost: sound on = 10⚡ for 5s, 18⚡ for 10s. Sound off = 4⚡ for 5s, 8⚡ for 10s.
-  const cost = sound ? (duration === 10 ? 18 : 10) : (duration === 10 ? 8 : 4);
+  // Cost: sound on = 8⚡ for 5s, 15⚡ for 10s. Sound off = 4⚡ for 5s, 8⚡ for 10s.
+  const cost = sound ? (duration === 10 ? 15 : 8) : (duration === 10 ? 8 : 4);
 
   // mode / leng collection from body, query, referer
   const query = event.queryStringParameters || {};
