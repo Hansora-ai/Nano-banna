@@ -158,8 +158,11 @@ exports.handler = async function(event){
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Number(body.new_credits || 0);
 
-  // Cost: 10⚡ for 5s, 18⚡ for 10s
-  const cost = duration === 10 ? 18 : 10;
+  // Sound: true by default. Sound off is cheaper.
+  const sound = body.sound === false || String(body.sound).toLowerCase() === "false" || String(body.sound).toLowerCase() === "off" ? false : true;
+
+  // Cost: sound on = 10⚡ for 5s, 18⚡ for 10s. Sound off = 4⚡ for 5s, 8⚡ for 10s.
+  const cost = sound ? (duration === 10 ? 18 : 10) : (duration === 10 ? 8 : 4);
 
   // mode / leng collection from body, query, referer
   const query = event.queryStringParameters || {};
@@ -227,13 +230,13 @@ exports.handler = async function(event){
       prompt,
       aspect_ratio: aspectRatio,
       duration: (duration === 10 ? "10" : "5"),
-      sound: true,
+      sound,
       image_urls: [image_url]
     } : {
       prompt,
       aspect_ratio: aspectRatio,
       duration: (duration === 10 ? "10" : "5"),
-      sound: true
+      sound
     },
     callBackUrl: callbackUrl,
     meta: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId },
