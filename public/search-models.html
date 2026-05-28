@@ -4366,6 +4366,9 @@ function createResultCard(data) {
     }
 
     function endpointForCurrentRun(model) {
+      if (isTelegramMiniApp) {
+        return model && model.endpoint ? model.endpoint : '';
+      }
       if (model && model.id === 'seedance20' && !seedanceHasUploadedMedia()) {
         return '/.netlify/functions/run-seedance-cheap';
       }
@@ -4705,7 +4708,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'Studio-grade quality with multi-image fusion.',
-        endpoint: '/.netlify/functions/run-nano-banana-pro',
+        endpoint: '/.netlify/functions/run-nano-pro-tg',
         needsImage: false,
         maxFiles: 8,
         aspectOptions: ['1:1', '3:4', '4:3', '9:16', '16:9'],
@@ -4721,7 +4724,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'Flash-speed generation with Pro-level quality (supports Google Search grounding).',
-        endpoint: '/.netlify/functions/run-nano-banana-2',
+        endpoint: '/.netlify/functions/run-nano-2',
         needsImage: false,
         maxFiles: 14,
         aspectOptions: ['auto', '1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9'],
@@ -4738,7 +4741,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'Seedream 4.5 creative image generator.',
-        endpoint: '/.netlify/functions/run-seedream-4-5',
+        endpoint: '/.netlify/functions/run-seedream-tg',
         needsImage: false,
         maxFiles: 8,
         aspectOptions: ['1:1', '3:4', '4:3', '9:16', '16:9'],
@@ -4754,7 +4757,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'OpenAI GPT-Image-1.5 for sharp, detailed visuals.',
-        endpoint: '/.netlify/functions/run-gpt-image-1-5',
+        endpoint: '/.netlify/functions/run-gpt-tg',
         needsImage: false,
         maxFiles: 3,
         aspectOptions: ['1:1', '2:3', '3:2'],
@@ -4770,7 +4773,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'GPT Image 2.0 with Kie resolution rules.',
-        endpoint: '/.netlify/functions/run-gpt-image-2',
+        endpoint: '/.netlify/functions/run-gpt-image-2-tg',
         needsImage: false,
         maxFiles: 4,
         uploadMaxMB: 10,
@@ -4787,7 +4790,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'Seedream 5.0 Lite with high quality enabled.',
-        endpoint: '/.netlify/functions/run-seedream-5-lite',
+        endpoint: '/.netlify/functions/run-seedream-tg',
         needsImage: false,
         maxFiles: 8,
         uploadMaxMB: 10,
@@ -4804,7 +4807,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'Grok image generation at fixed 720p.',
-        endpoint: '/.netlify/functions/run-grok-image',
+        endpoint: '/.netlify/functions/run-grok',
         needsImage: false,
         maxFiles: 4,
         uploadMaxMB: 10,
@@ -4821,7 +4824,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'Wan 2.7 Image with Normal / Pro quality.',
-        endpoint: '/.netlify/functions/run-wan-2-7-image',
+        endpoint: '/.netlify/functions/run-wan-2-7',
         needsImage: false,
         maxFiles: 4,
         uploadMaxMB: 10,
@@ -4855,7 +4858,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text → Image',
         category: 'image',
         description: 'Lightweight text-to-image generation.',
-        endpoint: '/.netlify/functions/run-z-image',
+        endpoint: '/.netlify/functions/run-image-z',
         needsImage: false,
         maxFiles: 0,
         uploadMaxMB: 10,
@@ -4873,7 +4876,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         category: 'image',
         description: 'MidJourney-style image generation.',
         hidden: true,
-        endpoint: '/.netlify/functions/run-midjourney',
+        endpoint: '/.netlify/functions/run-mj-tg',
         needsImage: false,
         maxFiles: 1,
         aspectOptions: ['2:3', '3:2', '1:1', '9:16', '16:9'],
@@ -4890,7 +4893,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         category: 'video',
         description: 'Turn an image into a MidJourney-style motion.',
         hidden: true,
-        endpoint: '/.netlify/functions/run-mj-video',
+        endpoint: '/.netlify/functions/run-mj-video-tg',
         needsImage: true,
         maxFiles: 1,
         aspectOptions: [],
@@ -4907,7 +4910,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         category: 'video',
         description: 'Veo 3 Fast — 8s only, vertical/horizontal only.',
         hidden: true,
-        endpoint: '/.netlify/functions/run-veo3',
+        endpoint: '/.netlify/functions/run_veo_tg',
         needsImage: false,
         maxFiles: 1,
         aspectOptions: ['16:9', '9:16'],
@@ -4924,7 +4927,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         category: 'video',
         description: 'Veo 3 — 8s only, vertical/horizontal only.',
         hidden: true,
-        endpoint: '/.netlify/functions/run-veo3',
+        endpoint: '/.netlify/functions/run_veo_tg',
         needsImage: false,
         maxFiles: 1,
         aspectOptions: ['16:9', '9:16'],
@@ -4941,7 +4944,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         category: 'video',
         description: 'Sora 2 video generation (10s / 15s).',
         hidden: true,
-        endpoint: '/.netlify/functions/run-sora2',
+        endpoint: '/.netlify/functions/run-sora2-tg',
         needsImage: false,
         maxFiles: 1,
         aspectOptions: ['16:9', '9:16'],
@@ -4957,7 +4960,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text → Video (start / last frames optional)',
         category: 'video',
         description: 'Veo 3.1 Fast — 8s only, vertical/horizontal only.',
-        endpoint: '/.netlify/functions/run-veo31',
+        endpoint: '/.netlify/functions/run_veo_tg',
         needsImage: false,
         maxFiles: 0,
         useFrames: true,
@@ -4977,7 +4980,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text → Video (start / last frames optional)',
         category: 'video',
         description: 'Veo 3.1 — 8s only, vertical/horizontal only.',
-        endpoint: '/.netlify/functions/run-veo31',
+        endpoint: '/.netlify/functions/run_veo_tg',
         needsImage: false,
         maxFiles: 0,
         useFrames: true,
@@ -5116,7 +5119,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / Image → Video (sound optional)',
         category: 'video',
         description: 'Kling 2.6 high-quality video (sound optional).',
-        endpoint: '/.netlify/functions/run-kling-26',
+        endpoint: '/.netlify/functions/run-kling26',
         needsImage: false,
         maxFiles: 1,
         aspectOptions: ['1:1', '9:16', '16:9'],
@@ -5132,7 +5135,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / elements → Video (sound optional)',
         category: 'video',
         description: 'Kling 3.0 with optional image elements and sound generation.',
-        endpoint: '/.netlify/functions/run-kling-30',
+        endpoint: '/.netlify/functions/run-kling-3',
         needsImage: false,
         maxFiles: 0,
         uploadMaxMB: 50,
@@ -5171,7 +5174,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Motion transfer from video',
         category: 'video',
         description: 'Kling motion control with source video and optional reference image.',
-        endpoint: '/.netlify/functions/run-kling-motion-control',
+        endpoint: '/.netlify/functions/run-kling26-motion-control-tg',
         needsImage: false,
         maxFiles: 0,
         needsMotionVideo: true,
@@ -8728,6 +8731,14 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           user_agent: navigator.userAgent || ''
         };
         if (isTelegramMiniApp) {
+          if (currentModel.id === 'kling30') {
+            body.startImageUrl = body.first_frame_url || (Array.isArray(body.image_urls) ? body.image_urls[0] : '') || '';
+            body.endImageUrl = body.last_frame_url || (Array.isArray(body.image_urls) ? body.image_urls[1] : '') || '';
+            body.aspectRatio = body.aspect_ratio || currentAspect || '16:9';
+            body.kling_mode = body.mode || (currentResolution === '4K' ? '4K' : (currentResolution === '1080p' ? 'pro' : 'std'));
+            body.klingMode = body.kling_mode;
+            body.mode_quality = body.kling_mode;
+          }
           body.telegram_id = telegramId;
           body.user_id = telegramId;
           body.uid = telegramId;
@@ -8735,7 +8746,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           body.cost = Number(getModelCreditValue(currentModel) || 0);
           body.model_id = currentModel.id;
           body.model_name = currentModel.name;
-          body.mode = body.mode || telegramMode;
+          body.mode = currentModel.id === 'kling30' ? telegramMode : (body.mode || telegramMode);
           body.modul = telegramMode;
           body.leng = telegramLeng;
           body.lang = telegramLeng;
@@ -8836,6 +8847,23 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
             console.warn('provider rejected generation', providerError);
             showGenerationFailedStatus(providerError, runId);
             await refreshCredits();
+            return;
+          }
+
+          if (isTelegramMiniApp) {
+            const controllers = createProcessingPlaceholders();
+            controllers.forEach((controller) => {
+              if (controller && typeof controller.apply === 'function') {
+                controller.apply({ status: 'submitted', result_url: null });
+              }
+            });
+            showStatus(
+              `Request submitted to ${currentModel.name}. The result will arrive in Telegram when it is ready.`,
+              'success'
+            );
+            setTimeout(() => {
+              loadRecentHistory().catch((error) => console.warn('loadRecentHistory after submit failed', error));
+            }, 900);
             return;
           }
 
