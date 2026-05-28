@@ -2767,11 +2767,54 @@
       -webkit-overflow-scrolling:touch;
       touch-action:pan-y;
     }
+    .telegram-credit-banner{
+      display:none;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      max-width:calc(100vw - 40px);
+      margin:22px auto 0;
+      padding:12px 16px;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:22px;
+      background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(49,46,129,.72));
+      box-shadow:0 18px 46px rgba(0,0,0,.32);
+      color:#fff;
+    }
+    body.telegram-miniapp .telegram-credit-banner{ display:flex; }
+    .telegram-credit-banner .label{
+      font-size:12px;
+      color:rgba(255,255,255,.62);
+      font-weight:700;
+    }
+    .telegram-credit-banner .id{
+      font-size:11px;
+      color:rgba(255,255,255,.46);
+      margin-top:2px;
+      max-width:52vw;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .telegram-credit-banner .amount{
+      font-size:20px;
+      line-height:1;
+      font-weight:900;
+      color:#d9ff5f;
+      white-space:nowrap;
+    }
 
     </style>
 </head>
 <body class="min-h-screen flex flex-col workspace-redesign">
   <div id="sharedHeader"></div>
+  <div id="telegramCreditBanner" class="telegram-credit-banner" aria-live="polite">
+    <div>
+      <div class="label">Telegram balance</div>
+      <div id="telegramCreditUser" class="id">Telegram ID</div>
+    </div>
+    <div id="telegramCreditAmount" class="amount">0⚡</div>
+  </div>
 
   <div id="generatorDock" class="fixed inset-x-0 bottom-0 z-30 flex justify-center pb-6 px-3">
     <div id="generatorCard" class="w-full max-w-5xl rounded-3xl bg-black/80 border border-white/15 shadow-soft px-4 py-4 space-y-3 backdrop-blur-xl">
@@ -3471,6 +3514,12 @@ async function __mjFetchNbCheck(params){
       return { id: telegramId, telegram_id: telegramId, isTelegram: true };
     }
 
+    if (isTelegramMiniApp) {
+      document.body.classList.add('telegram-miniapp');
+      const tgUser = document.getElementById('telegramCreditUser');
+      if (tgUser) tgUser.textContent = `Telegram ID: ${telegramId}`;
+    }
+
     function formatCredits(value) {
       const n = Number(value || 0);
       return `${Number.isInteger(n) ? n : n.toFixed(2)}⚡`;
@@ -3487,6 +3536,8 @@ async function __mjFetchNbCheck(params){
       document.querySelectorAll('#navCredits').forEach((node) => {
         node.textContent = formatCredits(n);
       });
+      const tgAmount = document.getElementById('telegramCreditAmount');
+      if (tgAmount) tgAmount.textContent = formatCredits(n);
       if (window.HansoraHeader && typeof window.HansoraHeader.setCredits === 'function') {
         window.HansoraHeader.setCredits(n);
       }
@@ -3741,7 +3792,7 @@ async function __mjFetchNbCheck(params){
     }
 
     function isSubmittedOnlyStatus(status) {
-      return /^(submitted|logged|sent)$/i.test(String(status || '').trim());
+      return /^(submitted|logged|sent|history)$/i.test(String(status || '').trim());
     }
 
     function createResultThumb(data) {
@@ -3796,7 +3847,7 @@ async function __mjFetchNbCheck(params){
         }
         const label = document.createElement('div');
         label.className = 'result-thumb-placeholder-label';
-        label.textContent = initialFailed ? 'Failed' : (isSubmittedOnlyStatus(statusRaw) ? 'Submitted' : 'Creating...');
+        label.textContent = initialFailed ? 'Failed' : (isSubmittedOnlyStatus(statusRaw) ? 'History' : 'Creating...');
         ph.appendChild(label);
         card.appendChild(ph);
       }
@@ -3838,7 +3889,7 @@ async function __mjFetchNbCheck(params){
         state.textContent = 'Failed';
         state.classList.add('failed');
       } else if (isSubmittedOnlyStatus(statusRaw) && !url) {
-        state.textContent = 'Submitted';
+        state.textContent = 'History';
       } else if (isReady) {
         state.textContent = 'Ready';
         state.classList.add('ready');
@@ -3915,7 +3966,7 @@ async function __mjFetchNbCheck(params){
             state.textContent = 'Ready';
             state.classList.add('ready');
           } else if (isSubmittedOnlyStatus(nextStatusRaw) && !nextUrl) {
-            state.textContent = 'Submitted';
+            state.textContent = 'History';
           } else {
             state.textContent = 'Processing';
             state.classList.add('processing');
@@ -3926,7 +3977,7 @@ async function __mjFetchNbCheck(params){
             placeholder.innerHTML = '<div class="result-thumb-placeholder-label">Failed</div>';
             placeholder.style.color = 'rgba(248,113,113,.9)';
           } else if (placeholder && isSubmittedOnlyStatus(nextStatusRaw) && !ready) {
-            placeholder.innerHTML = '<div class="result-thumb-placeholder-label">Submitted</div>';
+            placeholder.innerHTML = '<div class="result-thumb-placeholder-label">History</div>';
             placeholder.style.color = 'rgba(255,255,255,.72)';
           } else if (placeholder && !failed && !ready && !placeholder.querySelector('.processing-orb')) {
             placeholder.innerHTML = '';
@@ -4127,7 +4178,7 @@ function createResultCard(data) {
           pillClass = 'absolute left-2 top-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/85 text-white';
           statusClass = 'text-[10px] text-emerald-300';
         } else if (isSubmittedOnlyStatus(stRaw)) {
-          label = 'Submitted';
+          label = 'History';
           pillClass = 'absolute left-2 top-2 text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/85 text-white';
           statusClass = 'text-[10px] text-indigo-200/80';
         }
@@ -4212,7 +4263,7 @@ function createResultCard(data) {
               kind: inferKindFromTelegramModel(row.model),
               prompt: row.prompt || '',
               result_url: row.result_url || '',
-              status: row.result_url ? 'ready' : 'submitted',
+              status: row.result_url ? 'ready' : 'history',
               meta: {},
               created_at: row.created_at
             }))
