@@ -11,6 +11,7 @@ const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 // KEEP: existing Make.com webhook callback (DO NOT CHANGE)
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
 
 function json(statusCode, body){
   return {
@@ -22,8 +23,56 @@ function json(statusCode, body){
   };
 }
 
-// Optional: insert into telegram_generations
-async function writeTelegramGeneration({ telegramId, cost, prompt }){
+function normalizeLeng(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "ru" ? "ru" : "en";
+}
+
+function getLoadingMessage(leng) {
+  return normalizeLeng(leng) === "ru"
+    ? "⏳ Ваша генерация принята.\n\nПожалуйста, подождите — это может занять 1–5 минут.\n\nПока ваш запрос обрабатывается, вы можете создавать другие материалы."
+    : "⏳ Your generation has been accepted.\n\nPlease wait — it may take 1–5 minutes.\n\nWhile this is being processed, you can generate other things as well.";
+}
+
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
+  if (!LOADING_HOOK) return null;
+
+  try {
+    const resp = await fetch(LOADING_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits,
+        message: getLoadingMessage(leng)
+      })
+    });
+
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error("loading message hook failed", resp.status, data);
+      return null;
+    }
+
+    return data.message_id || data.messageId || data.result?.message_id || null;
+  } catch (e) {
+    console.error("loading message hook error", e && e.message ? e.message : e);
+    return null;
+  }
+}
+
+// Insert the first row. n8n updates this same row later by run_id.
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }){
   if (!SUPABASE_URL || !SERVICE_KEY) return;
   try{
     const url = SUPABASE_URL + "/rest/v1/telegram_generations";
@@ -39,7 +88,12 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }){
         telegram_id: telegramId,
         model: "GPT-Image-1",
         credits: cost,
-        prompt
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "image",
+        result_url: null
       }])
     });
     if (!resp.ok){
@@ -81,18 +135,21 @@ exports.handler = async (event) => {
 
   const image_url  = body.image_url ? String(body.image_url).trim() : null;
   const image_urls = Array.isArray(body.image_urls) ? body.image_urls.filter(Boolean) : null;
+  const urls = Array.isArray(body.urls) ? body.urls.filter(Boolean) : null;
 
   // Choose images precedence same as website function
   let chosenImages = null;
-  if (image_urls && image_urls.length){
+  if (urls && urls.length) {
+    chosenImages = urls.slice(0, 8);
+  } else if (image_urls && image_urls.length){
     chosenImages = image_urls.slice(0, 8);
   } else if (image_url){
     chosenImages = [image_url];
   }
 
   const creditsBefore = Number(body.credits_before || 0);
-  const newCredits    = Number(body.new_credits || 0);
-  const cost          = Number(body.cost || 2.5) || 2.5;
+  const cost          = 1.5;
+  const newCredits    = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
   const query   = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
@@ -112,7 +169,19 @@ exports.handler = async (event) => {
     }catch{}
   }
 
+  leng = normalizeLeng(leng);
+
   const run_id = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,10);
+
+  const loadingMessageId = await sendLoadingMessage({
+    telegramId,
+    runId: run_id,
+    leng,
+    mode,
+    cost,
+    creditsBefore,
+    newCredits
+  });
 
   // KEEP: webhook goes directly to Make.com, carrying all needed info
   const callbackUrl =
@@ -123,7 +192,8 @@ exports.handler = async (event) => {
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(mode) +
-    "&leng=" + encodeURIComponent(leng);
+    "&leng=" + encodeURIComponent(leng) +
+    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
 
   // KIE createTask endpoint
   const endpoint = `${KIE_BASE}/api/v1/jobs/createTask`;
@@ -155,7 +225,8 @@ exports.handler = async (event) => {
       new_credits: newCredits,
       cost,
       mode,
-      leng
+      leng,
+      loading_message_id: loadingMessageId
     }
   };
 
@@ -180,10 +251,9 @@ exports.handler = async (event) => {
     // Best-effort task id extraction (KIE responses vary by interface)
     const task_id = (data && (data.taskId || data.task_id || data.id || (data.data && (data.data.taskId || data.data.id)))) || null;
 
-    // Non-blocking log
-    await writeTelegramGeneration({ telegramId, cost, prompt });
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId: run_id, taskId: task_id });
 
-    return json(201, { ok:true, submitted:true, task_id, run_id, new_credits:newCredits });
+    return json(201, { ok:true, submitted:true, task_id, taskId: task_id, run_id, loading_message_id: loadingMessageId, new_credits:newCredits, cost });
   }catch(e){
     return json(500, { ok:false, submitted:false, error:"server_error", details:String(e && e.message || e) });
   }
