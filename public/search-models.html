@@ -3802,8 +3802,7 @@ async function __mjFetchNbCheck(params){
       const cleanUrl = String(url || '').trim();
       const cleanStatus = String(status || '').trim();
       if (!cleanUrl || isFailedResultStatus(cleanStatus)) return false;
-      if (!cleanStatus) return true;
-      return isReadyResultStatus(cleanStatus);
+      return true;
     }
 
     function normalizeResultUrl(url) {
@@ -3816,7 +3815,7 @@ async function __mjFetchNbCheck(params){
 
     function createResultThumb(data) {
       if (!shouldShowResultGeneration(data)) return null;
-      const provider = data.provider || 'Model';
+      let provider = data.provider || 'Model';
       const kind = (data.kind || 'image').toLowerCase();
       const prompt = (data.prompt || '').toString();
       const statusRaw = (data.status || '').toString();
@@ -3968,6 +3967,13 @@ async function __mjFetchNbCheck(params){
 
       function apply(next) {
         try {
+          if (next && next.provider) {
+            provider = next.provider;
+            modelLine.textContent = provider;
+          }
+          if (next && next.prompt != null) {
+            promptLine.textContent = String(next.prompt || '—');
+          }
           const nextStatusRaw = (next && next.status != null) ? String(next.status) : statusRaw;
           const nextStatusLower = String(nextStatusRaw || '').toLowerCase();
           const nextUrl = (next && next.result_url) ? normalizeResultUrl(next.result_url) : (__thumb_url || '');
@@ -4067,7 +4073,7 @@ async function __mjFetchNbCheck(params){
 
 function createResultCard(data) {
       if (!shouldShowResultGeneration(data)) return null;
-      const provider = data.provider || 'Model';
+      let provider = data.provider || 'Model';
       const kind = (data.kind || 'image').toLowerCase();
       const prompt = data.prompt || '';
       const statusRaw = (data.status || '').toString();
@@ -4157,6 +4163,14 @@ function createResultCard(data) {
       card.appendChild(body);
 
       function apply(newData) {
+        if (newData.provider) {
+          provider = newData.provider;
+          nameEl.textContent = provider;
+        }
+        if (newData.prompt != null) {
+          promptEl.textContent = newData.prompt || '';
+          promptEl.title = newData.prompt || '';
+        }
         const stRaw = (newData.status || '').toString();
         const st = stRaw.toLowerCase();
         const cleanUrl = normalizeResultUrl(newData.result_url);
@@ -4220,6 +4234,7 @@ function createResultCard(data) {
       if (!strip) return null;
       const resultsSection = document.getElementById('resultsSection');
       if (resultsSection) resultsSection.classList.remove('hidden');
+      const runId = data && data.run_id ? String(data.run_id) : '';
 
       // if empty placeholder exists, clear it
       if (strip.classList.contains('empty')) {
@@ -4227,9 +4242,22 @@ function createResultCard(data) {
         strip.innerHTML = '';
       }
 
+      if (runId) {
+        const existing = strip.querySelector(`[data-run-id="${CSS.escape(runId)}"]`);
+        const existingController = existing && existing.__resultController;
+        if (existingController && typeof existingController.apply === 'function') {
+          existingController.apply(data);
+          if (options && options.prepend && existing !== strip.firstElementChild) {
+            strip.prepend(existing);
+          }
+          return existingController;
+        }
+      }
+
       const built = createResultItem(data);
       const card = built && built.card ? built.card : null;
       if (!card) return null;
+      card.__resultController = built;
 
       if (options && options.prepend) strip.prepend(card);
       else strip.appendChild(card);
