@@ -4333,6 +4333,7 @@ function createResultCard(data) {
         telegramHistoryRefreshBusy = true;
         try {
           await loadRecentHistory();
+          await refreshCredits();
         } catch (error) {
           console.warn('telegram history auto refresh failed', error);
         } finally {
@@ -4457,9 +4458,6 @@ function createResultCard(data) {
     }
 
     function endpointForCurrentRun(model) {
-      if (isTelegramMiniApp) {
-        return model && model.endpoint ? model.endpoint : '';
-      }
       if (model && model.id === 'seedance20' && !seedanceHasUploadedMedia()) {
         return '/.netlify/functions/run-seedance-cheap';
       }
@@ -4881,7 +4879,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         subtitle: 'Text / (Image) → Image',
         category: 'image',
         description: 'Seedream 5.0 Lite with high quality enabled.',
-        endpoint: '/.netlify/functions/run-seedream-tg',
+        endpoint: '/.netlify/functions/run-seedream-5-lite-tg',
         needsImage: false,
         maxFiles: 8,
         uploadMaxMB: 10,
@@ -5276,23 +5274,6 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         durations: null,
         costLabel: 'Kling 2.6: 720p 1⚡/sec, 1080p 1.5⚡/sec',
         minCredits: 1
-      },
-            {
-        id: 'aleph',
-        name: 'Aleph',
-        emoji: '🧪',
-        subtitle: 'Video → Video (optional image)',
-        category: 'video',
-        description: 'Aleph video-to-video transformations (video required).',
-        endpoint: '/.netlify/functions/run-aleph',
-        needsImage: false,
-        maxFiles: 0,
-        needsVideo: true,
-        allowOptionalImage: true,
-        aspectOptions: [],
-        durations: [5],
-        costLabel: 'Credits 8⚡',
-        minCredits: 8
       }
     ];;
 
