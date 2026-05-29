@@ -115,8 +115,8 @@ async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, credits
   }
 }
 
-// Insert a row into telegram_generations (non-blocking)
-async function writeTelegramGeneration({ telegramId, cost, prompt }) {
+// Insert the first row. n8n updates this same row later by run_id.
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
     return;
@@ -135,7 +135,12 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
         telegram_id: telegramId,
         model: "Nano Banana Image Edit",
         credits: cost,
-        prompt
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "image",
+        result_url: null
       }])
     });
 
@@ -183,8 +188,8 @@ exports.handler = async function(event){
   const image_size = normalizeImageSize(sizeRaw);
 
   const creditsBefore = Number(body.credits_before || 0);
-  const newCredits = Number(body.new_credits || 0);
-  const cost = Number(body.cost || 1) || 1; // Telegram flow uses fixed cost 1
+  const cost = 0.5;
+  const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
   // mode / leng similar to other tg functions
   const query = event.queryStringParameters || {};
@@ -280,8 +285,7 @@ exports.handler = async function(event){
     const taskId =
       data.taskId || data.id || data.data?.taskId || data.data?.id || null;
 
-    // Non-blocking log to telegram_generations
-    await writeTelegramGeneration({ telegramId, cost, prompt });
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId });
 
     return jsonResponse(201, {
       ok:true,
