@@ -1,49 +1,42 @@
-// netlify/functions/run-kling-3.js
-// Submit a Kling 3.0 text/image → video task via KIE for Telegram Mini App.
-// This endpoint is called by kling30_tg_fixed.html at "/.netlify/functions/run-kling-3".
-//
-// Notes:
-// - NEVER expose KIE API key in frontend. Keep it in Netlify env vars.
-// - We validate multi-shot total duration <= 15s (and each shot 3–12s) to match the UI.
+// netlify/functions/run-kling-30-tg.js
+// Kling 3.0 video launcher for Telegram Mini App.
+// Backend owns pricing. n8n updates telegram_generations later by run_id.
 
-const KIE_BASE = (process.env.KIE_BASE_URL || 'https://api.kie.ai').replace(/\/+$/, '');
-const KIE_KEY  = process.env.KIE_API_KEY || '';
+const KIE_BASE = (process.env.KIE_BASE_URL || "https://api.kie.ai").replace(/\/+$/, "");
+const KIE_KEY = process.env.KIE_API_KEY || "";
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const TG_TABLE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generations` : "";
 
-// Make.com / n8n callback for Telegram delivery + credit reconciliation
 const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
 
-// n8n webhook that sends the temporary Telegram video loading/process message.
-const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/4f5c5e17-79f7-46d9-b9f7-b884fb09e030";
+const VERSION_TAG = "kling_30_tg_v1";
 
-// UI rate table (must match kling_3.html)
-const RATE = {
-  std: { nosound: 1.0, sound: 1.5 },
-  pro: { nosound: 1.5, sound: 2.0 },
-  "4k": { nosound: 4.0, sound: 4.0 }
-};
-
-function jsonResponse(statusCode, body){
+function cors() {
   return {
-    statusCode,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-USER-ID, x-user-id"
   };
 }
 
+function jsonResponse(statusCode, body) {
+  return {
+    statusCode,
+    headers: { ...cors(), "Content-Type": "application/json", "X-NB-Version": VERSION_TAG },
+    body: JSON.stringify(body)
+  };
+}
 
 function normalizeLeng(v) {
   const s = String(v || "").trim().toLowerCase();
   return s === "ru" ? "ru" : "en";
 }
 
-function getLoadingMessage(leng) {
-  return normalizeLeng(leng) === "ru"
-    ? "⏳ Ваша генерация принята.\n\nПожалуйста, подождите — это может занять 1–5 минут.\n\nПока ваш запрос обрабатывается, вы можете создавать другие материалы."
-    : "⏳ Your generation has been accepted.\n\nPlease wait — it may take 1–5 minutes.\n\nWhile this is being processed, you can generate other things as well.";
+function getLoadingMessage() {
+  return "Your video generation has started. Please wait.";
 }
 
 async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
@@ -83,68 +76,121 @@ async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, credits
   }
 }
 
-function clampInt(n, lo, hi){
-  const x = Math.round(Number(n));
-  if (!Number.isFinite(x)) return lo;
-  return Math.max(lo, Math.min(hi, x));
-}
-
-function normalizeUrl(u){
-  try {
-    const url = new URL(String(u || ""));
-    return url.href;
-  } catch {
-    return "";
-  }
-}
-
-function normalizeKlingMode(mode){
-  const m = String(mode || "std").trim();
-  const lower = m.toLowerCase();
-  if (lower === "pro") return "pro";
-  if (lower === "4k") return "4k";
-  return "std";
-}
-
-function getRate(mode, sound){
-  const m = normalizeKlingMode(mode);
-  const key = sound ? "sound" : "nosound";
-  return (RATE[m] && RATE[m][key]) ? RATE[m][key] : 1.0;
-}
-
-function calcExpectedCost(totalSeconds, mode, sound){
-  const rate = getRate(mode, sound);
-  const raw = totalSeconds * rate;
-  // UI rounds to nearest 0.5
-  return Math.round(raw * 2) / 2;
-}
-
-function extractTaskId(data){
-  if (!data || typeof data !== 'object') return '';
-  const cands = [
-    data?.data?.taskId, data?.taskId, data?.result?.taskId,
-    data?.data?.task_id, data?.task_id, data?.result?.task_id,
+function extractTaskId(data) {
+  if (!data || typeof data !== "object") return "";
+  const direct = [
+    data?.data?.taskId,
+    data?.taskId,
+    data?.result?.taskId,
+    data?.data?.task_id,
+    data?.task_id,
     data?.id
-  ].map(v => (v==null?'':String(v))).filter(s => s && s.length>3);
-  if (cands.length) return cands[0];
+  ].map((v) => (v == null ? "" : String(v))).find((v) => v.length > 3);
+  if (direct) return direct;
 
   const seen = new Set();
-  const scan = (x)=>{
-    if (!x || typeof x!=='object' || seen.has(x)) return '';
-    seen.add(x);
-    for (const [k,v] of Object.entries(x)){
-      if (/^(task[_-]?id|request[_-]?id|id)$/i.test(k) && (typeof v==='string'||typeof v==='number')) {
-        const s = String(v); if (s.length>3) return s;
+  const scan = (value) => {
+    if (!value || typeof value !== "object" || seen.has(value)) return "";
+    seen.add(value);
+    for (const [key, inner] of Object.entries(value)) {
+      if (/^(task[_-]?id|request[_-]?id|id)$/i.test(key) && (typeof inner === "string" || typeof inner === "number")) {
+        const out = String(inner);
+        if (out.length > 3) return out;
       }
-      const inner = scan(v); if (inner) return inner;
+      const nested = scan(inner);
+      if (nested) return nested;
     }
-    return '';
+    return "";
   };
-  return scan(data) || '';
+  return scan(data);
 }
 
-async function writeTelegramGeneration({ telegramId, cost, prompt }) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !TG_TABLE_URL) {
+function costFor(body) {
+  const duration = Math.max(1, Number(body.duration || 5));
+  const resolution = String(body.resolution || "720p");
+  const sound = !!body.sound;
+  let rate = 1;
+  if (resolution === "4K") rate = 4;
+  else if (resolution === "1080p") rate = sound ? 2 : 1.5;
+  else rate = sound ? 1.5 : 1;
+  return Number((duration * rate).toFixed(1));
+}
+
+function sanitizeElementName(name) {
+  let s = String(name || "").trim().replace(/[^a-zA-Z0-9_]/g, "_");
+  if (!s) return "";
+  if (!/^[a-zA-Z_]/.test(s)) s = "_" + s;
+  return s.slice(0, 32);
+}
+
+function appendElementReference(prompt, elementName) {
+  const base = String(prompt || "").trim();
+  const cleanName = sanitizeElementName(elementName);
+  if (!cleanName) return base;
+  const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const refRegex = new RegExp("(^|\\s)@" + escaped + "(?=\\s|$)", "i");
+  if (refRegex.test(base)) return base;
+  return (base ? base + " " : "") + "@" + cleanName;
+}
+
+function normalizeElementDescription(description) {
+  const raw = String(description || "").trim();
+  if (!raw) return "";
+  return /\belement\b/i.test(raw) ? raw : `element: ${raw}`;
+}
+
+function normalizeAndValidateKlingElements(rawElements) {
+  const elements = Array.isArray(rawElements) ? rawElements : [];
+  if (elements.length > 3) {
+    return { ok: false, error: "too_many_kling_elements", details: "Kling 3.0 supports up to 3 element references per request." };
+  }
+
+  const normalized = [];
+  const seen = new Set();
+  for (let i = 0; i < elements.length; i += 1) {
+    const item = elements[i] || {};
+    const name = sanitizeElementName(item.name);
+    const description = normalizeElementDescription(item.description);
+    const imageUrls = Array.isArray(item.element_input_urls) ? item.element_input_urls.map(String).filter(Boolean) : [];
+    const videoUrls = Array.isArray(item.element_input_video_urls)
+      ? item.element_input_video_urls.map(String).filter(Boolean)
+      : (item.element_input_video_url ? [String(item.element_input_video_url)].filter(Boolean) : []);
+
+    if (!name) return { ok: false, error: "invalid_kling_element", details: `Element ${i + 1}: name is required.` };
+    if (!description) return { ok: false, error: "invalid_kling_element", details: `Element ${i + 1}: description is required.` };
+    if (seen.has(name)) return { ok: false, error: "duplicate_kling_element_name", details: `Duplicate element name: ${name}` };
+    seen.add(name);
+
+    if (imageUrls.length && videoUrls.length) {
+      return { ok: false, error: "invalid_kling_element", details: `Element ${name}: use image URLs or video URLs, not both.` };
+    }
+    if (videoUrls.length) {
+      if (videoUrls.length !== 1) return { ok: false, error: "invalid_kling_element", details: `Element ${name}: video element requires exactly 1 video URL.` };
+      normalized.push({ name, description, element_input_video_urls: videoUrls });
+      continue;
+    }
+    if (imageUrls.length < 2 || imageUrls.length > 4) {
+      return { ok: false, error: "invalid_kling_element", details: `Element ${name}: image element requires 2-4 image URLs.` };
+    }
+    normalized.push({ name, description, element_input_urls: imageUrls });
+  }
+
+  return { ok: true, elements: normalized };
+}
+
+function normalizeMultiPrompt(rawMultiPrompt, elements) {
+  const multiPrompt = Array.isArray(rawMultiPrompt) ? rawMultiPrompt.slice(0, 5) : [];
+  return multiPrompt.map((shot, index) => {
+    const duration = Math.max(1, Math.min(12, Number(shot?.duration || 3)));
+    let prompt = String(shot?.prompt || "").trim();
+    const element = elements[index] || null;
+    if (element && element.name) prompt = appendElementReference(prompt, element.name);
+    return { prompt, duration };
+  });
+}
+
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }) {
+  if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
     return;
   }
@@ -154,15 +200,20 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+        "apikey": SERVICE_KEY,
+        "Authorization": "Bearer " + SERVICE_KEY,
         "Prefer": "return=minimal"
       },
       body: JSON.stringify([{
         telegram_id: telegramId,
         model: "Kling 3.0 Video",
         credits: cost,
-        prompt
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "video",
+        result_url: null
       }])
     });
 
@@ -175,119 +226,69 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
   }
 }
 
-exports.handler = async function(event){
+exports.handler = async function(event) {
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: cors(), body: "" };
+  }
+
   if (event.httpMethod !== "POST") {
-    return jsonResponse(405, { ok:false, submitted:false, error: "method_not_allowed" });
+    return jsonResponse(405, { ok: false, submitted: false, error: "method_not_allowed", version: VERSION_TAG });
   }
 
   if (!KIE_KEY) {
-    return jsonResponse(500, { ok:false, submitted:false, error: "missing_kie_key" });
+    return jsonResponse(500, { ok: false, submitted: false, error: "missing_kie_api_key", version: VERSION_TAG });
   }
 
   let body;
   try {
     body = JSON.parse(event.body || "{}");
   } catch (e) {
-    return jsonResponse(400, { ok:false, submitted:false, error: "bad_json", details: String(e && e.message || e) });
+    return jsonResponse(400, { ok: false, submitted: false, error: "bad_json", details: String(e && e.message || e), version: VERSION_TAG });
   }
 
-  const telegramId = (body.telegram_id || "").toString().trim();
-  const prompt = (body.prompt || "").toString().trim();
+  const telegramId = String(body.telegram_id || body.user_id || body.uid || "");
+  const prompt = String(body.prompt || "").trim();
 
-  const startImageUrl = normalizeUrl(body.startImageUrl || body.start_image_url || body.imageUrl || body.image_url || "");
-  const endImageUrl   = normalizeUrl(body.endImageUrl   || body.end_image_url   || body.lastFrameUrl || body.last_frame_url || "");
+  if (!telegramId) {
+    return jsonResponse(400, { ok: false, submitted: false, error: "missing_telegram_id", version: VERSION_TAG });
+  }
 
-  const aspectRatio = (body.aspectRatio || body.aspect_ratio || "").toString().trim(); // optional if using image_urls per docs
-  const klingMode = normalizeKlingMode(body.kling_mode || body.klingMode || body.mode_quality || "std");
-  const sound = !!(body.sound);
+  if (!prompt && !Array.isArray(body.kling_elements)) {
+    return jsonResponse(400, { ok: false, submitted: false, error: "missing_prompt", version: VERSION_TAG });
+  }
 
-  const multiShots = !!(body.multi_shots);
-  const multiPrompt = Array.isArray(body.multi_prompt) ? body.multi_prompt : [];
-  const klingElements = Array.isArray(body.kling_elements) ? body.kling_elements : [];
-
+  const cost = costFor(body);
   const creditsBefore = Number(body.credits_before || 0);
-  const costFromUI = Number(body.cost || 0);
+  const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
-  // mode / leng passthrough (Telegram UI)
   const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
-  let mode = (body.mode || body.modul || query.mode || query.modul || "").toString();
-  let leng = (body.leng || body.lang || query.leng || query.lang || "").toString();
-  if (!mode && referer) {
-    try { mode = (new URL(referer).searchParams.get("mode") || new URL(referer).searchParams.get("modul") || mode || "").toString(); } catch (_) {}
+  let urlMode = String(body.modul || query.mode || query.modul || "");
+  let leng = String(body.leng || body.lang || query.leng || query.lang || "");
+
+  if (!urlMode && referer) {
+    try {
+      const u = new URL(referer);
+      urlMode = String(u.searchParams.get("mode") || u.searchParams.get("modul") || urlMode || "");
+    } catch (_) {}
   }
+
   if (!leng && referer) {
-    try { leng = (new URL(referer).searchParams.get("leng") || new URL(referer).searchParams.get("lang") || leng || "").toString(); } catch (_) {}
+    try {
+      const u = new URL(referer);
+      leng = String(u.searchParams.get("leng") || u.searchParams.get("lang") || leng || "");
+    } catch (_) {}
   }
-
-  if (!telegramId) return jsonResponse(400, { ok:false, submitted:false, error: "missing_telegram_id" });
-  if (!prompt) return jsonResponse(400, { ok:false, submitted:false, error: "missing_prompt" });
-
-  // Build durations
-  let totalSeconds = 0;
-
-  if (multiShots) {
-    if (!startImageUrl) {
-      return jsonResponse(400, { ok:false, submitted:false, error: "missing_start_image_for_multi_shots" });
-    }
-    if (endImageUrl) {
-      // Docs: multi-shot supports only first frame image.
-      return jsonResponse(400, { ok:false, submitted:false, error: "end_image_not_supported_in_multi_shots" });
-    }
-    if (!multiPrompt.length) {
-      return jsonResponse(400, { ok:false, submitted:false, error: "missing_multi_prompt" });
-    }
-
-    // Validate each shot: 3–12 seconds (UI constraint) and sum <= 15.
-    const normalizedShots = [];
-    for (const item of multiPrompt) {
-      const p = (item && item.prompt != null) ? String(item.prompt).trim() : "";
-      const d = clampInt(item && item.duration, 3, 12);
-      if (!p) return jsonResponse(400, { ok:false, submitted:false, error: "multi_prompt_item_missing_prompt" });
-      normalizedShots.push({ prompt: p, duration: d });
-      totalSeconds += d;
-      if (totalSeconds > 15) {
-        return jsonResponse(400, { ok:false, submitted:false, error: "multi_shots_total_exceeds_15s" });
-      }
-    }
-
-    // Replace with normalized versions
-    body._normalizedShots = normalizedShots;
-  } else {
-    // Single-shot: duration must be 3–15.
-    // The HTML currently does not send duration explicitly; infer from cost if needed.
-    const explicitDuration = body.duration != null ? clampInt(body.duration, 3, 15) : 0;
-    if (explicitDuration) {
-      totalSeconds = explicitDuration;
-    } else {
-      // Infer duration from UI cost and known rate (UI uses integer seconds).
-      const rate = getRate(klingMode, sound);
-      const inferred = Number.isFinite(costFromUI) && rate > 0 ? Math.round(costFromUI / rate) : 5;
-      totalSeconds = clampInt(inferred, 3, 15);
-    }
-  }
-
-  // Server-side cost verification (basic anti-tamper)
-  const expectedCost = calcExpectedCost(totalSeconds, klingMode, sound);
-  const cost = Number.isFinite(costFromUI) && costFromUI > 0 ? costFromUI : expectedCost;
-  if (Number.isFinite(costFromUI) && costFromUI > 0) {
-    // allow tiny float error
-    if (Math.abs(costFromUI - expectedCost) > 0.001) {
-      return jsonResponse(400, { ok:false, submitted:false, error: "cost_mismatch", expected_cost: expectedCost });
-    }
-  }
-
-  const newCredits = Number.isFinite(creditsBefore) ? Math.max(0, creditsBefore - cost) : 0;
 
   leng = normalizeLeng(leng);
 
-  const runId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  const runId = String(body.run_id || body.runId || `kling30-${telegramId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
 
   const loadingMessageId = await sendLoadingMessage({
     telegramId,
     runId,
     leng,
-    mode,
+    mode: urlMode,
     cost,
     creditsBefore,
     newCredits
@@ -300,42 +301,83 @@ exports.handler = async function(event){
     "&new_credits=" + encodeURIComponent(newCredits) +
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
-    "&mode=" + encodeURIComponent(mode) +
+    "&mode=" + encodeURIComponent(urlMode) +
     "&leng=" + encodeURIComponent(leng) +
     "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
 
-  // Build KIE input per Kling 3.0 docs
-  // Docs show model as "kling-3.0/video" for createTask.
-  const image_urls = [];
-  if (startImageUrl) image_urls.push(startImageUrl);
-  if (!multiShots && endImageUrl) image_urls.push(endImageUrl);
-
-  const input = {
-    prompt,
-    sound,
-    duration: String(totalSeconds),
-    mode: klingMode === "4k" ? "4K" : klingMode,
-    multi_shots: multiShots
-  };
-
-  // aspect_ratio is optional if image_urls provided, but keep if provided by UI
-  if (aspectRatio) input.aspect_ratio = aspectRatio;
-
-  if (image_urls.length) input.image_urls = image_urls;
-
-  if (multiShots) {
-    input.multi_prompt = body._normalizedShots;
-    if (klingElements.length) input.kling_elements = klingElements;
-  } else {
-    if (klingElements.length) input.kling_elements = klingElements; // allow elements in single-shot too
+  const resolution = String(body.resolution || "720p");
+  const elementsResult = normalizeAndValidateKlingElements(body.kling_elements);
+  if (!elementsResult.ok) {
+    return jsonResponse(400, { ok: false, submitted: false, error: elementsResult.error, details: elementsResult.details, version: VERSION_TAG });
   }
 
+  const klingElements = elementsResult.elements || [];
+  const multiPrompt = normalizeMultiPrompt(body.multi_prompt, klingElements);
+  const totalShotSeconds = multiPrompt.reduce((sum, shot) => sum + Math.max(1, Number(shot?.duration || 1)), 0);
+
+  if (body.multi_shots) {
+    if (!multiPrompt.length) {
+      return jsonResponse(400, { ok: false, submitted: false, error: "missing_multi_prompt", version: VERSION_TAG });
+    }
+    if (totalShotSeconds > 15) {
+      return jsonResponse(400, { ok: false, submitted: false, error: "multi_shots_too_long", details: "Kling 3.0 multi-shot total duration must be 15 seconds or less.", version: VERSION_TAG });
+    }
+    const badShot = multiPrompt.find((shot) => !shot.prompt || Number(shot.duration) < 1 || Number(shot.duration) > 12);
+    if (badShot) {
+      return jsonResponse(400, { ok: false, submitted: false, error: "invalid_multi_prompt", details: "Each multi-shot prompt must include prompt text and duration from 1-12 seconds.", version: VERSION_TAG });
+    }
+  }
+
+  const imageUrlsRaw = Array.isArray(body.image_urls)
+    ? body.image_urls
+    : (Array.isArray(body.urls) ? body.urls : []);
+  const imageUrls = imageUrlsRaw.map(String).filter(Boolean);
+  const safeImageUrls = body.multi_shots ? imageUrls.slice(0, 1) : imageUrls.slice(0, 2);
+
+  const firstFrameUrl = body.first_frame_url || body.firstFrameUrl || body.startImageUrl || "";
+  const lastFrameUrl = body.last_frame_url || body.lastFrameUrl || body.endImageUrl || "";
+
+  const promptForKie = klingElements.length && !body.multi_shots
+    ? klingElements.reduce((out, element) => appendElementReference(out, element.name), prompt)
+    : prompt;
+
+  const input = {
+    prompt: promptForKie,
+    aspect_ratio: String(body.aspect_ratio || body.aspectRatio || "16:9"),
+    duration: Math.max(1, Number(body.duration || 5)),
+    mode: body.kling_mode || body.mode || (resolution === "4K" ? "4K" : (resolution === "1080p" ? "pro" : "std")),
+    sound: !!body.sound,
+    multi_shots: !!body.multi_shots,
+    ...(firstFrameUrl ? { first_frame_url: String(firstFrameUrl) } : {}),
+    ...(!body.multi_shots && lastFrameUrl ? { last_frame_url: String(lastFrameUrl) } : {}),
+    ...(safeImageUrls.length ? { image_urls: safeImageUrls } : {}),
+    ...(klingElements.length ? { kling_elements: klingElements } : {}),
+    ...(multiPrompt.length ? { multi_prompt: multiPrompt } : {})
+  };
+
+  const model = process.env.KLING_30_MODEL || "kling-3.0/video";
   const payload = {
-    model: "kling-3.0/video",
+    model,
     input,
+    webhook_url: callbackUrl,
+    webhookUrl: callbackUrl,
+    callbackUrl,
     callBackUrl: callbackUrl,
-    meta: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId },
-    metadata: { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId }
+    notify_url: callbackUrl,
+    meta: {
+      telegram_id: telegramId,
+      run_id: runId,
+      cost,
+      loading_message_id: loadingMessageId,
+      version: VERSION_TAG
+    },
+    metadata: {
+      telegram_id: telegramId,
+      run_id: runId,
+      cost,
+      loading_message_id: loadingMessageId,
+      version: VERSION_TAG
+    }
   };
 
   try {
@@ -343,44 +385,50 @@ exports.handler = async function(event){
       method: "POST",
       headers: {
         "Authorization": `Bearer ${KIE_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify(payload)
     });
 
-    const text = await resp.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = { _raw: text }; }
+    const data = await resp.json().catch(() => ({}));
 
     if (!resp.ok) {
       return jsonResponse(resp.status || 502, {
-        ok:false,
-        submitted:false,
-        error: (data && (data.error || data.msg || data.message)) || "kie_create_failed",
-        data
+        ok: false,
+        submitted: false,
+        error: "kie_create_failed",
+        details: data,
+        version: VERSION_TAG
       });
     }
 
     const taskId = extractTaskId(data);
     if (!taskId) {
-      return jsonResponse(502, { ok:false, submitted:false, error:"missing_task_id", data });
+      return jsonResponse(502, { ok: false, submitted: false, error: "missing_task_id", details: data, version: VERSION_TAG });
     }
 
-    await writeTelegramGeneration({ telegramId, cost, prompt });
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId });
 
     return jsonResponse(201, {
-      ok:true,
-      submitted:true,
-      run_id: runId,
+      ok: true,
+      submitted: true,
       taskId,
+      id: taskId,
+      run_id: runId,
       loading_message_id: loadingMessageId,
-      new_credits: newCredits
+      new_credits: newCredits,
+      cost,
+      kind: "video",
+      version: VERSION_TAG
     });
-  } catch (e) {
+  } catch (error) {
     return jsonResponse(500, {
-      ok:false,
-      submitted:false,
-      error: e && e.message ? e.message : "server_error"
+      ok: false,
+      submitted: false,
+      error: "server_error",
+      details: String(error && error.message || error),
+      version: VERSION_TAG
     });
   }
 };
