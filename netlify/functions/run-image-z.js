@@ -1,7 +1,7 @@
 // netlify/functions/run-z-image-free.js
 // Submit a Z-Image text-to-image job for Telegram Mini App.
-// Credit mini-app flow uses telegram_users.credits on the page side;
-// here we only forward the job and keep the credit values for callbacks.
+// Credit mini-app flow uses telegram_users.credits, but the backend owns pricing
+// so the browser cannot send the wrong price.
 
 const CREATE_URL = process.env.KIE_CREATE_URL || "https://api.kie.ai/api/v1/jobs/createTask";
 const API_KEY = process.env.KIE_API_KEY || "";
@@ -91,7 +91,8 @@ function normalizeAspectRatio(v) {
   return "1:1";
 }
 
-async function writeTelegramGeneration({ telegramId, cost, prompt }) {
+// Insert the first row. n8n updates this same row later by run_id.
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
     return;
@@ -110,7 +111,12 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
         telegram_id: telegramId,
         model: "Z-Image",
         credits: cost,
-        prompt
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "image",
+        result_url: null
       }])
     });
 
@@ -159,8 +165,8 @@ exports.handler = async function(event) {
   );
 
   const creditsBefore = Number(body.credits_before || 0);
-  const newCredits = Number(body.new_credits || 0);
-  const cost = Number(body.cost || 0.5) || 0.5;
+  const cost = 0.2;
+  const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
   const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
@@ -253,7 +259,7 @@ exports.handler = async function(event) {
     const taskId =
       data.taskId || data.id || data.data?.taskId || data.data?.id || null;
 
-    await writeTelegramGeneration({ telegramId, cost, prompt });
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId });
 
     return jsonResponse(201, {
       ok: true,
