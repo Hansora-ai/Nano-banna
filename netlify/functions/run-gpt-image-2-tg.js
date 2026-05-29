@@ -111,8 +111,8 @@ async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, credits
   }
 }
 
-// Insert a row into telegram_generations (non-blocking)
-async function writeTelegramGeneration({ telegramId, cost, prompt }) {
+// Insert a row into telegram_generations so n8n can update it by run_id later.
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
     return;
@@ -131,7 +131,12 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
         telegram_id: telegramId,
         model: "GPT Image 2",
         credits: cost,
-        prompt
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "image",
+        result_url: null
       }])
     });
 
@@ -290,7 +295,7 @@ exports.handler = async function(event){
     const taskId =
       data.taskId || data.id || data.data?.taskId || data.data?.id || null;
 
-    await writeTelegramGeneration({ telegramId, cost, prompt });
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId });
 
     return jsonResponse(201, {
       ok:true,
