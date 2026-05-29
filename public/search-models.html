@@ -3672,6 +3672,20 @@ async function __mjFetchNbCheck(params){
       return parseCredits(currentCredits);
     }
 
+    async function persistTelegramCredits(newCredits) {
+      if (!isTelegramMiniApp || !telegramId) return;
+      const value = parseCredits(newCredits);
+      try {
+        const { error } = await supabaseClient
+          .from('telegram_users')
+          .update({ credits: value })
+          .eq('telegram_id', telegramId);
+        if (error) console.error('Error updating Telegram credits in Supabase', error);
+      } catch (e) {
+        console.error('Unexpected error updating Telegram credits in Supabase', e);
+      }
+    }
+
     async function loadUser() {
       try {
         if (isTelegramMiniApp) {
@@ -8795,8 +8809,12 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           body.telegram_id = telegramId;
           body.user_id = telegramId;
           body.uid = telegramId;
-          body.credits_before = parseCredits(currentCredits);
-          body.cost = Number(getModelCreditValue(currentModel) || 0);
+          const telegramCreditsBefore = parseCredits(currentCredits);
+          const telegramCost = Number(getModelCreditValue(currentModel) || 0);
+          const telegramNewCredits = Math.max(0, Math.round((telegramCreditsBefore - telegramCost) * 100) / 100);
+          body.credits_before = telegramCreditsBefore;
+          body.cost = telegramCost;
+          body.new_credits = telegramNewCredits;
           body.model_id = currentModel.id;
           body.model_name = currentModel.name;
           body.mode = currentModel.id === 'kling30' ? telegramMode : (body.mode || telegramMode);
@@ -8889,12 +8907,6 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           let j = null;
           try { j = await res.json(); } catch { j = null; }
 
-          if (isTelegramMiniApp && j && Number.isFinite(Number(j.new_credits))) {
-            setCreditsEverywhere(Number(j.new_credits));
-          } else if (isTelegramMiniApp) {
-            await refreshCredits();
-          }
-
           const providerError = cleanGenerationFailureReason(extractProviderError(j) || extractGenerationFailureReason(j));
           if (providerError) {
             console.warn('provider rejected generation', providerError);
@@ -8904,6 +8916,15 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           }
 
           if (isTelegramMiniApp) {
+            const submittedNewCredits = Number.isFinite(Number(j && j.new_credits))
+              ? Number(j.new_credits)
+              : Number(body.new_credits);
+            if (Number.isFinite(submittedNewCredits)) {
+              await persistTelegramCredits(submittedNewCredits);
+              setCreditsEverywhere(submittedNewCredits);
+            } else {
+              await refreshCredits();
+            }
             const controllers = createProcessingPlaceholders();
             controllers.forEach((controller) => {
               if (controller && typeof controller.apply === 'function') {
