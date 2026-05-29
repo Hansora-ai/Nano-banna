@@ -228,6 +228,7 @@ exports.handler = async function(event) {
   const modelLabel = model === "veo3_fast" ? "Veo 3.1 Fast Video" : "Veo 3.1 Video";
   const aspectRatio = normalizeAspect(body.aspectRatio || body.aspect_ratio || "16:9");
   const quality = normalizeQuality(body.quality || body.resolution || "1080p");
+  const providerResolution = quality === "4K" ? "4k" : "1080p";
   const cost = veo31Cost(model, quality);
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
@@ -272,6 +273,8 @@ exports.handler = async function(event) {
     "&new_credits=" + encodeURIComponent(newCredits) +
     "&credits_before=" + encodeURIComponent(creditsBefore) +
     "&cost=" + encodeURIComponent(cost) +
+    "&quality=" + encodeURIComponent(quality) +
+    "&resolution=" + encodeURIComponent(quality) +
     "&mode=" + encodeURIComponent(urlMode) +
     "&leng=" + encodeURIComponent(leng) +
     "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
@@ -280,7 +283,8 @@ exports.handler = async function(event) {
     prompt,
     model,
     aspectRatio,
-    quality,
+    quality: providerResolution,
+    resolution: providerResolution,
     callBackUrl: callbackUrl
   };
 
@@ -345,6 +349,7 @@ exports.handler = async function(event) {
       cost,
       kind: "video",
       quality,
+      resolution: quality,
       version: VERSION_TAG
     });
   } catch (error) {
