@@ -3805,6 +3805,10 @@ async function __mjFetchNbCheck(params){
       return isReadyResultStatus(cleanStatus);
     }
 
+    function normalizeResultUrl(url) {
+      return String(url || '').trim();
+    }
+
     function isSubmittedOnlyStatus(status) {
       return /^(submitted|logged|sent|history)$/i.test(String(status || '').trim());
     }
@@ -3816,7 +3820,7 @@ async function __mjFetchNbCheck(params){
       const prompt = (data.prompt || '').toString();
       const statusRaw = (data.status || '').toString();
       const statusLower = statusRaw.toLowerCase();
-      const url = data.result_url || '';
+      const url = normalizeResultUrl(data.result_url);
       const initialFailed = isFailedResultStatus(statusLower);
       const initialReady = canGetResult(statusLower, url);
 
@@ -3825,7 +3829,7 @@ async function __mjFetchNbCheck(params){
       card.dataset.runId = data.run_id || '';
 
       // media
-      if (url) {
+      if (url && !initialFailed) {
         if (kind === 'video') {
           const v = document.createElement('video');
           v.src = url;
@@ -3967,7 +3971,7 @@ async function __mjFetchNbCheck(params){
         try {
           const nextStatusRaw = (next && next.status != null) ? String(next.status) : statusRaw;
           const nextStatusLower = String(nextStatusRaw || '').toLowerCase();
-          const nextUrl = (next && next.result_url) ? String(next.result_url) : (__thumb_url || '');
+          const nextUrl = (next && next.result_url) ? normalizeResultUrl(next.result_url) : (__thumb_url || '');
           const failed = isFailedResultStatus(nextStatusLower);
           const ready = canGetResult(nextStatusLower, nextUrl);
 
@@ -4019,7 +4023,9 @@ async function __mjFetchNbCheck(params){
           __thumb_kind = (next && next.kind) ? String(next.kind).toLowerCase() : __thumb_kind;
 
           const existingMedia = card.querySelector('img,video');
-          if (__thumb_url) {
+          if (failed && existingMedia) existingMedia.remove();
+          if (ready && __thumb_url) {
+            if (placeholder) placeholder.remove();
             if (!existingMedia) {
               if (__thumb_kind === 'video') {
                 const v = document.createElement('video');
@@ -4072,7 +4078,7 @@ function createResultCard(data) {
       const prompt = data.prompt || '';
       const statusRaw = (data.status || '').toString();
       const statusLower = statusRaw.toLowerCase();
-      const hasUrl = !!data.result_url;
+      const hasUrl = !!normalizeResultUrl(data.result_url);
 
       const card = document.createElement('div');
       card.className = 'result-card w-64 flex-shrink-0 rounded-2xl border border-white/15 bg-slate-950/80 shadow-soft overflow-hidden';
@@ -4083,6 +4089,11 @@ function createResultCard(data) {
       const loader = document.createElement('div');
       loader.className = 'result-card-loader';
       media.appendChild(loader);
+
+      const failurePlaceholder = document.createElement('div');
+      failurePlaceholder.className = 'hidden flex flex-col items-center justify-center gap-2 text-red-300 text-xs font-semibold';
+      failurePlaceholder.innerHTML = '<div class="h-12 w-12 rounded-full bg-red-500/15 border border-red-400/40 flex items-center justify-center text-xl">!</div><div>Failed</div>';
+      media.appendChild(failurePlaceholder);
 
       const mediaEl = document.createElement(kind === 'video' ? 'video' : 'img');
       mediaEl.className = 'max-h-full max-w-full object-contain hidden';
@@ -4154,23 +4165,26 @@ function createResultCard(data) {
       function apply(newData) {
         const stRaw = (newData.status || '').toString();
         const st = stRaw.toLowerCase();
-        const hasUrlNow = !!newData.result_url;
+        const cleanUrl = normalizeResultUrl(newData.result_url);
+        const hasUrlNow = !!cleanUrl;
         const failedNow = isFailedResultStatus(st);
-        const readyNow = canGetResult(st, newData.result_url);
+        const readyNow = canGetResult(st, cleanUrl);
 
-        if (hasUrlNow) {
-          mediaEl.src = newData.result_url;
-          mediaEl.dataset.previewUrl = newData.result_url;
+        if (readyNow && hasUrlNow) {
+          mediaEl.src = cleanUrl;
+          mediaEl.dataset.previewUrl = cleanUrl;
           mediaEl.classList.remove('hidden');
+          failurePlaceholder.classList.add('hidden');
           loader.style.display = 'none';
         } else {
           mediaEl.classList.add('hidden');
           mediaEl.dataset.previewUrl = '';
-          loader.style.display = (st.includes('fail') || isSubmittedOnlyStatus(stRaw)) ? 'none' : 'block';
+          failurePlaceholder.classList.toggle('hidden', !failedNow);
+          loader.style.display = (failedNow || isSubmittedOnlyStatus(stRaw)) ? 'none' : 'block';
         }
 
         if (readyNow) {
-          downloadBtn.dataset.downloadUrl = newData.result_url;
+          downloadBtn.dataset.downloadUrl = cleanUrl;
           downloadBtn.classList.remove('hidden');
           downloadBtn.disabled = false;
         } else {
@@ -4252,7 +4266,7 @@ function createResultCard(data) {
         const query = isTelegramMiniApp
           ? supabaseClient
               .from('telegram_generations')
-              .select('model, credits, prompt, created_at')
+              .select('model, credits, prompt, created_at, run_id, task_id, status, kind, result_url')
               .eq('telegram_id', telegramId)
           : supabaseClient
               .from('user_generations')
@@ -4274,11 +4288,13 @@ function createResultCard(data) {
         const normalizedRows = isTelegramMiniApp
           ? (data || []).map((row) => ({
               provider: row.model || 'Model',
-              kind: inferKindFromTelegramModel(row.model),
+              kind: row.kind || inferKindFromTelegramModel(row.model),
               prompt: row.prompt || '',
-              result_url: row.result_url || '',
-              status: row.result_url ? 'ready' : 'history',
-              meta: {},
+              result_url: normalizeResultUrl(row.result_url),
+              status: row.status || (row.result_url ? 'ready' : 'history'),
+              run_id: row.run_id || '',
+              task_id: row.task_id || '',
+              meta: { run_id: row.run_id || '', task_id: row.task_id || '', status: row.status || '' },
               created_at: row.created_at
             }))
           : (data || []);
@@ -4294,7 +4310,7 @@ function createResultCard(data) {
         for (const row of visibleRows) {
           const runId = row && row.meta && row.meta.run_id ? row.meta.run_id : '';
           const taskId = row && row.meta && (row.meta.task_id || row.meta.taskId) ? (row.meta.task_id || row.meta.taskId) : '';
-          const status = row && row.meta && row.meta.status ? row.meta.status : (row && row.result_url ? 'ready' : 'processing');
+          const status = row && row.status ? row.status : (row && row.meta && row.meta.status ? row.meta.status : (row && row.result_url ? 'ready' : 'processing'));
 
           const controller = addResultCard({
             run_id: runId,
