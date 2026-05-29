@@ -54,7 +54,7 @@ function normalizeResolution(v) {
 }
 
 function getCostForResolution(resolution) {
-  return resolution === "4K" ? 2 : 1.5;
+  return normalizeResolution(resolution) === "4K" ? 1.5 : 1;
 }
 
 function normalizeLeng(v) {
@@ -105,7 +105,8 @@ async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, credits
   }
 }
 
-async function writeTelegramGeneration({ telegramId, cost, prompt }) {
+// Insert the first row. n8n updates this same row later by run_id.
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
     return;
@@ -124,7 +125,12 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
         telegram_id: telegramId,
         model: "Nano Banana 2",
         credits: cost,
-        prompt
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "image",
+        result_url: null
       }])
     });
 
@@ -169,12 +175,11 @@ exports.handler = async function(event){
 
   const sizeRaw = body.size || body.image_size || body.imageSize || "auto";
   const image_size = normalizeImageSize(sizeRaw);
-  const resolution = normalizeResolution(body.resolution);
+  const resolution = normalizeResolution(body.resolution || body.res || body.output_resolution || body.outputResolution);
 
   const creditsBefore = Number(body.credits_before || 0);
   const cost = getCostForResolution(resolution);
-  const bodyNewCredits = Number(body.new_credits);
-  const newCredits = Number.isFinite(bodyNewCredits) ? bodyNewCredits : creditsBefore - cost;
+  const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
   const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
@@ -274,7 +279,7 @@ exports.handler = async function(event){
     const taskId =
       data.taskId || data.id || data.data?.taskId || data.data?.id || null;
 
-    await writeTelegramGeneration({ telegramId, cost, prompt });
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId });
 
     return jsonResponse(201, {
       ok:true,
