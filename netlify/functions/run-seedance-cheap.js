@@ -13,6 +13,7 @@ const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258
 const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
 
 const VERSION_TAG = "seedance_cheap_tg_v1";
+const PROVIDER_CALLBACK_PARAM = "__seedance_provider_callback";
 
 function cors() {
   return {
@@ -28,6 +29,83 @@ function jsonResponse(statusCode, body) {
     headers: { ...cors(), "Content-Type": "application/json", "X-NB-Version": VERSION_TAG },
     body: JSON.stringify(body)
   };
+}
+
+function normalizeCallbackMode(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "seedacne_cheap" || raw === "seedancecheap" || raw === "seedance-cheap") return "seedance_cheap";
+  return raw || "seedance_cheap";
+}
+
+function ownFunctionUrl(event) {
+  try {
+    if (event.rawUrl) {
+      const url = new URL(event.rawUrl);
+      url.search = "";
+      return url.href;
+    }
+  } catch (_) {}
+
+  const headers = event.headers || {};
+  const host = headers.host || headers.Host;
+  if (!host) return "";
+  const proto = headers["x-forwarded-proto"] || headers["X-Forwarded-Proto"] || "https";
+  const path = event.path || "/.netlify/functions/run-seedance-cheap";
+  return `${proto}://${host}${path}`;
+}
+
+function pickProviderVideoUrl(body) {
+  return (
+    body?.content?.video_url ||
+    body?.body?.content?.video_url ||
+    body?.data?.content?.video_url ||
+    body?.data?.info?.resultUrls?.[0] ||
+    body?.data?.info?.result_urls?.[0] ||
+    body?.resultUrls?.[0] ||
+    body?.result_urls?.[0] ||
+    body?.video_url ||
+    body?.url ||
+    ""
+  );
+}
+
+function providerStatus(body) {
+  return String(body?.status || body?.body?.status || body?.data?.status || "").trim().toLowerCase();
+}
+
+async function handleProviderCallback(query, body) {
+  const status = providerStatus(body);
+  const videoUrl = pickProviderVideoUrl(body);
+
+  if (!videoUrl && /^(running|queued|pending|processing|created)$/i.test(status)) {
+    return jsonResponse(200, { ok: true, ignored: true, status, version: VERSION_TAG });
+  }
+
+  if (!videoUrl && !/(fail|failed|error|cancel|canceled|cancelled|rejected|denied|blocked)/i.test(status)) {
+    return jsonResponse(200, { ok: true, ignored: true, status: status || "no_result_yet", version: VERSION_TAG });
+  }
+
+  const url = new URL(MAKE_HOOK);
+  Object.entries(query || {}).forEach(([key, value]) => {
+    if (key === PROVIDER_CALLBACK_PARAM) return;
+    url.searchParams.set(key, value == null ? "" : String(value));
+  });
+  url.searchParams.set("mode", normalizeCallbackMode(url.searchParams.get("mode")));
+
+  const resp = await fetch(url.href, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(body || {})
+  });
+
+  const text = await resp.text().catch(() => "");
+  return jsonResponse(resp.ok ? 200 : resp.status || 502, {
+    ok: resp.ok,
+    forwarded: true,
+    n8n_status: resp.status,
+    n8n_body: text ? text.slice(0, 500) : "",
+    version: VERSION_TAG
+  });
 }
 
 function extractTaskId(data) {
@@ -209,15 +287,21 @@ exports.handler = async function(event) {
     return jsonResponse(405, { ok: false, submitted: false, error: "method_not_allowed", version: VERSION_TAG });
   }
 
-  if (!ARK_KEY) {
-    return jsonResponse(500, { ok: false, submitted: false, error: "missing_ark_key", version: VERSION_TAG });
-  }
-
   let body;
   try {
     body = JSON.parse(event.body || "{}");
   } catch (e) {
     return jsonResponse(400, { ok: false, submitted: false, error: "bad_json", details: String(e && e.message || e), version: VERSION_TAG });
+  }
+
+  const query = event.queryStringParameters || {};
+
+  if (query[PROVIDER_CALLBACK_PARAM] === "1") {
+    return handleProviderCallback(query, body);
+  }
+
+  if (!ARK_KEY) {
+    return jsonResponse(500, { ok: false, submitted: false, error: "missing_ark_key", version: VERSION_TAG });
   }
 
   const telegramId = String(body.telegram_id || body.user_id || body.uid || "");
@@ -241,12 +325,11 @@ exports.handler = async function(event) {
   const ratio = normalizeRatio(body.aspect_ratio || body.aspectRatio || body.ratio);
   const cost = costFor({ ...body, duration, resolution, variant });
   const model = normalizeModel(body.model, variant);
-  const modelLabel = variant === "fast" ? "Seedance 2.0 Cheap Fast Video" : "Seedance 2.0 Cheap Video";
+  const modelLabel = variant === "fast" ? "Seedance 2 Prompt Fast" : "Seedance 2 Prompt";
 
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
-  const query = event.queryStringParameters || {};
   const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
   let urlMode = String(body.modul || query.mode || query.modul || "");
   let leng = String(body.leng || body.lang || query.leng || query.lang || "");
@@ -266,6 +349,7 @@ exports.handler = async function(event) {
   }
 
   leng = normalizeLeng(leng);
+  urlMode = normalizeCallbackMode(urlMode);
 
   const runId = String(body.run_id || body.runId || `seedancecheap-${telegramId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
 
@@ -279,8 +363,9 @@ exports.handler = async function(event) {
     newCredits
   });
 
+  const callbackBase = ownFunctionUrl(event) || MAKE_HOOK;
   const callbackUrl =
-    MAKE_HOOK +
+    callbackBase +
     "?telegram_id=" + encodeURIComponent(telegramId) +
     "&run_id=" + encodeURIComponent(runId) +
     "&new_credits=" + encodeURIComponent(newCredits) +
@@ -288,7 +373,8 @@ exports.handler = async function(event) {
     "&cost=" + encodeURIComponent(cost) +
     "&mode=" + encodeURIComponent(urlMode) +
     "&leng=" + encodeURIComponent(leng) +
-    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
+    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "") +
+    "&" + PROVIDER_CALLBACK_PARAM + "=1";
 
   const arkPayload = {
     model,
