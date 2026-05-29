@@ -2,7 +2,7 @@
 // Telegram Mini App — Seedream 4.5
 // EXACT logic duplicated from run-nano-banana-pro-tg.js
 // KIE model structure taken from run-seedream-4-5.js
-// Cost = 1 (handled by Telegram UI + callback)
+// Cost = 0.5 (handled here so the browser cannot send the wrong price)
 
 const CREATE_URL = process.env.KIE_CREATE_URL || "https://api.kie.ai/api/v1/jobs/createTask";
 const API_KEY = process.env.KIE_API_KEY || "";
@@ -93,9 +93,9 @@ exports.handler = async (event) => {
     const prompt         = body.prompt || "";
     const mode           = body.mode || "";
     let leng             = body.leng || "";
-    const creditsBefore  = body.credits_before || 0;
-    const newCredits     = body.new_credits || 0;
-    const cost           = 1.5; // fixed
+    const creditsBefore  = Number(body.credits_before || 0);
+    const cost           = 0.5;
+    const newCredits     = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
     // Images (0–6)
     const rawUrls = Array.isArray(body.urls) ? body.urls : [];
@@ -178,6 +178,15 @@ exports.handler = async (event) => {
     let job;
     try { job = JSON.parse(raw); } catch { job = { raw }; }
 
+    if (!create.ok) {
+      return jsonResponse(create.status || 502, {
+        ok: false,
+        submitted: false,
+        error: (job && (job.error || job.message)) || "seedream_error",
+        data: job
+      });
+    }
+
     const taskId =
       job.taskId ||
       job.id ||
@@ -185,7 +194,7 @@ exports.handler = async (event) => {
       job.data?.id ||
       null;
 
-    // Insert into telegram_generations EXACTLY like MJ Video
+    // Insert the first row. n8n updates this same row later by run_id.
     if (TG_TABLE_URL && SERVICE_KEY) {
       try {
         await fetch(TG_TABLE_URL, {
@@ -201,7 +210,12 @@ exports.handler = async (event) => {
               telegram_id: telegramId,
               model: "Seedream 4.5",
               credits: cost,
-              prompt
+              prompt,
+              run_id: runId,
+              task_id: taskId || null,
+              status: "submitted",
+              kind: "image",
+              result_url: null
             }
           ])
         });
