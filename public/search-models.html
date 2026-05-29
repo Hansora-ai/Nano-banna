@@ -4273,7 +4273,6 @@ function createResultCard(data) {
         }
 
         const strip = document.getElementById('resultsStrip');
-        if (strip) strip.innerHTML = '';
         const resultsSection = document.getElementById('resultsSection');
         const normalizedRows = isTelegramMiniApp
           ? (data || []).map((row) => ({
@@ -4289,6 +4288,17 @@ function createResultCard(data) {
             }))
           : (data || []);
         const visibleRows = normalizedRows.filter(shouldShowResultGeneration).slice(0, recentLimit);
+        const historySignature = JSON.stringify(visibleRows.map((row) => ({
+          run_id: row.run_id || (row.meta && row.meta.run_id) || '',
+          status: row.status || (row.meta && row.meta.status) || '',
+          result_url: row.result_url || '',
+          task_id: row.task_id || (row.meta && (row.meta.task_id || row.meta.taskId)) || ''
+        })));
+        if (strip && strip.children.length && historySignature === lastRecentHistorySignature) {
+          return;
+        }
+        lastRecentHistorySignature = historySignature;
+        if (strip) strip.innerHTML = '';
         const hasItems = visibleRows.length > 0;
         if (resultsSection) {
           if (hasItems) resultsSection.classList.remove('hidden');
@@ -4325,6 +4335,7 @@ function createResultCard(data) {
 
     let telegramHistoryRefreshTimer = null;
     let telegramHistoryRefreshBusy = false;
+    let lastRecentHistorySignature = '';
 
     function startTelegramHistoryAutoRefresh() {
       if (!isTelegramMiniApp || telegramHistoryRefreshTimer) return;
@@ -8109,22 +8120,28 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
         if (t.includes('wav')) return '.wav';
         return fallback || '';
       };
-      const directTelegramUpload = async (file) => {
+      const uploadNameForFile = (file, index) => {
         const type = (file.type || 'application/octet-stream').toLowerCase();
         const origName = file.name || 'file';
         const base = origName.replace(/\.[^./\\]+$/, '').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'upload';
-        const filename = `${Date.now()}-${telegramId || 'tg-anon'}-${base}${safeExtFromMime(type, '')}`;
-        const resp = await fetch('/.netlify/functions/sign-upload', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-USER-ID': telegramId || 'tg-anon'
-          },
-          body: JSON.stringify({ filename, mime: type })
-        });
-        const signed = await resp.json().catch(() => null);
-        if (!resp.ok || !signed || !signed.uploadUrl || !signed.publicUrl) {
-          throw new Error((signed && signed.error) || 'sign-upload failed');
+        return `${Date.now()}-${index}-${telegramId || 'tg-anon'}-${base}${safeExtFromMime(type, '')}`;
+      };
+      const directTelegramUpload = async (file, signedUpload, index) => {
+        const type = (file.type || 'application/octet-stream').toLowerCase();
+        let signed = signedUpload || null;
+        if (!signed) {
+          const resp = await fetch('/.netlify/functions/sign-upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-USER-ID': telegramId || 'tg-anon'
+            },
+            body: JSON.stringify({ filename: uploadNameForFile(file, index || 0), mime: type })
+          });
+          signed = await resp.json().catch(() => null);
+          if (!resp.ok || !signed || !signed.uploadUrl || !signed.publicUrl) {
+            throw new Error((signed && signed.error) || 'sign-upload failed');
+          }
         }
         const putResp = await fetch(signed.uploadUrl, {
           method: 'PUT',
@@ -8132,14 +8149,13 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           body: file
         });
         if (!putResp.ok) throw new Error('upload_failed');
-        try { await fetch(signed.publicUrl, { method: 'HEAD', cache: 'no-store' }); } catch (_) {}
         return { publicUrl: signed.publicUrl };
       };
-      const uploadViaBridgeOrDirect = async (file) => {
+      const uploadViaBridgeOrDirect = async (file, index, signedUpload) => {
         if (!isTelegramMiniApp && window.kieUploadBridge && typeof window.kieUploadBridge.upload === 'function') {
           return window.kieUploadBridge.upload(file);
         }
-        return directTelegramUpload(file);
+        return directTelegramUpload(file, signedUpload, index);
       };
       const maxUploadMB = (typeof currentModel !== 'undefined' && currentModel && currentModel.uploadMaxMB)
         ? Number(currentModel.uploadMaxMB)
@@ -8162,6 +8178,33 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           throw new Error('file_too_large');
         }
       });
+
+      let batchSignedUploads = null;
+      if (isTelegramMiniApp && list.length > 1) {
+        try {
+          const signResp = await fetch('/.netlify/functions/sign-upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-USER-ID': telegramId || 'tg-anon'
+            },
+            body: JSON.stringify({
+              files: list.map((file, index) => ({
+                filename: uploadNameForFile(file, index),
+                mime: (file.type || 'application/octet-stream').toLowerCase()
+              }))
+            })
+          });
+          const signedBatch = await signResp.json().catch(() => null);
+          if (signResp.ok && signedBatch && Array.isArray(signedBatch.files) && signedBatch.files.length === list.length) {
+            batchSignedUploads = signedBatch.files;
+          } else {
+            console.warn('batch sign-upload unavailable, falling back to per-file signing', signedBatch);
+          }
+        } catch (error) {
+          console.warn('batch sign-upload failed, falling back to per-file signing', error);
+        }
+      }
 
       const urls = new Array(list.length);
       const hasLargeMedia = list.some((file) => {
@@ -8214,14 +8257,14 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
             try { URL.revokeObjectURL(objectUrl); } catch (_) {}
           }
         };
-        const uploadWithFreshSignedUrlRetries = async (sourceFile, label, attempts) => {
+        const uploadWithFreshSignedUrlRetries = async (sourceFile, label, attempts, firstSignedUpload) => {
           let lastError = null;
           for (let attempt = 1; attempt <= attempts; attempt += 1) {
             try {
               showStatus(attempt === 1
                 ? `Uploading input files (${index + 1}/${list.length})…`
                 : `Retrying ${label} upload ${attempt}/${attempts} (${index + 1}/${list.length})…`);
-              return await uploadViaBridgeOrDirect(sourceFile);
+              return await uploadViaBridgeOrDirect(sourceFile, index, attempt === 1 ? firstSignedUpload : null);
             } catch (error) {
               lastError = error;
               if (attempt >= attempts || !isRetryableUploadError(error)) throw error;
@@ -8231,7 +8274,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           throw lastError || new Error('upload_failed');
         };
         try {
-          up = await uploadWithFreshSignedUrlRetries(file, 'image', 3);
+          up = await uploadWithFreshSignedUrlRetries(file, 'file', 3, batchSignedUploads && batchSignedUploads[index]);
         } catch (error) {
           const bridgeMessage = uploadErrorMessage(error);
           let retryMessage = '';
