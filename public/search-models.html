@@ -3694,6 +3694,7 @@ async function __mjFetchNbCheck(params){
           setTimeout(() => {
             loadRecentHistory().catch((error) => console.warn('loadRecentHistory deferred failed', error));
           }, 100);
+          startTelegramHistoryAutoRefresh();
           return;
         }
 
@@ -3810,7 +3811,7 @@ async function __mjFetchNbCheck(params){
     }
 
     function isSubmittedOnlyStatus(status) {
-      return /^(submitted|logged|sent|history)$/i.test(String(status || '').trim());
+      return false;
     }
 
     function createResultThumb(data) {
@@ -3865,7 +3866,7 @@ async function __mjFetchNbCheck(params){
         }
         const label = document.createElement('div');
         label.className = 'result-thumb-placeholder-label';
-        label.textContent = initialFailed ? 'Failed' : (isSubmittedOnlyStatus(statusRaw) ? 'History' : 'Creating...');
+        label.textContent = initialFailed ? 'Failed' : 'Creating...';
         ph.appendChild(label);
         card.appendChild(ph);
       }
@@ -3906,8 +3907,6 @@ async function __mjFetchNbCheck(params){
       if (isFailed) {
         state.textContent = 'Failed';
         state.classList.add('failed');
-      } else if (isSubmittedOnlyStatus(statusRaw) && !url) {
-        state.textContent = 'History';
       } else if (isReady) {
         state.textContent = 'Ready';
         state.classList.add('ready');
@@ -3983,8 +3982,6 @@ async function __mjFetchNbCheck(params){
           } else if (ready) {
             state.textContent = 'Ready';
             state.classList.add('ready');
-          } else if (isSubmittedOnlyStatus(nextStatusRaw) && !nextUrl) {
-            state.textContent = 'History';
           } else {
             state.textContent = 'Processing';
             state.classList.add('processing');
@@ -3994,9 +3991,6 @@ async function __mjFetchNbCheck(params){
           if (placeholder && failed && !ready) {
             placeholder.innerHTML = '<div class="result-thumb-placeholder-label">Failed</div>';
             placeholder.style.color = 'rgba(248,113,113,.9)';
-          } else if (placeholder && isSubmittedOnlyStatus(nextStatusRaw) && !ready) {
-            placeholder.innerHTML = '<div class="result-thumb-placeholder-label">History</div>';
-            placeholder.style.color = 'rgba(255,255,255,.72)';
           } else if (placeholder && !failed && !ready && !placeholder.querySelector('.processing-orb')) {
             placeholder.innerHTML = '';
             const orb = document.createElement('div');
@@ -4180,7 +4174,7 @@ function createResultCard(data) {
           mediaEl.classList.add('hidden');
           mediaEl.dataset.previewUrl = '';
           failurePlaceholder.classList.toggle('hidden', !failedNow);
-          loader.style.display = (failedNow || isSubmittedOnlyStatus(stRaw)) ? 'none' : 'block';
+          loader.style.display = failedNow ? 'none' : 'block';
         }
 
         if (readyNow) {
@@ -4205,10 +4199,6 @@ function createResultCard(data) {
           label = 'Ready';
           pillClass = 'absolute left-2 top-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/85 text-white';
           statusClass = 'text-[10px] text-emerald-300';
-        } else if (isSubmittedOnlyStatus(stRaw)) {
-          label = 'History';
-          pillClass = 'absolute left-2 top-2 text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/85 text-white';
-          statusClass = 'text-[10px] text-indigo-200/80';
         }
 
         statusChip.textContent = label;
@@ -4291,7 +4281,7 @@ function createResultCard(data) {
               kind: row.kind || inferKindFromTelegramModel(row.model),
               prompt: row.prompt || '',
               result_url: normalizeResultUrl(row.result_url),
-              status: row.status || (row.result_url ? 'ready' : 'history'),
+              status: row.status || (row.result_url ? 'ready' : 'processing'),
               run_id: row.run_id || '',
               task_id: row.task_id || '',
               meta: { run_id: row.run_id || '', task_id: row.task_id || '', status: row.status || '' },
@@ -4331,6 +4321,24 @@ function createResultCard(data) {
       } catch (e) {
         console.warn('loadRecentHistory failed', e);
       }
+    }
+
+    let telegramHistoryRefreshTimer = null;
+    let telegramHistoryRefreshBusy = false;
+
+    function startTelegramHistoryAutoRefresh() {
+      if (!isTelegramMiniApp || telegramHistoryRefreshTimer) return;
+      telegramHistoryRefreshTimer = setInterval(async () => {
+        if (telegramHistoryRefreshBusy || document.hidden || !currentUser) return;
+        telegramHistoryRefreshBusy = true;
+        try {
+          await loadRecentHistory();
+        } catch (error) {
+          console.warn('telegram history auto refresh failed', error);
+        } finally {
+          telegramHistoryRefreshBusy = false;
+        }
+      }, 3500);
     }
 
     async function __extractResultUrls(row) {
