@@ -8,7 +8,7 @@ const https = require('https');
 const { URL } = require('url');
 const crypto = require('crypto');
 
-const HANDLER_VERSION = 'sign-upload@v7-timeout-retry-no-probe';
+const HANDLER_VERSION = 'sign-upload@v8-batch-timeout-retry-no-probe';
 const FETCH_TIMEOUT_MS = 12000;
 
 function cors() {
@@ -120,7 +120,11 @@ function extForMime(mime) {
   if (m === 'image/webp') return 'webp';
   if (m === 'video/mp4') return 'mp4';
   if (m === 'video/quicktime') return 'mov';
+  if (m === 'video/webm') return 'webm';
   if (m === 'image/gif') return 'gif';
+  if (m === 'audio/mpeg' || m === 'audio/mp3') return 'mp3';
+  if (m === 'audio/wav' || m === 'audio/x-wav') return 'wav';
+  if (m === 'audio/mp4' || m === 'audio/m4a') return 'm4a';
   return 'bin';
 }
 function encodePath(p) {
@@ -179,6 +183,29 @@ function objectPathFor(filename, mime) {
   return `images/user-uploads/${y}/${m}/${d}/${rand}-${safe}`;
 }
 
+async function createSignedUpload({ url, bucket, key, exp, filename, mime }) {
+  const objectPath = objectPathFor(filename, mime);
+  const signed = await signUpload(url, key, bucket, objectPath, mime, exp);
+  if (!signed.ok) {
+    const error = new Error('sign_failed');
+    error.status = signed.status;
+    error.detail = signed.raw || signed.data;
+    throw error;
+  }
+
+  const signedUrl = signed.data && (signed.data.signedUrl || signed.data.signedURL || signed.data.url);
+  if (!signedUrl) {
+    const error = new Error('sign_missing_url');
+    error.status = 500;
+    error.detail = signed.data || signed.raw;
+    throw error;
+  }
+
+  const uploadUrl = absolutize(url, signedUrl);
+  const publicUrl = `${url}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath).replace(/%2F/g,'/')}`;
+  return { uploadUrl, publicUrl, bucket, objectPath };
+}
+
 function absolutize(base, pathOrUrl) {
   if (!pathOrUrl) return null;
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
@@ -198,13 +225,30 @@ exports.handler = async (event) => {
 
     let payload = {};
     try { payload = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'bad_json' }, headers); }
+    if (Array.isArray(payload.files) && payload.files.length) {
+      const files = payload.files.slice(0, 20).map((file) => ({
+        filename: (file && file.filename ? file.filename : '').toString(),
+        mime: (file && file.mime ? file.mime : '').toString().toLowerCase()
+      }));
+
+      try {
+        const signedFiles = await Promise.all(files.map((file) => createSignedUpload({ url, bucket, key, exp, ...file })));
+        return json(200, { files: signedFiles, bucket },
+          { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket, 'x-batch-count': String(signedFiles.length) });
+      } catch (batchError) {
+        return json(batchError.status || 502, { error: batchError.message || 'sign_failed', detail: batchError.detail || String(batchError) },
+          { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket });
+      }
+    }
+
     const filename = (payload.filename || '').toString();
     const mime = (payload.mime || '').toString().toLowerCase();
-    const objectPath = objectPathFor(filename, mime);
 
-    const signed = await signUpload(url, key, bucket, objectPath, mime, exp);
-    if (!signed.ok) {
-      if (signed.status === 404) {
+    let signedUpload;
+    try {
+      signedUpload = await createSignedUpload({ url, bucket, key, exp, filename, mime });
+    } catch (signError) {
+      if (signError.status === 404) {
         try {
           const probe = await probeBucket(url, key, bucket);
           if (probe.status === 404) {
@@ -216,22 +260,12 @@ exports.handler = async (event) => {
         }
       }
 
-      return json(502, { error: 'sign_failed', detail: signed.raw || signed.data },
+      return json(signError.status || 502, { error: signError.message || 'sign_failed', detail: signError.detail },
         { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket });
     }
 
-    const signedUrl = signed.data && (signed.data.signedUrl || signed.data.signedURL || signed.data.url);
-    if (!signedUrl) {
-      return json(500, { error: 'sign_missing_url', detail: signed.data || signed.raw }, { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket });
-    }
-
-    // Accept `/object/upload/sign/...` with or without `/storage/v1` prefix
-
-    const uploadUrl = absolutize(url, signedUrl);
-    const publicUrl = `${url}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodeURIComponent(objectPath).replace(/%2F/g,'/')}`;
-
-    return json(200, { uploadUrl, publicUrl, bucket, objectPath },
-      { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket, 'x-object': objectPath });
+    return json(200, signedUpload,
+      { ...headers, 'x-project-host': new URL(url).host, 'x-bucket': bucket, 'x-object': signedUpload.objectPath });
   } catch (e) {
     return json(500, { error: 'server_error', detail: String(e && e.message ? e.message : e) }, headers);
   }
