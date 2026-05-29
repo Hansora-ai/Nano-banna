@@ -67,6 +67,10 @@ function normalizeResolution(v) {
   return "1K";
 }
 
+function getResolutionCost(resolution) {
+  return normalizeResolution(resolution) === "4K" ? 2 : 1.5;
+}
+
 function normalizeLeng(v) {
   const s = String(v || "").trim().toLowerCase();
   return s === "ru" ? "ru" : "en";
@@ -117,8 +121,8 @@ async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, credits
   }
 }
 
-// Insert a row into telegram_generations (non-blocking)
-async function writeTelegramGeneration({ telegramId, cost, prompt }) {
+// Insert the first row. n8n updates this same row later by run_id.
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }) {
   if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
     console.error("telegram_generations insert skipped: missing Supabase env");
     return;
@@ -137,7 +141,12 @@ async function writeTelegramGeneration({ telegramId, cost, prompt }) {
         telegram_id: telegramId,
         model: "Nano Banana Pro",
         credits: cost,
-        prompt
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "image",
+        result_url: null
       }])
     });
 
@@ -185,12 +194,11 @@ exports.handler = async function(event){
 
   const sizeRaw = body.size || body.image_size || body.imageSize || "auto";
   const image_size = normalizeImageSize(sizeRaw);
-  const resolution = normalizeResolution(body.resolution);
+  const resolution = normalizeResolution(body.resolution || body.res || body.output_resolution || body.outputResolution);
 
   const creditsBefore = Number(body.credits_before || 0);
-  const newCredits = Number(body.new_credits || 0);
-  const resolutionCost = resolution === "4K" ? 2.5 : 2;
-  const cost = Number(body.cost || resolutionCost) || resolutionCost;
+  const cost = getResolutionCost(resolution);
+  const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
   // mode / leng similar to other tg functions
   const query = event.queryStringParameters || {};
@@ -290,8 +298,7 @@ exports.handler = async function(event){
     const taskId =
       data.taskId || data.id || data.data?.taskId || data.data?.id || null;
 
-    // Non-blocking log to telegram_generations
-    await writeTelegramGeneration({ telegramId, cost, prompt });
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId });
 
     return jsonResponse(201, {
       ok:true,
