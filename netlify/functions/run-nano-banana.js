@@ -1,114 +1,306 @@
-// netlify/functions/run-nano-banana.js
-const API_KEY = "bcf86d741fea9aa3ee039f6c6a2ad98b";
+// netlify/functions/run-nano-banana-tg.js
+// Submit a Nano Banana image-to-image job for Telegram Mini App.
+// Credits are handled on Telegram side; here we forward to Make.com
+// and (optionally) log into Supabase telegram_generations.
 
-// KIE endpoints (per their docs)
-const CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
-// We don't know which "get" route your account exposes, so try a few:
-const RESULT_URLS = [
-  (id) => `https://api.kie.ai/api/v1/jobs/getTask?taskId=${id}`,
-  (id) => `https://api.kie.ai/api/v1/jobs/getTaskResult?taskId=${id}`,
-  (id) => `https://api.kie.ai/api/v1/jobs/result?taskId=${id}`,
-];
+const CREATE_URL = process.env.KIE_CREATE_URL || "https://api.kie.ai/api/v1/jobs/createTask";
+const API_KEY = process.env.KIE_API_KEY || "";
 
-export default async (req) => {
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Use POST" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
+const SUPABASE_URL  = process.env.SUPABASE_URL || "";
+const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const TG_TABLE_URL  = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/telegram_generations` : "";
+
+// Make.com scenario callback – same as other Telegram video/image flows
+const MAKE_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/42acdd7a-21a6-4258-a925-3f0174c1f354";
+
+// n8n webhook that sends/animates the temporary Telegram loading message.
+const LOADING_HOOK = "https://n8n.srv1223021.hstgr.cloud/webhook/41c3d47d-eef6-49f6-95dd-51dce81f84d1";
+
+function jsonResponse(statusCode, body){
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  };
+}
+
+// Minimal copy of normalizeImageSize from web run-nano-banana.js
+function normalizeImageSize(v) {
+  if (!v) return "auto";
+  const s = String(v).trim().toLowerCase();
+
+  const direct = new Set(["auto", "1:1", "3:4", "4:3", "9:16", "16:9"]);
+  if (direct.has(s)) return s;
+
+  if (s === "square") return "1:1";
+  if (s === "portrait_3_4") return "3:4";
+  if (s === "portrait_9_16") return "9:16";
+  if (s === "landscape_4_3") return "4:3";
+  if (s === "landscape_16_9") return "16:9";
+
+  const coerced = s.replace(/(\d)[_\-:](\d)/g, "$1:$2");
+  if (direct.has(coerced)) return coerced;
+
+  return "auto";
+}
+
+function normalizeLeng(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return s === "ru" ? "ru" : "en";
+}
+
+function getLoadingMessage(leng) {
+  return normalizeLeng(leng) === "ru"
+    ? "⏳ Ваша генерация запущена. Пожалуйста, подождите…"
+    : "⏳ Your generation is in process. Please wait…";
+}
+
+// Trigger n8n to send/animate a temporary loading message in Telegram.
+// Debug version: returns both message_id and detailed hook diagnostics.
+async function sendLoadingMessage({ telegramId, runId, leng, mode, cost, creditsBefore, newCredits }) {
+  const debug = {
+    loading_hook_called: false,
+    loading_hook_url: LOADING_HOOK || "",
+    loading_hook_status: null,
+    loading_hook_ok: null,
+    loading_hook_response: null,
+    loading_hook_error: null
+  };
+
+  if (!LOADING_HOOK) {
+    debug.loading_hook_error = "missing_loading_hook_url";
+    return { messageId: null, debug };
   }
 
   try {
-    const { urls, prompt = "", format = "png", size = "auto" } = await req.json();
-    if (!Array.isArray(urls) || urls.length === 0) {
-      return new Response(JSON.stringify({ error: "urls[] required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
+    debug.loading_hook_called = true;
+
+    const resp = await fetch(LOADING_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        chat_id: telegramId,
+        run_id: runId,
+        leng: normalizeLeng(leng),
+        lang: normalizeLeng(leng),
+        mode,
+        cost,
+        credits_before: creditsBefore,
+        new_credits: newCredits,
+        message: getLoadingMessage(leng)
+      })
+    });
+
+    debug.loading_hook_status = resp.status;
+    debug.loading_hook_ok = resp.ok;
+
+    const text = await resp.text();
+    debug.loading_hook_response = text;
+
+    let data = {};
+    try { data = JSON.parse(text || "{}"); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      console.error("loading message hook failed", resp.status, data);
+      return { messageId: null, debug };
+    }
+
+    const messageId = data.message_id || data.messageId || data.result?.message_id || null;
+    return { messageId, debug };
+  } catch (e) {
+    debug.loading_hook_error = e && e.message ? e.message : String(e);
+    console.error("loading message hook error", debug.loading_hook_error);
+    return { messageId: null, debug };
+  }
+}
+
+// Insert the first row. n8n updates this same row later by run_id.
+async function writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId }) {
+  if (!SUPABASE_URL || !SERVICE_KEY || !TG_TABLE_URL) {
+    console.error("telegram_generations insert skipped: missing Supabase env");
+    return;
+  }
+
+  try {
+    const resp = await fetch(TG_TABLE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SERVICE_KEY,
+        "Authorization": "Bearer " + SERVICE_KEY,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify([{
+        telegram_id: telegramId,
+        model: "Nano Banana Image Edit",
+        credits: cost,
+        prompt,
+        run_id: runId,
+        task_id: taskId || null,
+        status: "submitted",
+        kind: "image",
+        result_url: null
+      }])
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error("telegram_generations insert failed", resp.status, text);
+    }
+  } catch (e) {
+    console.error("telegram_generations insert error", e && e.message ? e.message : e);
+  }
+}
+
+exports.handler = async function(event){
+  if (event.httpMethod !== "POST") {
+    return jsonResponse(405, { ok:false, submitted:false, error:"method_not_allowed" });
+  }
+
+  if (!API_KEY) {
+    return jsonResponse(500, { ok:false, submitted:false, error:"missing_kie_api_key" });
+  }
+
+  let body;
+  try {
+    body = JSON.parse(event.body || "{}");
+  } catch (e) {
+    return jsonResponse(400, { ok:false, submitted:false, error:"bad_json", details:String(e && e.message || e) });
+  }
+
+  const telegramId = (body.telegram_id || "").toString();
+  const prompt = (body.prompt || "").toString();
+
+  const rawUrls = Array.isArray(body.urls) ? body.urls : [];
+  const cleanUrls = rawUrls
+    .map(u => String(u || "").trim())
+    .filter(u => !!u);
+
+  if (!telegramId) {
+    return jsonResponse(400, { ok:false, submitted:false, error:"missing_telegram_id" });
+  }
+  if (!cleanUrls.length) {
+    return jsonResponse(400, { ok:false, submitted:false, error:"urls_required" });
+  }
+
+  const sizeRaw = body.size || body.image_size || body.imageSize || "auto";
+  const image_size = normalizeImageSize(sizeRaw);
+
+  const creditsBefore = Number(body.credits_before || 0);
+  const cost = 0.5;
+  const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
+
+  // mode / leng similar to other tg functions
+  const query = event.queryStringParameters || {};
+  const referer = (event.headers && (event.headers.referer || event.headers.Referer)) || "";
+  let mode = (body.mode || body.modul || query.mode || query.modul || "").toString();
+  let leng = (body.leng || body.lang || query.leng || query.lang || "").toString();
+
+  if (!mode && referer) {
+    try {
+      const u = new URL(referer);
+      mode = (u.searchParams.get("mode") || u.searchParams.get("modul") || mode || "").toString();
+    } catch (_) {}
+  }
+
+  if (!leng && referer) {
+    try {
+      const u2 = new URL(referer);
+      leng = (u2.searchParams.get("leng") || u2.searchParams.get("lang") || leng || "").toString();
+    } catch (_) {}
+  }
+
+  leng = normalizeLeng(leng);
+
+  const runId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+  const loadingResult = await sendLoadingMessage({
+    telegramId,
+    runId,
+    leng,
+    mode,
+    cost,
+    creditsBefore,
+    newCredits
+  });
+  const loadingMessageId = loadingResult.messageId;
+  const loadingDebug = loadingResult.debug;
+
+  const callbackUrl =
+    MAKE_HOOK +
+    "?telegram_id=" + encodeURIComponent(telegramId) +
+    "&run_id=" + encodeURIComponent(runId) +
+    "&new_credits=" + encodeURIComponent(newCredits) +
+    "&credits_before=" + encodeURIComponent(creditsBefore) +
+    "&cost=" + encodeURIComponent(cost) +
+    "&mode=" + encodeURIComponent(mode) +
+    "&leng=" + encodeURIComponent(leng) +
+    "&loading_message_id=" + encodeURIComponent(loadingMessageId || "");
+
+  // Build KIE payload (very close to web run-nano-banana.js)
+  const image_urls = cleanUrls.map(u => encodeURI(String(u)));
+
+  const payload = {
+    model: "google/nano-banana-edit",
+    input: {
+      prompt,
+      image_urls,
+      output_format: (body.format || "png").toLowerCase(),
+      image_size
+    },
+    webhook_url: callbackUrl,
+    webhookUrl:  callbackUrl,
+    callbackUrl: callbackUrl,
+    callBackUrl: callbackUrl,
+    notify_url:  callbackUrl,
+    meta:      { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId },
+    metadata:  { telegram_id: telegramId, run_id: runId, cost, loading_message_id: loadingMessageId }
+  };
+
+  try {
+    const resp = await fetch(CREATE_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${API_KEY}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await resp.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    if (!resp.ok) {
+      return jsonResponse(resp.status || 502, {
+        ok:false,
+        submitted:false,
+        error:(data && (data.error || data.message)) || "nano_banana_error",
+        data
       });
     }
 
-    // *** FOLLOWING KIE EXAMPLE EXACTLY ***
-    const payload = {
-      model: "google/nano-banana-edit",
-      input: {
-        prompt,
-        image_urls: urls,
-        output_format: format,
-        image_size: size,
-      },
-    };
-
-    const create = await fetch(CREATE_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const createText = await create.text();
-    let createJson;
-    try { createJson = JSON.parse(createText); } catch { createJson = { raw: createText }; }
-
-    // Be flexible about the field name that holds the task id
     const taskId =
-      createJson.taskId ||
-      createJson.id ||
-      createJson.data?.taskId ||
-      createJson.data?.id ||
-      createJson.result?.taskId ||
-      createJson.result?.id;
+      data.taskId || data.id || data.data?.taskId || data.data?.id || null;
 
-    if (!taskId) {
-      // Echo back what we got so you can see the exact shape from KIE
-      return new Response(
-        JSON.stringify({ error: "No taskId from KIE", createJson }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
-    }
+    await writeTelegramGeneration({ telegramId, cost, prompt, runId, taskId });
 
-    // Poll for result (max ~2 min)
-    const deadline = Date.now() + 120000;
-    let last;
-    while (Date.now() < deadline) {
-      for (const makeUrl of RESULT_URLS) {
-        const res = await fetch(makeUrl(taskId), {
-          headers: { Authorization: `Bearer ${API_KEY}` },
-        });
-        const text = await res.text();
-        let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
-        last = json;
-
-        const status =
-          json.status || json.data?.status || json.result?.status || json.state;
-        const s = String(status || "").toLowerCase();
-
-        if (["success", "succeeded", "completed", "done"].includes(s)) {
-          return new Response(
-            JSON.stringify({ taskId, ...json }),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-          );
-        }
-        if (["failed", "error"].includes(s)) {
-          return new Response(
-            JSON.stringify({ taskId, ...json }),
-            { status: 500, headers: { "Content-Type": "application/json" } }
-          );
-        }
-      }
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-
-    return new Response(
-      JSON.stringify({ taskId, timeout: true, last }),
-      { status: 504, headers: { "Content-Type": "application/json" } }
-    );
+    return jsonResponse(201, {
+      ok:true,
+      submitted:true,
+      run_id: runId,
+      taskId,
+      loading_message_id: loadingMessageId,
+      loading_debug: loadingDebug,
+      new_credits: newCredits
+    });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
+    return jsonResponse(500, {
+      ok:false,
+      submitted:false,
+      error: e && e.message ? e.message : "server_error"
     });
   }
 };
