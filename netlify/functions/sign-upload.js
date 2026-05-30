@@ -113,11 +113,38 @@ function sanitize(name) {
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
+function extFromFilename(name) {
+  const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)(?:$|\?)/);
+  return match ? match[1] : '';
+}
+function mimeFromFilename(name) {
+  const ext = extFromFilename(name);
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'heic') return 'image/heic';
+  if (ext === 'heif') return 'image/heif';
+  if (ext === 'mp4' || ext === 'm4v') return 'video/mp4';
+  if (ext === 'mov') return 'video/quicktime';
+  if (ext === 'webm') return 'video/webm';
+  if (ext === 'mp3') return 'audio/mpeg';
+  if (ext === 'wav') return 'audio/wav';
+  if (ext === 'm4a') return 'audio/mp4';
+  return '';
+}
+function normalizeMimeForUpload(mime, filename) {
+  const raw = String(mime || '').trim().toLowerCase();
+  if (raw && raw !== 'application/octet-stream') return raw;
+  return mimeFromFilename(filename) || raw || 'application/octet-stream';
+}
 function extForMime(mime) {
   const m = (mime || '').toLowerCase();
   if (m === 'image/jpeg' || m === 'image/jpg' || m === 'image/pjpeg') return 'jpg';
   if (m === 'image/png' || m === 'image/x-png') return 'png';
   if (m === 'image/webp') return 'webp';
+  if (m === 'image/heic') return 'heic';
+  if (m === 'image/heif') return 'heif';
   if (m === 'video/mp4') return 'mp4';
   if (m === 'video/quicktime') return 'mov';
   if (m === 'video/webm') return 'webm';
@@ -173,7 +200,8 @@ async function probeBucket(urlBase, key, bucket) {
 
 function objectPathFor(filename, mime) {
   const base = String(filename || 'file').replace(/\.[^.]+$/, '');
-  const ext = extForMime(mime);
+  const normalizedMime = normalizeMimeForUpload(mime, filename);
+  const ext = extForMime(normalizedMime) || extFromFilename(filename) || 'bin';
   const safe = `${sanitize(base)}.${ext}`;
   const now = new Date();
   const y = now.getUTCFullYear();
@@ -184,8 +212,9 @@ function objectPathFor(filename, mime) {
 }
 
 async function createSignedUpload({ url, bucket, key, exp, filename, mime }) {
+  const normalizedMime = normalizeMimeForUpload(mime, filename);
   const objectPath = objectPathFor(filename, mime);
-  const signed = await signUpload(url, key, bucket, objectPath, mime, exp);
+  const signed = await signUpload(url, key, bucket, objectPath, normalizedMime, exp);
   if (!signed.ok) {
     const error = new Error('sign_failed');
     error.status = signed.status;
