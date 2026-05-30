@@ -5737,6 +5737,10 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         const rounded = [4, 6, 8, 10].includes(seconds) ? seconds : 4;
         return currentResolution === '4K' ? table4k[rounded] : table1080[rounded];
       }
+      if (model.id === 'kling25') {
+        const dur = (currentDuration === 10 || String(currentDuration) === '10') ? 10 : 5;
+        return dur === 10 ? 8 : 4;
+      }
       if (model.id === 'kling30') {
         const seconds = getKling30MultiShotDuration();
         let rate = 1;
@@ -5754,6 +5758,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       }
       if (model.id === 'kling26') {
         const dur = (currentDuration === 10 || String(currentDuration) === '10') ? 10 : 5;
+        if (currentKlingSound) return dur === 10 ? 15 : 8;
         return dur === 10 ? 8 : 4;
       }
       if (model.id === 'sora2') return currentSoraTier === 'pro' ? 20 : 3;
@@ -5789,6 +5794,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       const credits = getRunCreditLabel();
       runBtn.textContent = credits ? `Run ${credits} ⚡` : 'Run';
       syncKlingMotionRunState(false);
+      syncPromptSafetyRunState(false);
     }
 
     function getResolutionOptionsForCurrentModel() {
@@ -5933,6 +5939,104 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
 
     function showGenerationFailedStatus(reason, runId) {
       showStatus(GENERATION_FAILED_MESSAGE, 'error');
+    }
+
+    const EXPLICIT_BLOCK_WORDS = new Set([
+      'naked',
+      'nude',
+      'nsfw',
+      'pussy',
+      'dick',
+      'penis',
+      'vagina',
+      'vergina',
+      'vaginal',
+      'cock',
+      'blowjob',
+      'bj',
+      'handjob',
+      'deepthroat',
+      'threesome',
+      'gangbang',
+      'creampie',
+      'cumshot',
+      'cum',
+      'clit',
+      'boob',
+      'boobs',
+      'tit',
+      'tits',
+      'milf',
+      'slut',
+      'whore',
+      'sex',
+      'sexual',
+      'xxx',
+      'fuck',
+      'fucking',
+      'fucked',
+      'masturbate',
+      'masturbating',
+      'masturbation',
+      'genital',
+      'genitals',
+      'porn',
+      'porno',
+      'erotic',
+      'topless',
+      'breast',
+      'breasts'
+    ]);
+
+    const EXPLICIT_BLOCK_PHRASES = [
+      'no clothes',
+      'no clothing',
+      'without clothes',
+      'without clothing',
+      'take off clothes',
+      'clothes off',
+      'strip naked',
+      'jerk off'
+    ];
+
+    function promptHasBlockedSexualTerms(value) {
+      const text = String(value || '').toLowerCase();
+      if (!text.trim()) return false;
+
+      const normalized = text
+        .replace(/[^a-z\s]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!normalized) return false;
+
+      for (const phrase of EXPLICIT_BLOCK_PHRASES) {
+        if (normalized.includes(phrase)) return true;
+      }
+
+      return normalized.split(' ').some((word) => EXPLICIT_BLOCK_WORDS.has(word));
+    }
+
+    function syncPromptSafetyRunState(showMessage = false) {
+      const runBtn = document.getElementById('runBtn');
+      const promptBox = document.getElementById('promptBox');
+      const blocked = promptHasBlockedSexualTerms(promptBox ? promptBox.value : '');
+      if (runBtn) {
+        if (blocked) {
+          runBtn.disabled = true;
+          runBtn.title = 'Explicit sexual prompts are not allowed.';
+          runBtn.dataset.promptSafetyTitle = 'true';
+        } else if (runBtn.dataset.promptSafetyTitle === 'true') {
+          runBtn.title = '';
+          delete runBtn.dataset.promptSafetyTitle;
+        }
+      }
+      if (blocked && showMessage) showStatus('Explicit sexual prompts are not allowed.', 'error');
+      if (!blocked && showMessage) {
+        const statusEl = document.getElementById('status');
+        if (statusEl && statusEl.textContent === 'Explicit sexual prompts are not allowed.') showStatus('');
+      }
+      return !blocked;
     }
 
     function getKlingMotionVideoError() {
@@ -8133,29 +8237,61 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
     });
 
 
+    function fileExtFromName(name) {
+      const match = String(name || '').toLowerCase().match(/\.([a-z0-9]+)(?:$|\?)/);
+      return match ? `.${match[1]}` : '';
+    }
+
+    function mimeFromFilename(name) {
+      const ext = fileExtFromName(name);
+      if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+      if (ext === '.png') return 'image/png';
+      if (ext === '.webp') return 'image/webp';
+      if (ext === '.gif') return 'image/gif';
+      if (ext === '.heic') return 'image/heic';
+      if (ext === '.heif') return 'image/heif';
+      if (ext === '.mp4' || ext === '.m4v') return 'video/mp4';
+      if (ext === '.mov') return 'video/quicktime';
+      if (ext === '.webm') return 'video/webm';
+      if (ext === '.mp3') return 'audio/mpeg';
+      if (ext === '.wav') return 'audio/wav';
+      if (ext === '.m4a') return 'audio/mp4';
+      return '';
+    }
+
+    function uploadMimeForFile(file) {
+      const raw = String(file?.type || '').toLowerCase();
+      if (raw && raw !== 'application/octet-stream') return raw;
+      return mimeFromFilename(file?.name) || raw || 'application/octet-stream';
+    }
+
+    function safeExtFromMime(mime, fallback) {
+      const t = String(mime || '').toLowerCase();
+      if (t.includes('png')) return '.png';
+      if (t.includes('jpeg') || t.includes('jpg')) return '.jpg';
+      if (t.includes('webp')) return '.webp';
+      if (t.includes('gif')) return '.gif';
+      if (t.includes('heic')) return '.heic';
+      if (t.includes('heif')) return '.heif';
+      if (t.includes('mp4')) return '.mp4';
+      if (t.includes('quicktime') || t.includes('mov')) return '.mov';
+      if (t.includes('webm')) return '.webm';
+      if (t.includes('mpeg')) return '.mp3';
+      if (t.includes('wav')) return '.wav';
+      return fallback || '';
+    }
+
     async function uploadImagesAndGetUrls(files) {
       const list = Array.isArray(files) ? files : (uploadedFiles || []);
       if (!list.length) return [];
-      const safeExtFromMime = (mime, fallback) => {
-        const t = String(mime || '').toLowerCase();
-        if (t.includes('png')) return '.png';
-        if (t.includes('jpeg') || t.includes('jpg')) return '.jpg';
-        if (t.includes('webp')) return '.webp';
-        if (t.includes('mp4')) return '.mp4';
-        if (t.includes('quicktime') || t.includes('mov')) return '.mov';
-        if (t.includes('webm')) return '.webm';
-        if (t.includes('mpeg')) return '.mp3';
-        if (t.includes('wav')) return '.wav';
-        return fallback || '';
-      };
       const uploadNameForFile = (file, index) => {
-        const type = (file.type || 'application/octet-stream').toLowerCase();
+        const type = uploadMimeForFile(file);
         const origName = file.name || 'file';
         const base = origName.replace(/\.[^./\\]+$/, '').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'upload';
-        return `${Date.now()}-${index}-${telegramId || 'tg-anon'}-${base}${safeExtFromMime(type, '')}`;
+        return `${Date.now()}-${index}-${telegramId || 'tg-anon'}-${base}${safeExtFromMime(type, fileExtFromName(origName))}`;
       };
       const directTelegramUpload = async (file, signedUpload, index) => {
-        const type = (file.type || 'application/octet-stream').toLowerCase();
+        const type = uploadMimeForFile(file);
         let signed = signedUpload || null;
         if (!signed) {
           const resp = await fetch('/.netlify/functions/sign-upload', {
@@ -8191,10 +8327,11 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
       const getFileMaxMB = (file) => {
         let fileMaxMB = maxUploadMB;
         const limits = currentModel && currentModel.uploadLimitsMB ? currentModel.uploadLimitsMB : null;
-        if (limits && file && file.type) {
-          if (file.type.startsWith('image/')) fileMaxMB = Number(limits.image || fileMaxMB);
-          else if (file.type.startsWith('video/')) fileMaxMB = Number(limits.video || fileMaxMB);
-          else if (file.type.startsWith('audio/')) fileMaxMB = Number(limits.audio || fileMaxMB);
+        const type = uploadMimeForFile(file);
+        if (limits && file && type) {
+          if (type.startsWith('image/')) fileMaxMB = Number(limits.image || fileMaxMB);
+          else if (type.startsWith('video/')) fileMaxMB = Number(limits.video || fileMaxMB);
+          else if (type.startsWith('audio/')) fileMaxMB = Number(limits.audio || fileMaxMB);
         }
         return fileMaxMB;
       };
@@ -8219,7 +8356,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
             body: JSON.stringify({
               files: list.map((file, index) => ({
                 filename: uploadNameForFile(file, index),
-                mime: (file.type || 'application/octet-stream').toLowerCase()
+                mime: uploadMimeForFile(file)
               }))
             })
           });
@@ -8236,7 +8373,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
 
       const urls = new Array(list.length);
       const hasLargeMedia = list.some((file) => {
-        const type = String(file?.type || '');
+        const type = uploadMimeForFile(file);
         return type.startsWith('video/') || type.startsWith('audio/');
       });
       const concurrency = Math.min(list.length, hasLargeMedia ? 2 : 4);
@@ -8254,7 +8391,8 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
         const isRetryableUploadError = (error) => /upload_network_error|upload_timeout|upload_aborted|upload_failed_0/i.test(uploadErrorMessage(error));
         const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         const normalizeImageFile = async (sourceFile) => {
-          if (!sourceFile || !String(sourceFile.type || '').startsWith('image/') || sourceFile.type === 'image/gif') return sourceFile;
+          const sourceType = uploadMimeForFile(sourceFile);
+          if (!sourceFile || !sourceType.startsWith('image/') || sourceType === 'image/gif') return sourceFile;
           const objectUrl = URL.createObjectURL(sourceFile);
           try {
             const img = await new Promise((resolve, reject) => {
@@ -8372,7 +8510,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
       const media = { images: [], videos: [], audios: [] };
       (urls || []).forEach((url, index) => {
         const file = (uploadedFiles || [])[index];
-        const type = String(file?.type || '');
+        const type = uploadMimeForFile(file);
         if (type.startsWith('video/')) media.videos.push(url);
         else if (type.startsWith('audio/')) media.audios.push(url);
         else media.images.push(url);
@@ -8703,6 +8841,10 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
         showStatus('Please enter a prompt.', 'error');
         return;
       }
+      if (promptHasBlockedSexualTerms(prompt)) {
+        syncPromptSafetyRunState(true);
+        return;
+      }
 
       if (isTelegramMiniApp && !telegramId) {
         showStatus('Missing Telegram ID. Please open this page from the bot.', 'error');
@@ -8742,7 +8884,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
       }
 
       // Kling dynamic credit requirement (depends on model, resolution, sound, and duration)
-      if (currentModel && ['kling26', 'kling30'].includes(currentModel.id)) {
+      if (currentModel && ['kling25', 'kling26', 'kling30'].includes(currentModel.id)) {
         const __need = Number(getModelCreditValue(currentModel) || 0);
         availableCredits = await getAvailableCredits(__need);
         if (availableCredits < __need) {
@@ -9089,6 +9231,21 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
         updateRunButtonLabel();
       });
     });
+
+    const promptSafetyBox = document.getElementById('promptBox');
+    if (promptSafetyBox) {
+      promptSafetyBox.addEventListener('input', () => {
+        if (runSubmitLocked) return;
+        updateRunButtonLabel();
+        syncPromptSafetyRunState(true);
+      });
+      promptSafetyBox.addEventListener('change', () => {
+        if (runSubmitLocked) return;
+        updateRunButtonLabel();
+        syncPromptSafetyRunState(true);
+      });
+      syncPromptSafetyRunState(false);
+    }
 
     // boot
     (async () => {
