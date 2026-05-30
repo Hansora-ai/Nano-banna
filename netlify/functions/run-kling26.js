@@ -74,7 +74,10 @@ function normalizeBoolean(value) {
 }
 
 function costFor(body) {
-  return normalizeDuration(body.duration) === 10 ? 8 : 4;
+  const duration = normalizeDuration(body.duration);
+  const sound = normalizeBoolean(body.sound);
+  if (sound) return duration === 10 ? 15 : 8;
+  return duration === 10 ? 8 : 4;
 }
 
 function normalizeLeng(v) {
@@ -201,7 +204,7 @@ exports.handler = async function(event) {
   const duration = normalizeDuration(body.duration);
   const sound = Object.prototype.hasOwnProperty.call(body, "sound") ? normalizeBoolean(body.sound) : false;
   const aspectRatio = normalizeAspect(body.aspect_ratio || body.aspectRatio || "1:1");
-  const cost = costFor({ duration });
+  const cost = costFor({ duration, sound });
   const creditsBefore = Number(body.credits_before || 0);
   const newCredits = Math.max(0, Math.round((creditsBefore - cost) * 100) / 100);
 
