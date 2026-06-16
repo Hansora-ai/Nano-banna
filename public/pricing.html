@@ -7,57 +7,100 @@
 <title>Hansora — Buy Credits</title>
 <style>
   :root{
-    --bg:#0b0b0f; --card:#14141b; --muted:#b7b8c5; --text:#f2f3f8;
-    --accent:#8b5cf6; --accent-2:#a78bfa; --ring:rgba(139,92,246,.35);
+    --base-bg:#0b0d13;
+    --base-line:#1a1f2b;
+    --muted:rgba(255,255,255,.68);
+    --text:#f8fafc;
+    --accent:#8b5cf6;
+    --accent-2:#38bdf8;
+    --ring:rgba(168,85,247,.36);
     --ok:#10b981;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:radial-gradient(1200px 600px at 15% 5%, rgba(139,92,246,.08), transparent), var(--bg); color:var(--text); font:500 16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
-  .wrap{max-width:980px;margin:24px auto;padding:20px}
-  .header{display:flex;align-items:center;gap:16px;margin:8px 0 18px}
-  .header img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(139,92,246,.35));}
-  h1{margin:0;font-size:28px;letter-spacing:.2px}
-  .sub{color:var(--muted);margin-top:2px;font-size:14px}
+  html,body{
+    margin:0;
+    min-height:100%;
+    background:
+      radial-gradient(1200px 600px at 20% 0%, rgba(99,102,241,.15), transparent 60%),
+      radial-gradient(1200px 600px at 100% 100%, rgba(56,189,248,.12), transparent 60%),
+      var(--base-bg);
+    color:var(--text);
+    font:500 16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;
+  }
+  body{padding:18px 0 26px}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 18px}
+  .header{text-align:center;margin:0 auto 28px;position:relative}
+  .brand-row{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px}
+  .header img{width:54px;height:54px;object-fit:contain;border-radius:16px;filter:drop-shadow(0 8px 24px rgba(99,102,241,.35));}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(168,85,247,.3);background:rgba(168,85,247,.1);color:#ddd6fe;border-radius:999px;padding:8px 13px;font-size:13px;font-weight:750;box-shadow:0 10px 30px rgba(0,0,0,.24)}
+  .eyebrow::before{content:"";width:8px;height:8px;border-radius:50%;background:#a78bfa}
+  h1{margin:0;font-size:clamp(34px,6vw,62px);line-height:.98;letter-spacing:-.045em;font-weight:900;background:linear-gradient(90deg,#fff,#ddd6fe,#7dd3fc);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);margin:14px auto 0;font-size:15px;max-width:680px}
+  .hero-pills{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;color:rgba(255,255,255,.76);font-size:13px}
+  .hero-pills span{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);border-radius:999px;padding:9px 13px}
   .platform-pill{display:none !important;align-items:center;gap:8px;background:rgba(139,92,246,.12);border:1px solid var(--ring);color:var(--accent-2);padding:6px 10px;border-radius:999px;font-size:12px;margin-left:auto;white-space:nowrap}
   .hidden{display:none}
-  .grid{display:grid;gap:16px;grid-template-columns:repeat(4,minmax(0,1fr))}
-  @media (max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media (max-width:560px){.grid{grid-template-columns:1fr}}
+  .grid{display:grid;gap:22px;grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch}
   .card{
-    background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00));
-    border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:16px;
-    position:relative; overflow:hidden;
+    background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:22px;
+    padding:22px;
+    position:relative;
+    overflow:hidden;
+    min-height:430px;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 18px 46px rgba(0,0,0,.28);
   }
+  .card::before{content:"";position:absolute;inset-x:0;top:0;height:4px;background:linear-gradient(90deg,#a78bfa,#38bdf8)}
   .card:focus-within{outline:2px solid var(--ring)}
-  .badge{position:absolute;top:12px;right:-22px;transform:rotate(30deg);
-    background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#0a021b;
-    font-weight:800;font-size:12px;padding:6px 36px}
-  .coin{width:84px;height:84px;object-fit:contain;margin:4px auto 10px;display:block}
-  .title{font-size:18px;margin:4px 0 6px;text-align:center}
-  .price{font-size:14px;color:var(--muted);text-align:center;margin-bottom:6px}
-  .blurb{font-size:12px;color:var(--muted);text-align:center;margin:0 0 12px}
+  .card.featured{border-color:rgba(168,85,247,.45);background:linear-gradient(180deg, rgba(139,92,246,.18), rgba(255,255,255,.05));transform:translateY(-4px);box-shadow:0 24px 58px rgba(99,102,241,.24)}
+  .badge{position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,#8b5cf6,#d946ef);color:#fff;font-weight:850;font-size:12px;padding:7px 16px;border-radius:0 0 999px 999px;box-shadow:0 12px 30px rgba(139,92,246,.34);white-space:nowrap}
+  .plan-kicker{font-size:13px;color:rgba(255,255,255,.58);margin-top:20px}
+  .title{font-size:46px;line-height:1;font-weight:900;letter-spacing:-.045em;margin:6px 0 3px}
+  .title span{font-size:20px;letter-spacing:0;color:#fff;font-weight:850}
+  .price{font-size:36px;line-height:1;font-weight:900;color:#fff;margin:18px 0 4px}
+  .blurb{font-size:14px;color:rgba(221,214,254,.92);margin:0 0 18px}
+  .features{list-style:none;margin:0 0 20px;padding:0;display:grid;gap:9px;color:rgba(255,255,255,.84);font-size:14px}
+  .features li{display:flex;gap:9px;align-items:flex-start}
+  .features li::before{content:"";width:8px;height:8px;border-radius:999px;background:#8b5cf6;flex:0 0 auto;margin-top:7px}
   .buy{
-    width:100%;border:0;border-radius:12px;padding:12px 14px;font-weight:700;
-    background:linear-gradient(180deg,var(--accent),#6d28d9);
+    width:100%;
+    border:0;
+    border-radius:14px;
+    padding:14px 16px;
+    font-weight:850;
+    font-size:16px;
+    background:linear-gradient(90deg,#8b5cf6,#38bdf8);
     color:white;cursor:pointer;box-shadow:0 10px 26px rgba(139,92,246,.35);
     transition:transform .06s ease, filter .2s ease;
+    margin-top:auto;
   }
   .buy:hover{filter:brightness(1.06)}
   .buy:active{transform:translateY(1px)}
   .row{display:flex;gap:10px;align-items:center;justify-content:center;margin:10px 0 0}
   .tiny{opacity:.75;font-size:12px;color:var(--muted)}
-  .note{margin:18px auto 8px;font-size:12px;color:var(--muted);max-width:820px}
+  .note{margin:22px auto 8px;font-size:13px;color:var(--muted);max-width:820px;text-align:center}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
-  .foot{margin-top:6px;font-size:11px;color:#9092a3}
+  .foot{margin:6px auto 0;font-size:11px;color:#9092a3;max-width:820px;text-align:center}
+  @media (max-width:1040px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.card.featured{transform:none}}
+  @media (max-width:600px){body{padding-top:12px}.wrap{padding:0 12px}.grid{grid-template-columns:1fr;gap:14px}.card{min-height:0;border-radius:20px}.brand-row{margin-bottom:10px}.header{margin-bottom:20px}.hero-pills{gap:8px}.hero-pills span{font-size:12px;padding:8px 11px}.title{font-size:42px}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="header">
-    <img src="https://qmaealblegvcwodlmeht.supabase.co/storage/v1/object/public/downloads/2025/ChatGPT%20Image%20Oct%2020,%202025,%2011_50_37%20AM.png" alt="Hansora Credits" />
-    <div>
-      <h1>Hansora Credits</h1>
-      <div class="sub">Payments happen on our secure provider checkout outside Telegram. We do this to protect your payment and personal information.</div>
+    <div class="brand-row">
+      <img src="https://qmaealblegvcwodlmeht.supabase.co/storage/v1/object/public/website%20content/Untitled%20design%20(23).png" alt="Hansora Credits" />
+      <div class="eyebrow">Telegram credit packs</div>
+    </div>
+    <h1>Buy Credits For Less</h1>
+    <div class="sub">Payments happen on our secure provider checkout outside Telegram. We do this to protect your payment and personal information.</div>
+    <div class="hero-pills">
+      <span>No monthly subscription</span>
+      <span>Credits never expire</span>
+      <span>All AI tools included</span>
     </div>
     <div id="platformPill" class="platform-pill hidden">Detecting…</div>
   </div>
@@ -138,12 +181,18 @@
 
   const grid = document.getElementById('cards');
   grid.innerHTML = PLANS.map(p => `
-    <article class="card" tabindex="0">
+    <article class="card ${p.badge ? `featured` : ``}" tabindex="0">
       ${p.badge ? `<div class="badge">${p.badge}</div>` : ``}
-      <img class="coin" src="https://qmaealblegvcwodlmeht.supabase.co/storage/v1/object/public/downloads/AA.webp" alt=""/>
-      <div class="title">${p.credits} Credits</div>
+      <div class="plan-kicker">${p.credits} credits</div>
+      <div class="title">${p.credits} <span>credits</span></div>
       <div class="price">${p.price}</div>
-      <div class="blurb">Get ${p.credits} credits to use across all Hansora features.</div>
+      <div class="blurb">Use credits across Hansora images, videos.</div>
+      <ul class="features">
+        <li>All features included</li>
+        <li>Fast generation</li>
+        <li>Secure provider checkout</li>
+        <li>Credits added after checkout in seconds</li>
+      </ul>
       <button class="buy" data-plan="${p.id}">Buy</button>
       <div class="row tiny"><span>${platform === 'ios' ? 'Will open in Safari' : (platform === 'android' ? 'Will open in Chrome' : 'Opens in your browser')}</span></div>
     </article>`).join("");
@@ -153,6 +202,7 @@
     const plan = PLANS.find(x => x.id === btn.dataset.plan); if (!plan) return;
 
     const directUrl = withParams(plan.url, {
+      minimalAddress: "true",
       metadata_tgid: TG_ID,
       metadata_credits: plan.credits
     });
