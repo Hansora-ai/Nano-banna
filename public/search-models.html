@@ -4861,6 +4861,25 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         costLabel: '1⚡ per job',
         minCredits: 1
       },
+      {
+        id: 'nano-banana-2-lite',
+        name: 'Nano Banana 2 Lite',
+        emoji: '🍌',
+        subtitle: 'Text / (Image) → Image',
+        category: 'image',
+        description: 'Fast low-cost 1K image generation and editing.',
+        endpoint: '/.netlify/functions/run-nano-banana-2-lite-tg',
+        needsImage: false,
+        maxFiles: 10,
+        uploadMaxMB: 30,
+        aspectOptions: ['auto', '1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9'],
+        defaultAspect: 'auto',
+        resolutionOptions: ['1K'],
+        defaultResolution: '1K',
+        durations: null,
+        costLabel: '0.5⚡ per job',
+        minCredits: 0.5
+      },
 
       {
         id: 'seedream-4-5',
@@ -4924,6 +4943,25 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         uploadMaxMB: 10,
         aspectOptions: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
         defaultAspect: '1:1',
+        durations: null,
+        costLabel: '0.5⚡ per job',
+        minCredits: 0.5
+      },
+      {
+        id: 'seedream-5-pro',
+        name: 'Seedream 5.0 Pro',
+        emoji: '🎨',
+        subtitle: 'Text / (Image) → Image',
+        category: 'image',
+        description: 'Seedream 5.0 Pro for controlled generation and precise edits.',
+        endpoint: '/.netlify/functions/run-seedream-5-pro-tg',
+        needsImage: false,
+        maxFiles: 10,
+        uploadMaxMB: 10,
+        aspectOptions: ['1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9'],
+        defaultAspect: '1:1',
+        resolutionOptions: ['1K', '2K'],
+        defaultResolution: '1K',
         durations: null,
         costLabel: '0.5⚡ per job',
         minCredits: 0.5
@@ -5081,7 +5119,27 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         costLabel: 'Credits Sora -3⚡ Pro 20-25⚡',
         minCredits: 7
       },
-            {
+      {
+        id: 'veo31-lite',
+        name: 'Veo 3.1 Lite',
+        emoji: '🎥',
+        subtitle: 'Text → Video (start / last frames optional)',
+        category: 'video',
+        description: 'Veo 3.1 Lite — 8s only, 720p / 1080p.',
+        endpoint: '/.netlify/functions/run-veo31-lite-tg',
+        needsImage: false,
+        maxFiles: 0,
+        useFrames: true,
+        startOptional: true,
+        aspectOptions: ['16:9', '9:16'],
+        defaultAspect: '16:9',
+        durations: [8],
+        resolutionOptions: ['720p', '1080p'],
+        defaultResolution: '720p',
+        costLabel: 'Credits Lite 720p 2⚡ / 1080p 2.5⚡',
+        minCredits: 2
+      },
+      {
         id: 'veo31-fast',
         name: 'Veo 3.1 Fast',
         emoji: '🎥',
@@ -5122,6 +5180,28 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         minCredits: 17
       },
       {
+        id: 'seedance25',
+        name: 'Seedance 2.5',
+        emoji: '🌱',
+        subtitle: 'Text / media references → Video',
+        category: 'video',
+        description: 'Seedance 2.5 with first/last frame, image, video, and audio references.',
+        endpoint: '/.netlify/functions/run-seedance-25-tg',
+        needsImage: false,
+        maxFiles: 0,
+        uploadMaxMB: 200,
+        uploadLimitsMB: { image: 30, video: 200, audio: 15 },
+        referenceLimits: { image: 30, video: 10, audio: 3 },
+        specificUpload: 'seedance',
+        aspectOptions: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+        defaultAspect: '1:1',
+        resolutionOptions: ['480p', '720p'],
+        defaultResolution: '720p',
+        durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+        costLabel: '480p 1.7⚡/s · 720p 3.8⚡/s',
+        minCredits: 6.8
+      },
+      {
         id: 'seedance20',
         name: 'Seedance 2.0',
         emoji: '🌱',
@@ -5141,6 +5221,27 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         costLabel: 'Standard 720p 2.5⚡/s · 1080p 5.5⚡/s · Fast 2.5⚡/s',
         minCredits: 10
+      },
+      {
+        id: 'seedance20-mini',
+        name: 'Seedance 2.0 Mini',
+        emoji: '🌱',
+        subtitle: 'Text / media references → Video',
+        category: 'video',
+        description: 'Seedance 2.0 Mini with first/last frame, image, video, and audio references.',
+        endpoint: '/.netlify/functions/run-seedance-2-mini-tg',
+        needsImage: false,
+        maxFiles: 0,
+        uploadMaxMB: 50,
+        uploadLimitsMB: { image: 30, video: 50, audio: 50 },
+        specificUpload: 'seedance',
+        aspectOptions: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+        defaultAspect: '16:9',
+        resolutionOptions: ['480p', '720p'],
+        defaultResolution: '720p',
+        durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        costLabel: 'Mini 1.3⚡/s',
+        minCredits: 5.2
       },
       {
         id: 'gemini-omni-video',
@@ -5276,6 +5377,26 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         costLabel: '720p 1⚡/s · 1080p 1.5⚡/s · 4K 4⚡/s',
         minCredits: 5
       },
+      {
+        id: 'kling3-turbo',
+        name: 'Kling 3 Turbo',
+        emoji: 'KT',
+        subtitle: 'Text / Image → Video',
+        category: 'video',
+        description: 'Kling V3 Turbo text-to-video or image-to-video. No references.',
+        endpoint: '/.netlify/functions/run-kling-3-turbo-tg',
+        needsImage: false,
+        maxFiles: 1,
+        uploadMaxMB: 10,
+        acceptTypes: 'image/*',
+        aspectOptions: ['1:1', '9:16', '16:9'],
+        defaultAspect: '16:9',
+        resolutionOptions: ['720p', '1080p'],
+        defaultResolution: '720p',
+        durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        costLabel: '720p 1.2⚡/s · 1080p 1.5⚡/s',
+        minCredits: 3.6
+      },
             {
         id: 'kling21',
         name: 'Kling v2.1 Pro',
@@ -5319,12 +5440,12 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
     let currentModel = MODELS[0];
     let currentMode = 'image';
     let currentVeoFamily = null; // 'veo3' | 'veo31'
-    let currentVeoVariant = 'fast'; // 'fast' | 'quality'
+    let currentVeoVariant = 'fast'; // 'lite' | 'fast' | 'quality'
     let uploadedFiles = [];
     // Models that should APPEND images when user uploads again (multi-image support)
-    const __MULTI_APPEND_IMAGE_MODELS = new Set(['nano-banana-pro', 'nano-banana-2', 'nano-banana', 'gpt-image-1', 'gpt-image-1.5', 'gpt-image-2', 'seedream-4-5', 'seedream-5-lite', 'grok-image', 'wan-2-7-image', 'qwen-2']);
-    const IMAGE_MODEL_ORDER = ['gpt-image-2', 'nano-banana-2', 'nano-banana-pro', 'seedream-5-lite', 'grok-image'];
-    const VIDEO_MODEL_ORDER = ['kling30', 'seedance20', 'gemini-omni-video', 'happyhorse10', 'veo31-fast', 'grok-video', 'kling26', 'wan27-video'];
+    const __MULTI_APPEND_IMAGE_MODELS = new Set(['nano-banana-pro', 'nano-banana-2', 'nano-banana-2-lite', 'nano-banana', 'gpt-image-1', 'gpt-image-1.5', 'gpt-image-2', 'seedream-4-5', 'seedream-5-lite', 'seedream-5-pro', 'grok-image', 'wan-2-7-image', 'qwen-2']);
+    const IMAGE_MODEL_ORDER = ['gpt-image-2', 'nano-banana-2', 'nano-banana-2-lite', 'nano-banana-pro', 'seedream-5-pro', 'seedream-5-lite', 'grok-image'];
+    const VIDEO_MODEL_ORDER = ['seedance25', 'seedance20', 'kling30', 'seedance20-mini', 'kling3-turbo', 'gemini-omni-video', 'happyhorse10', 'veo31-lite', 'veo31-fast', 'grok-video', 'kling26', 'wan27-video'];
 
     function sortModelsForCurrentMode(items) {
       const order = currentMode === 'video' ? VIDEO_MODEL_ORDER : IMAGE_MODEL_ORDER;
@@ -5346,6 +5467,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       if (id === 'gpt-image-2') return 'G2';
       if (id.includes('gpt')) return 'AI';
       if (id === 'nano-banana-2') return 'N2';
+      if (id === 'nano-banana-2-lite') return 'NL';
       if (id === 'nano-banana-pro') return 'NP';
       if (id.includes('nano')) return 'NB';
       if (id.includes('seedream')) return 'S';
@@ -5354,9 +5476,12 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       if (id.includes('happyhorse')) return 'HH';
       if (id.includes('qwen')) return 'Q';
       if (id.includes('z-image')) return 'Z';
+      if (id === 'seedance25') return 'S25';
+      if (id === 'seedance20-mini') return 'SM';
       if (id.includes('seedance20')) return 'S2';
       if (id.includes('gemini-omni')) return 'GO';
       if (id.includes('kling30')) return 'K3';
+      if (id === 'kling3-turbo') return 'KT';
       if (id.includes('kling')) return 'K';
       if (id.includes('veo')) return 'V';
       if (id.includes('sora')) return 'S2';
@@ -5374,7 +5499,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       if (id.includes('happyhorse')) return 'seedance';
       if (id.includes('qwen')) return 'qwen';
       if (id.includes('z-image')) return 'z';
-      if (id.includes('seedance20')) return 'seedance';
+      if (id.includes('seedance20') || id === 'seedance25') return 'seedance';
       if (id.includes('gemini-omni')) return 'seedance';
       if (id.includes('kling')) return 'kling';
       if (id.includes('veo')) return 'veo';
@@ -5486,9 +5611,9 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
     function getWorkspaceModelItems() {
       const source = MODELS.filter((m) => !m.hidden && (currentMode === 'image' ? m.category === 'image' : m.category === 'video'));
       if (currentMode !== 'video') return sortModelsForCurrentMode(source);
-      const hasVeo31 = source.some((m) => m.id === 'veo31-fast' || m.id === 'veo31');
-      const items = source.filter((m) => !['veo31-fast','veo31','veo3-fast','veo3'].includes(m.id));
-      if (hasVeo31) items.push({ id: 'veo31-fast', name: 'Veo 3.1', emoji: '🎥', subtitle: 'Fast / Quality', category: 'video' });
+      const hasVeo31 = source.some((m) => m.id === 'veo31-lite' || m.id === 'veo31-fast' || m.id === 'veo31');
+      const items = source.filter((m) => !['veo31-lite','veo31-fast','veo31','veo3-fast','veo3'].includes(m.id));
+      if (hasVeo31) items.push({ id: 'veo31-lite', name: 'Veo 3.1', emoji: '🎥', subtitle: 'Lite / Fast / Quality', category: 'video' });
       return sortModelsForCurrentMode(items);
     }
 
@@ -5532,6 +5657,11 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         'seedance-2': 'seedance20',
         'seedance-2.0': 'seedance20',
         'seedance20': 'seedance20',
+        'seedance-2.5': 'seedance25',
+        'seedance25': 'seedance25',
+        'seedance-2-mini': 'seedance20-mini',
+        'seedance-2.0-mini': 'seedance20-mini',
+        'seedance20-mini': 'seedance20-mini',
         'gemini-omni': 'gemini-omni-video',
         'geminiomni': 'gemini-omni-video',
         'gemini-omni-video': 'gemini-omni-video',
@@ -5539,6 +5669,10 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         'veo-31': 'veo31-fast',
         'veo-3.1': 'veo31-fast',
         'veo3.1': 'veo31-fast',
+        'veo31-lite': 'veo31-lite',
+        'veo-31-lite': 'veo31-lite',
+        'veo-3.1-lite': 'veo31-lite',
+        'veo31lite': 'veo31-lite',
         'wan27': 'wan27-video',
         'wan-27': 'wan27-video',
         'wan-2.7': 'wan27-video',
@@ -5549,6 +5683,13 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         'kling3': 'kling30',
         'kling-3': 'kling30',
         'kling-3.0': 'kling30',
+        'kling3turbo': 'kling3-turbo',
+        'kling-3-turbo': 'kling3-turbo',
+        'kling-v3-turbo': 'kling3-turbo',
+        'nano-banana-2-lite': 'nano-banana-2-lite',
+        'nanobanana2lite': 'nano-banana-2-lite',
+        'seedream-5-pro': 'seedream-5-pro',
+        'seedream5pro': 'seedream-5-pro',
         'kling-2-5-turbo': 'kling25',
         'wan-2-7-video': 'wan27-video'
       };
@@ -5608,7 +5749,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       items.forEach((model) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        const active = currentModel && (currentModel.id === model.id || (model.id === 'veo31-fast' && ['veo31-fast','veo31'].includes(currentModel.id)));
+        const active = currentModel && (currentModel.id === model.id || (model.id === 'veo31-lite' && ['veo31-lite','veo31-fast','veo31'].includes(currentModel.id)));
         btn.className = 'model-tab' + (active ? ' active' : '');
         btn.innerHTML = modelLogoHTML(model) + '<span>' + model.name + '</span>';
         btn.addEventListener('click', () => selectWorkspaceModel(model.id));
@@ -5705,8 +5846,11 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       if (!model) return null;
       if (model.id === 'nano-banana-pro') return currentResolution === '4K' ? 2 : 1.5;
       if (model.id === 'nano-banana-2') return currentResolution === '4K' ? 1.5 : 1;
+      if (model.id === 'nano-banana-2-lite') return 0.5;
+      if (model.id === 'seedream-5-pro') return currentResolution === '2K' ? 1 : 0.5;
       if (model.id === 'gpt-image-2') return currentResolution === '4K' ? 1.5 : 1;
       if (model.id === 'wan-2-7-image') return currentWanTier === 'pro' ? 1 : 0.5;
+      if (model.id === 'veo31-lite') return currentResolution === '1080p' ? 2.5 : 2;
       if (model.id === 'veo31-fast') return currentResolution === '4K' ? 12 : 5;
       if (model.id === 'veo31') return currentResolution === '4K' ? 22 : 17;
       if (model.id === 'wan27-video') {
@@ -5728,6 +5872,15 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         const rate = currentSeedanceVariant === 'fast' ? 2.5 : (currentResolution === '1080p' ? 5.5 : 2.5);
         return Number((seconds * rate).toFixed(1));
       }
+      if (model.id === 'seedance25') {
+        const seconds = Math.max(4, Math.min(30, Number(currentDuration || 4)));
+        const rate = currentResolution === '480p' ? 1.7 : 3.8;
+        return Number((seconds * rate).toFixed(1));
+      }
+      if (model.id === 'seedance20-mini') {
+        const seconds = Math.max(4, Math.min(15, Number(currentDuration || 4)));
+        return Number((seconds * 1.3).toFixed(1));
+      }
       if (model.id === 'gemini-omni-video') {
         const hasVideoInput = !!videoSourceFile;
         if (hasVideoInput) return currentResolution === '4K' ? 25 : 17;
@@ -5747,6 +5900,11 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         if (currentResolution === '4K') rate = 4;
         else if (currentResolution === '1080p') rate = currentKlingSound ? 2 : 1.5;
         else rate = currentKlingSound ? 1.5 : 1;
+        return Number((seconds * rate).toFixed(1));
+      }
+      if (model.id === 'kling3-turbo') {
+        const seconds = Math.max(1, Number(currentDuration || 3));
+        const rate = currentResolution === '1080p' ? 1.5 : 1.2;
         return Number((seconds * rate).toFixed(1));
       }
       if (model.id === 'kling-motion-control') {
@@ -6123,9 +6281,9 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       // Fast / Quality is selected in the bottom bar.
       let overlayModels = filtered;
       if (currentMode === 'video') {
-        const hasVeo31 = filtered.some((m) => m.id === 'veo31-fast' || m.id === 'veo31');
+        const hasVeo31 = filtered.some((m) => m.id === 'veo31-lite' || m.id === 'veo31-fast' || m.id === 'veo31');
 
-        filtered = filtered.filter((m) => !['veo3-fast', 'veo3', 'veo31-fast', 'veo31'].includes(m.id));
+        filtered = filtered.filter((m) => !['veo3-fast', 'veo3', 'veo31-lite', 'veo31-fast', 'veo31'].includes(m.id));
 
         const matchGroup = (label) => {
           if (!searchValue) return true;
@@ -6137,12 +6295,13 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         overlayModels.push(...filtered);
         if (hasVeo31 && matchGroup('Veo 3.1')) {
           overlayModels.push({
-            id: 'veo31-fast',
+            id: 'veo31-lite',
             name: 'Veo 3.1',
             emoji: 'V',
-            subtitle: 'Text → Video (Fast / Quality in bottom)',
+            subtitle: 'Text → Video (Lite / Fast / Quality in bottom)',
             category: 'video',
             __veoFamily: 'veo31',
+            __liteId: 'veo31-lite',
             __fastId: 'veo31-fast',
             __qualityId: 'veo31',
           });
@@ -6175,9 +6334,9 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
             return;
           }
           if (model.__veoFamily) {
-            currentModel = MODELS.find((m) => m.id === model.__fastId) || currentModel;
+            currentModel = MODELS.find((m) => m.id === (model.__liteId || model.__fastId)) || currentModel;
             currentVeoFamily = model.__veoFamily;
-            currentVeoVariant = 'fast';
+            currentVeoVariant = model.__liteId ? 'lite' : 'fast';
           } else {
             currentModel = model;
             currentVeoFamily = null;
@@ -6219,9 +6378,9 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
       currentDuration = currentModel.durations && currentModel.durations.length ? currentModel.durations[0] : null;
       currentResolution = currentModel.defaultResolution || (currentModel.category === 'image' ? '1K' : '720p');
 
-      // Veo Fast / Quality toggle (only for Veo 3.1)
+      // Veo Lite / Fast / Quality toggle (only for Veo 3.1)
       const isVeo3 = false;
-      const isVeo31 = currentModel.id === 'veo31-fast' || currentModel.id === 'veo31';
+      const isVeo31 = currentModel.id === 'veo31-lite' || currentModel.id === 'veo31-fast' || currentModel.id === 'veo31';
       const isWan27 = currentModel.id === 'wan-2-7-image';
       const isMotionControl = currentModel.id === 'kling-motion-control';
       if (isWan27) {
@@ -6310,7 +6469,9 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
         if (veoQualityLabel) veoQualityLabel.textContent = 'Quality';
         currentWanTier = 'normal';
         currentVeoFamily = isVeo31 ? 'veo31' : 'veo3';
-        currentVeoVariant = (currentModel.id.endsWith('-fast') ? 'fast' : 'quality');
+        currentVeoVariant = currentModel.id === 'veo31-lite'
+          ? 'lite'
+          : (currentModel.id.endsWith('-fast') ? 'fast' : 'quality');
 
         if (veoQualityBlock) veoQualityBlock.classList.remove('hidden');
         if (veoQualityPills) {
@@ -6325,7 +6486,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
               if (!currentVeoFamily) return;
               const nextId =
                 currentVeoFamily === 'veo31'
-                  ? (variant === 'fast' ? 'veo31-fast' : 'veo31')
+                  ? (variant === 'lite' ? 'veo31-lite' : (variant === 'fast' ? 'veo31-fast' : 'veo31'))
                   : (variant === 'fast' ? 'veo3-fast' : 'veo3');
               const nextModel = MODELS.find((m) => m.id === nextId);
               if (!nextModel) return;
@@ -6336,6 +6497,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
             });
             return b;
           };
+          if (currentVeoFamily === 'veo31') veoQualityPills.appendChild(makeBtn('Lite', 'lite'));
           veoQualityPills.appendChild(makeBtn('Fast', 'fast'));
           veoQualityPills.appendChild(makeBtn('Quality', 'quality'));
         }
@@ -7131,7 +7293,7 @@ async function pollGeneration(runId, controllers, token, taskId, checker) {
 
     function syncVeo31InputLocks() {
       const isFrameModel = currentModel && currentModel.useFrames;
-      const isVeo31Model = currentModel && (currentModel.id === 'veo31-fast' || currentModel.id === 'veo31');
+      const isVeo31Model = currentModel && (currentModel.id === 'veo31-lite' || currentModel.id === 'veo31-fast' || currentModel.id === 'veo31');
       if (!isFrameModel) return;
       if (!startFrameFile && lastFrameFile && typeof clearLastFrame === 'function') clearLastFrame();
       const hasFrames = !!(startFrameFile || lastFrameFile);
@@ -8527,10 +8689,14 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
           return { urls, prompt: prompt || '.', format: 'png', size: aspect || '1:1', resolution: (resolution || '1K'), run_id: runId };
         case 'nano-banana-2':
           return { urls, prompt: prompt || '.', format: 'png', size: aspect || 'auto', resolution: (resolution || '1K'), google_search: true, run_id: runId };
+        case 'nano-banana-2-lite':
+          return { urls, image_urls: urls, prompt: prompt || '.', format: 'png', size: aspect || 'auto', aspect_ratio: aspect || 'auto', resolution: '1K', run_id: runId };
         case 'seedream-4-5':
           return { urls, prompt: prompt || '.', format: 'png', size: aspect || '1:1', run_id: runId };
         case 'seedream-5-lite':
           return { urls, prompt: prompt || '.', format: 'png', size: aspect || '1:1', quality: 'high', run_id: runId };
+        case 'seedream-5-pro':
+          return { urls, image_urls: urls, prompt: prompt || '.', format: 'png', size: aspect || '1:1', aspect_ratio: aspect || '1:1', resolution: resolution || '1K', quality: (resolution || '1K') === '2K' ? 'high' : 'basic', run_id: runId };
         case 'gpt-image-1':
           return { prompt, aspect_ratio: aspect || '1:1', image_urls: urls && urls.length ? urls : undefined, run_id: runId };
         case 'gpt-image-2':
@@ -8572,6 +8738,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
             model: model.id === 'veo3-fast' ? 'veo3_fast' : 'veo3',
             run_id: runId
           };
+        case 'veo31-lite':
         case 'veo31-fast':
         case 'veo31': {
           const frameCount = [startFrameFile, lastFrameFile].filter(Boolean).length;
@@ -8589,11 +8756,13 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
             resolution: currentResolution || '1080p',
             quality: currentResolution || '1080p',
             imageUrl: '',
-            model: model.id === 'veo31-fast' ? 'veo3_1_fast' : 'veo3_1',
+            model: model.id === 'veo31-lite' ? 'veo3_lite' : (model.id === 'veo31-fast' ? 'veo3_1_fast' : 'veo3_1'),
             run_id: runId
           };
         }
 
+        case 'seedance25':
+        case 'seedance20-mini':
         case 'seedance20': {
           let cursor = 0;
           const firstFrameUrl = seedanceFirstFrameFile ? (urls || [])[cursor++] : '';
@@ -8607,10 +8776,11 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
             uid,
             user_id: uid,
             prompt,
-            variant: currentSeedanceVariant === 'fast' ? 'fast' : 'standard',
-            aspect_ratio: aspect || '16:9',
+            variant: model.id === 'seedance20-mini' ? 'mini' : (currentSeedanceVariant === 'fast' ? 'fast' : 'standard'),
+            model: model.id === 'seedance20-mini' ? 'bytedance/seedance-2-mini' : undefined,
+            aspect_ratio: model.id === 'seedance25' && (firstFrameUrl || lastFrameUrl) ? 'adaptive' : (aspect || '16:9'),
             duration: duration ? Number(duration) : 5,
-            resolution: currentSeedanceVariant === 'fast' ? '720p' : (currentResolution || '720p'),
+            resolution: model.id === 'seedance20-mini' ? (currentResolution || '720p') : (currentSeedanceVariant === 'fast' ? '720p' : (currentResolution || '720p')),
             generate_audio: !!seedanceGenerateAudio,
             enable_web_search: !!seedanceWebSearch,
             web_search: !!seedanceWebSearch,
@@ -8774,6 +8944,18 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
             run_id: runId
           };
         }
+        case 'kling3-turbo':
+          return {
+            uid,
+            user_id: uid,
+            prompt,
+            aspect_ratio: aspect || '16:9',
+            duration: duration ? Number(duration) : 3,
+            resolution: currentResolution || '720p',
+            image_url: urls && urls[0] ? urls[0] : undefined,
+            image_urls: urls && urls[0] ? [urls[0]] : [],
+            run_id: runId
+          };
         case 'kling21':
           return {
             prompt,
@@ -8954,7 +9136,7 @@ document.getElementById('motionImageInput').addEventListener('change', (e) => {
         const frameFiles = currentModel.useFrames
           ? [startFrameFile, lastFrameFile].filter(Boolean)
           : [];
-        const veoRefs = currentModel.useFrames && (currentModel.id === 'veo31-fast' || currentModel.id === 'veo31')
+        const veoRefs = currentModel.useFrames && (currentModel.id === 'veo31-lite' || currentModel.id === 'veo31-fast' || currentModel.id === 'veo31')
           ? (veoReferenceFiles || [])
           : [];
         const urls = currentModel.useFrames
